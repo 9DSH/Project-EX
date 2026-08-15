@@ -1,0 +1,24 @@
+# Visual Studio
+.vs/
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Build files
+Debug/
+Release/
+
+# NuGet
+packages/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+
+# Environment files
+.env

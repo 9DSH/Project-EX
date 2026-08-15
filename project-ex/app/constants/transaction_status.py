@@ -1,0 +1,5 @@
+PENDING = "pending"
+COMPLETED = "completed"
+FAILED = "failed"
+FROZEN = "frozen"
+REJECTED = "rejected"
