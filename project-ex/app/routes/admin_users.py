@@ -13,7 +13,8 @@ from app.models.order_item import OrderItem
 from app.models.transaction import Transaction
 from app.core.security import get_current_user, is_master, is_admin_or_above
 from app.schemas.user import UserCreate
-
+from app.constants.transaction_types import ADMIN_DEPOSIT,ADMIN_WITHDRAW, MASTER_DEPOSIT, MASTER_WITHDRAW 
+from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 import uuid
 from app.core.security import hash_password
 from sqlalchemy import func, or_
@@ -833,9 +834,9 @@ def update_balance(
 
     # TX for USer
     if not master_mode:
-        transaction_type = "admin_deposit" if payload.action == "deposit" else "admin_withdraw"
+        transaction_type = ADMIN_DEPOSIT if payload.action == "deposit" else ADMIN_WITHDRAW
     else: 
-        transaction_type = "master_deposit" if payload.action == "deposit" else "master_withdraw"
+        transaction_type = MASTER_DEPOSIT if payload.action == "deposit" else MASTER_WITHDRAW
 
 
     db.add(Transaction(
@@ -843,7 +844,7 @@ def update_balance(
         amount=user_tx_amount,
         currency_id=payload.currency_id,
         type=transaction_type,
-        status="completed", 
+        status=COMPLETED, 
         blockchain="internal",
         platform_bank_account_id=payload.platform_bank_account_id,
     ))
@@ -855,7 +856,7 @@ def update_balance(
             amount=admin_tx_amount,
             currency_id=payload.currency_id,
             type="deposit_to_user" if payload.action == "deposit" else "deposit_from_user",
-            status="completed", 
+            status=COMPLETED, 
             blockchain="internal",
             platform_bank_account_id=payload.platform_bank_account_id,
         ))

@@ -6,4 +6,7 @@ EXCHANGE_IN = "exchange_in"
 EXCHANGE_COMMISSION = "exchange_commission"
 WIRE_TRANSFER = "wire_transfer"
 WIRE_REFUND = "wire_refund"
-
+ADMIN_DEPOSIT= "admin_deposit"
+ADMIN_WITHDRAW = "admin_withdraw"
+MASTER_DEPOSIT= "master_deposit"
+MASTER_WITHDRAW = "master_withdraw"
