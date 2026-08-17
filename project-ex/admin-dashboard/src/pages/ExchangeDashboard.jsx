@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   ArrowLeftRight, FileText, AlertTriangle, Plus, Edit3, Trash2,
   Power, PowerOff, X, Save, RotateCw, GitCompare, Search, BarChart3,
-  Activity, RefreshCw, CheckCircle2, XCircle, Clock, Filter,
+  Activity, RefreshCw, CheckCircle2, XCircle, Clock, Filter, ChevronDown, Users,
 } from "lucide-react";
 import AnalysisTab from "./AnalysisTab";
 import DatePicker from "react-datepicker";
@@ -84,6 +84,79 @@ const Field = ({ label, children }) => (
     {children}
   </div>
 );
+
+/* ─── ADMIN FILTER DROPDOWN ─── */
+function AdminFilterDropdown({ value, onChange, adminList, currentUsername }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const currentLabel =
+    value === "all" ? "All Admins" :
+    value === "mine" ? `My Rates (${currentUsername})` :
+    adminList.find(a => String(a.user_id) === String(value))?.username
+      ? `Admin: ${adminList.find(a => String(a.user_id) === String(value)).username}`
+      : "My Rates";
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display:"flex", alignItems:"center", gap:6,
+          background: open ? "rgba(139,92,246,.16)" : "rgba(139,92,246,.1)",
+          border:`1px solid ${open ? "#8b5cf6" : "rgba(139,92,246,.28)"}`,
+          color:"#c4b5fd", borderRadius:7, padding:"7px 9px",
+          fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap",
+        }}
+      >
+        <Users size={12} />
+        {currentLabel}
+        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none", transition:"transform .15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position:"absolute", top:"calc(100% + 6px)", left:0, minWidth:220,
+          background:"#0d1424", border:"1px solid rgba(139,92,246,.25)", borderRadius:10,
+          zIndex:50, boxShadow:"0 12px 32px rgba(0,0,0,.5)", overflow:"hidden",
+        }}>
+          <div
+            onClick={() => { onChange("mine"); setOpen(false); }}
+            style={{ padding:"9px 12px", cursor:"pointer", fontSize:12, fontWeight: value === "mine" ? 700 : 500, color: value === "mine" ? "#a78bfa" : "#94a3b8", background: value === "mine" ? "rgba(139,92,246,.1)" : "transparent" }}
+          >
+            My Rates ({currentUsername})
+          </div>
+          <div
+            onClick={() => { onChange("all"); setOpen(false); }}
+            style={{ padding:"9px 12px", cursor:"pointer", fontSize:12, fontWeight: value === "all" ? 700 : 500, color: value === "all" ? "#a78bfa" : "#94a3b8", background: value === "all" ? "rgba(139,92,246,.1)" : "transparent", borderTop:"1px solid rgba(255,255,255,.05)" }}
+          >
+            All Admins (Platform)
+          </div>
+          {adminList.length > 0 && (
+            <div style={{ maxHeight:220, overflowY:"auto", borderTop:"1px solid rgba(255,255,255,.05)" }}>
+              {adminList.map(a => (
+                <div
+                  key={a.user_id}
+                  onClick={() => { onChange(String(a.user_id)); setOpen(false); }}
+                  style={{ padding:"9px 12px", cursor:"pointer", fontSize:12, fontWeight: String(value) === String(a.user_id) ? 700 : 500, color: String(value) === String(a.user_id) ? "#a78bfa" : "#94a3b8", background: String(value) === String(a.user_id) ? "rgba(139,92,246,.1)" : "transparent", display:"flex", justifyContent:"space-between", gap:8 }}
+                >
+                  <span>{a.username}</span>
+                  <span style={{ color:"#4b5563", fontSize:10 }}>{a.role === "master" ? "MASTER" : `#${a.user_id}`}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─── PAIR FORM (add / edit) ─── */
 function PairForm({ data, setData, onSubmit, submitLabel, onCancel, currencies }) {
@@ -173,14 +246,14 @@ function PairEditModal({ editPair, currencies, onSave, onClose }) {
 }
 
 /* ─── PAIR ROW in sidebar ─── */
-function PairRow({ p, selected, onClick }) {
+function PairRow({ p, selected, onClick, showOwner }) {
   return (
     <div
       onClick={onClick}
       style={{
         display:"flex", 
         alignItems:"center", 
-        gap:14, 
+        gap:10, 
         padding:"9px 20px", 
         borderRadius:9, 
         cursor:"pointer",
@@ -206,6 +279,16 @@ function PairRow({ p, selected, onClick }) {
         textOverflow:"ellipsis" }}>
         {p.from_currency?.symbol}→{p.to_currency?.symbol}
       </span>
+      {showOwner && p.admin_id != null && (
+        <span style={{
+          fontSize:10, fontWeight:700, color:"#a78bfa",
+          background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.25)",
+          borderRadius:999, padding:"2px 7px", whiteSpace:"nowrap",
+          maxWidth:90, overflow:"hidden", textOverflow:"ellipsis",
+        }}>
+          {p.admin_username || `#${p.admin_id}`}
+        </span>
+      )}
       <span style={{ 
         fontSize:14, 
         color:p.is_active ? "#3b82f6" : "#374151", 
@@ -241,6 +324,9 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
             {pair.is_active ? "LIVE" : "OFF"}
           </span>
         </div>
+        {pair.admin_username && (
+          <div style={{ marginTop:6, fontSize:11, color:"#a78bfa" }}>Owner: {pair.admin_username} (#{pair.admin_id})</div>
+        )}
       </div>
 
       {/* body */}
@@ -334,10 +420,10 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
 
 
 /* ─── ORDER ROW ─── */
-function OrderRow({ item }) {
+function OrderRow({ item, showOwner }) {
   const fromSym = item.from_currency?.symbol || "—";
   const toSym = item.to_currency?.symbol || "—";
-
+  console.log(item)
   const displayRate =
     fromSym === "IRT" && Number(item.rate) > 0
       ? 1 / Number(item.rate)
@@ -396,8 +482,13 @@ function OrderRow({ item }) {
           </div>
 
           
-          <div style={{ fontSize: 12, color: "#475569" , marginTop:3}}>
-            #{item.id}
+          <div style={{ fontSize: 12, color: "#475569" , marginTop:3, display:"flex", alignItems:"center", gap:6}}>
+            ORDER #{item.id}
+            {showOwner && item.admin_id != null && (
+              <span style={{ fontSize:10, fontWeight:700, color:"#a78bfa", background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.22)", borderRadius:999, padding:"1px 6px" }}>
+                {item.admin_username}  {`#${item.admin_id}`}
+              </span>
+            )}
           </div>
       </div>
 
@@ -432,7 +523,7 @@ function OrderRow({ item }) {
   );
 }
 /* ─── SWEEP ROW ─── */
-function SweepRow({ sweep, onRetry, retrying }) {
+function SweepRow({ sweep, onRetry, retrying, showOwner }) {
   return (
     <div style={{ background:"rgba(255,255,255,.025)", border:`1px solid ${sweep.resolved ? "rgba(34,197,94,.1)" : "rgba(239,68,68,.1)"}`, borderRadius:11, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
       <div style={{ display:"flex", alignItems:"flex-start", gap:10, flex:1, minWidth:0 }}>
@@ -440,8 +531,22 @@ function SweepRow({ sweep, onRetry, retrying }) {
           <AlertTriangle size={13} color={sweep.resolved ? "#4ade80" : "#f87171"} />
         </div>
         <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:700, fontSize:12, color:"white" }}>
+          <div style={{ fontWeight:700, fontSize:12, color:"white", display:"flex", alignItems:"center", gap:6 }}>
             {sweep.currency} <span style={{ color:"#6b7280", fontWeight:400 }}>{fmt(sweep.amount)} · {sweep.network || "N/A"}</span>
+            {showOwner && sweep.admin_id != null && (
+              <span
+                title={sweep.admin_linked ? "Attributed via the pair's owning admin" : "Fallback: attributed via the buyer's admin (older sweep, no linked order)"}
+                style={{
+                  fontSize:10, fontWeight:700,
+                  color: sweep.admin_linked ? "#a78bfa" : "#fbbf24",
+                  background: sweep.admin_linked ? "rgba(139,92,246,.12)" : "rgba(245,158,11,.12)",
+                  border: `1px solid ${sweep.admin_linked ? "rgba(139,92,246,.22)" : "rgba(245,158,11,.22)"}`,
+                  borderRadius:999, padding:"1px 6px",
+                }}
+              >
+                {sweep.admin_username || `#${sweep.admin_id}`}{!sweep.admin_linked && " ~"}
+              </span>
+            )}
           </div>
           <div style={{ fontSize:10, color:"#4b5563", marginTop:3 }}>User #{sweep.user_id} · {sweep.username?.toUpperCase()} · Order #{sweep.exchange_order_id || "—"} · {sweep.retries} retries</div>
           {sweep.error && (
@@ -517,22 +622,45 @@ export default function ExchangeDashboard() {
   const [failedSweeps,  setFailedSweeps]  = useState([]);
   const [retryingSweep, setRetryingSweep] = useState(null);
 
+  /* cross-admin filter */
+  const [adminFilter,   setAdminFilter]   = useState("mine"); // "mine" | "all" | "<user_id>"
+  const [filterAdmins,  setFilterAdmins]  = useState([]);
+  const [canFilterAdmins, setCanFilterAdmins] = useState(false);
+
   const token   = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
+  const currentUsername = localStorage.getItem("username") || "Me";
+
+  const showOwnerColumns = canFilterAdmins && adminFilter !== "mine";
 
   function emptyForm() {
     return { from_currency_id:"", to_currency_id:"", rate:"", fee_percent:0, min_amount:0, max_amount:"", is_active:true };
   }
 
+  /* ── LOAD FILTER-ADMINS (once) ── */
+  const loadFilterAdmins = useCallback(async () => {
+    try {
+      const r = await api.get("/admin/exchange/filter-admins", { headers });
+      setFilterAdmins((r.data || []).filter(a => a.username !== currentUsername));
+      setCanFilterAdmins(true);
+    } catch {
+      setCanFilterAdmins(false);
+      setFilterAdmins([]);
+    }
+  }, []);
+
+  useEffect(() => { loadFilterAdmins(); }, [loadFilterAdmins]);
+
   /* ── LOAD ── */
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
+      const params = { admin_filter: adminFilter };
       const [pR, oR, cR, sR] = await Promise.all([
-        api.get("/admin/exchange/",                         { headers }),
-        api.get("/admin/exchange/orders",                   { headers }),
-        api.get("/admin/currencies/",                       { headers }),
-        api.get("/admin/exchange/failed-sweeps?resolved=false", { headers }),
+        api.get("/admin/exchange/", { headers, params }),
+        api.get("/admin/exchange/orders", { headers, params }),
+        api.get("/admin/currencies/", { headers }),
+        api.get("/admin/exchange/failed-sweeps", { headers, params: { ...params, resolved: false } }),
       ]);
       setPairs(pR.data || []);
       setOrders(oR.data || []);
@@ -540,7 +668,7 @@ export default function ExchangeDashboard() {
       setFailedSweeps(sR.data || []);
     } catch { showToast("Failed to load data", false); }
     setLoading(false);
-  }, []);
+  }, [adminFilter]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -549,6 +677,7 @@ export default function ExchangeDashboard() {
     if (selectedPair) {
       const fresh = pairs.find(p => p.id === selectedPair.id);
       if (fresh) setSelectedPair(fresh);
+      else setSelectedPair(null);
     }
   }, [pairs]);
 
@@ -625,9 +754,10 @@ export default function ExchangeDashboard() {
     const q = pairSearch.toLowerCase();
     return pairs.filter(p =>
       p.from_currency?.symbol?.toLowerCase().includes(q) ||
-      p.to_currency?.symbol?.toLowerCase().includes(q)
+      p.to_currency?.symbol?.toLowerCase().includes(q) ||
+      (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
     );
-  }, [pairs, pairSearch]);
+  }, [pairs, pairSearch, showOwnerColumns]);
 
   const filteredOrders = useMemo(() => {
     const q = orderSearch.toLowerCase().trim();
@@ -650,14 +780,15 @@ export default function ExchangeDashboard() {
           `${o.from_currency?.symbol}-${o.to_currency?.symbol}`.toLowerCase().includes(q) ||
           (o.username || "").toLowerCase().includes(q) ||
           String(o.user_id || "").includes(q) ||
-          String(o.id || "").includes(q);
+          String(o.id || "").includes(q) ||
+          (showOwnerColumns && ((o.admin_username || "").toLowerCase().includes(q) || String(o.admin_id || "").includes(q)));
 
         if (!hit) return false;
       }
 
       return true;
     });
-  }, [orders, orderSearch, orderStatus, orderFrom, orderTo]);
+  }, [orders, orderSearch, orderStatus, orderFrom, orderTo, showOwnerColumns]);
 
   const filteredSweeps = useMemo(() => {
     const q = sweepSearch.toLowerCase().trim();
@@ -669,12 +800,13 @@ export default function ExchangeDashboard() {
           (s.username || "").toLowerCase().includes(q) ||
           (s.currency || "").toLowerCase().includes(q) ||
           (s.network  || "").toLowerCase().includes(q) ||
-          String(s.exchange_order_id || "").includes(q);
+          String(s.exchange_order_id || "").includes(q) ||
+          (showOwnerColumns && ((s.admin_username || "").toLowerCase().includes(q) || String(s.admin_id || "").includes(q)));
         if (!hit) return false;
       }
       return true;
     });
-  }, [failedSweeps, sweepSearch, sweepResolved]);
+  }, [failedSweeps, sweepSearch, sweepResolved, showOwnerColumns]);
 
   const unresolvedSweeps = failedSweeps.filter(s => !s.resolved).length;
 
@@ -796,6 +928,14 @@ export default function ExchangeDashboard() {
                   </span>
                  </div> 
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {canFilterAdmins && (
+                  <AdminFilterDropdown
+                    value={adminFilter}
+                    onChange={setAdminFilter}
+                    adminList={filterAdmins}
+                    currentUsername={currentUsername}
+                  />
+                )}
                 <button
                   onClick={() => setAddOpen(true)}
                   style={{ 
@@ -819,7 +959,7 @@ export default function ExchangeDashboard() {
                 <div style={{ background:"#060c18", border:"1px solid rgba(255,255,255,.07)", borderRadius:7, padding:"5px 9px", display:"flex", alignItems:"center", gap:6 }}>
                   <Search size={12} color="#515c6dff" />
                   <input
-                    placeholder="Search pair…"
+                    placeholder={showOwnerColumns ? "Search pair or admin…" : "Search pair…"}
                     value={pairSearch}
                     onChange={e => setPairSearch(e.target.value)}
                     style={{ background:"transparent", border:"none", outline:"none", color:"white", fontSize:11, width:"100%" }}
@@ -838,6 +978,7 @@ export default function ExchangeDashboard() {
                         key={p.id}
                         p={p}
                         selected={selectedPair?.id === p.id}
+                        showOwner={showOwnerColumns}
                         onClick={() =>
                           setSelectedPair(prev => (prev?.id === p.id ? null : p))
                         }
@@ -1001,7 +1142,7 @@ export default function ExchangeDashboard() {
                   <div style={{ position:"relative", flex:"1 1 160px", minWidth:0 }}>
                     <Search size={12} style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", color:"#677285ff", pointerEvents:"none" }} />
                     <input
-                      placeholder="Search user, ID or pair…"
+                      placeholder={showOwnerColumns ? "Search user, ID, pair or admin…" : "Search user, ID or pair…"}
                       value={orderSearch}
                       onChange={e => setOrderSearch(e.target.value)}
                       style={{ ...S.filterInput, paddingLeft:28, width:"100%", boxSizing:"border-box" }}
@@ -1032,46 +1173,56 @@ export default function ExchangeDashboard() {
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                   {filteredOrders.length === 0
                     ? <EmptyState icon={FileText} title="No orders found" sub="Try adjusting your filters" />
-                    : filteredOrders.map(o => <OrderRow key={o.id} item={o} />)
+                    : filteredOrders.map(o => <OrderRow key={o.id} item={o} showOwner={showOwnerColumns} />)
                   }
                 </div>
               </div>
               )}
+
+
+
+
+
               {/* SWEEPS */}
                {rightTab === RIGHT_TABS.FAILED_SWEEPS && (
-                <div style={S.filtersContainer}>
-                <div style={{ display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
-                  <div style={{ position:"relative", flex:"1 1 160px", minWidth:0 }}>
-                    <Search size={11} style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", color:"#374151", pointerEvents:"none" }} />
-                    <input
-                      placeholder="Search user, currency, network…"
-                      value={sweepSearch}
-                      onChange={e => setSweepSearch(e.target.value)}
-                      style={{ ...S.filterInput, paddingLeft:28, width:"100%", boxSizing:"border-box" }}
-                    />
+                
+              <div style={{ display:"flex", flexDirection:"column", gap:10, height:"100%" }}>
+                  <div style={S.filtersContainer}>
+                    <div style={{ display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
+                      <div style={{ position:"relative", flex:"1 1 160px", minWidth:0 }}>
+                        <Search size={11} style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", color:"#374151", pointerEvents:"none" }} />
+                        <input
+                          placeholder={showOwnerColumns ? "Search user, currency, network or admin…" : "Search user, currency, network…"}
+                          value={sweepSearch}
+                          onChange={e => setSweepSearch(e.target.value)}
+                          style={{ ...S.filterInput, paddingLeft:28, width:"100%", boxSizing:"border-box" }}
+                        />
+                      </div>
+                      <select value={sweepResolved} onChange={e => setSweepResolved(e.target.value)} style={S.filterInput}>
+                        <option value="">All</option>
+                        <option value="false">Unresolved</option>
+                        <option value="true">Resolved</option>
+                      </select>
+                      <button onClick={() => { setSweepSearch(""); setSweepResolved("false"); }} style={S.refreshBtn} title="Clear">
+                        Clear
+                      </button>
                   </div>
-                  <select value={sweepResolved} onChange={e => setSweepResolved(e.target.value)} style={S.filterInput}>
-                    <option value="">All</option>
-                    <option value="false">Unresolved</option>
-                    <option value="true">Resolved</option>
-                  </select>
-                  <button onClick={() => { setSweepSearch(""); setSweepResolved("false"); }} style={S.refreshBtn} title="Clear">
-                    Clear
-                  </button>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                  {filteredSweeps.length === 0
-                    ? <EmptyState icon={AlertTriangle} title="No sweeps found" sub="All clear — no failed sweeps matching your filter" />
-                    : filteredSweeps.map(s => <SweepRow key={s.id} sweep={s} onRetry={retrySweep} retrying={retryingSweep} />)
-                  }
-                </div>
-              
-              </div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {filteredSweeps.length === 0
+                      ? <EmptyState icon={AlertTriangle} title="No sweeps found" sub="All clear — no failed sweeps matching your filter" />
+                      : filteredSweeps.map(s => <SweepRow key={s.id} sweep={s} onRetry={retrySweep} retrying={retryingSweep} showOwner={showOwnerColumns} />)
+                    }
+                  </div>
+                
+               </div>
                 )}
+
+
               {/* ANALYSIS */}
                {rightTab === RIGHT_TABS.ANALYSIS && (
-              <div key={RIGHT_TABS.ANALYSIS} style={{ height:"100%" }}>
-                <AnalysisTab pairs={pairs} headers={headers} />
+              <div key={`${RIGHT_TABS.ANALYSIS}-${adminFilter}`} style={{ height:"100%" }}>
+                <AnalysisTab pairs={pairs} headers={headers} adminFilter={adminFilter} />
               </div>
                )}
 

@@ -11,6 +11,14 @@ admin exchange router):
     GET /admin/exchange/analysis/inventory?base_currency_symbol=
     GET /admin/exchange/analysis/volume?from=&to=
 
+All of the above also accept an optional `admin_filter` query param:
+  - omitted / "mine" -> scoped to the requesting user's own admin_id
+  - "all"            -> platform-wide, across every admin (requires
+                         can_view_all_admins — master or
+                         platform_exchange_management)
+  - "<user_id>"       -> scoped to that specific admin (same permission
+                         requirement)
+
 IMPORTANT: ExchangeOrder has NO pair_id column — only from_currency_id /
 to_currency_id. So "orders for a pair" = orders matching that pair's
 (from_currency_id, to_currency_id).
@@ -25,8 +33,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.core.security import get_current_user, is_admin_or_above
+from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.core.permissions import has_access
+from app.services.exchange_scope import resolve_admin_scope
 
 from app.models.exchange_pair import ExchangePair
 from app.models.exchange_order import ExchangeOrder
@@ -122,6 +131,7 @@ def get_rate_history(
     pair_id:   int           = Query(...),
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
+    admin_filter: Optional[str] = Query(None),
     db:    Session = Depends(get_db),
     admin = Depends(get_admin),
 ):
@@ -131,6 +141,10 @@ def get_rate_history(
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
+
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    if not scope_all and pair.admin_id != scope_admin_id:
+        raise HTTPException(403, "Pair not available for this scope")
 
     dt_from, dt_to = _parse_date_range(date_from, date_to)
 
@@ -150,6 +164,7 @@ def get_rate_history(
         .filter(
             ExchangeOrder.from_currency_id == pair.from_currency_id,
             ExchangeOrder.to_currency_id   == pair.to_currency_id,
+            ExchangeOrder.admin_id         == pair.admin_id,
             ExchangeOrder.status           == "completed",
             ExchangeOrder.created_at       >= dt_from,
             ExchangeOrder.created_at       <= dt_to,
@@ -181,6 +196,7 @@ def get_rate_ohlc(
     timeframe: str           = Query("1h"),
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
+    admin_filter: Optional[str] = Query(None),
     db:    Session = Depends(get_db),
     admin = Depends(get_admin),
 ):
@@ -218,6 +234,10 @@ def get_rate_ohlc(
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
+
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    if not scope_all and pair.admin_id != scope_admin_id:
+        raise HTTPException(403, "Pair not available for this scope")
  
     dt_from, dt_to = _parse_date_range(date_from, date_to)
     bucket_secs    = TIMEFRAME_SECONDS[timeframe]
@@ -323,6 +343,7 @@ def get_pnl_series(
     date_from: Optional[str] = Query(None, alias="from"),
     date_to: Optional[str] = Query(None, alias="to"),
     base_currency_symbol: str = Query("USDT"),
+    admin_filter: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     admin=Depends(get_admin),
 ):
@@ -341,18 +362,19 @@ def get_pnl_series(
     if not has_access(admin, "exchange.manage"):
         raise HTTPException(403, "Access denied")
 
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+
     dt_from, dt_to = _parse_date_range(date_from, date_to)
 
-    orders = (
-        db.query(ExchangeOrder)
-        .filter(
-            ExchangeOrder.status == "completed",
-            ExchangeOrder.created_at >= dt_from,
-            ExchangeOrder.created_at <= dt_to,
-        )
-        .order_by(ExchangeOrder.created_at.asc())
-        .all()
+    query = db.query(ExchangeOrder).filter(
+        ExchangeOrder.status == "completed",
+        ExchangeOrder.created_at >= dt_from,
+        ExchangeOrder.created_at <= dt_to,
     )
+    if not scope_all:
+        query = query.filter(ExchangeOrder.admin_id == scope_admin_id)
+
+    orders = query.order_by(ExchangeOrder.created_at.asc()).all()
 
     # Cache currency_id -> symbol lookups
     currency_symbols: dict[int, str] = {}
@@ -388,6 +410,7 @@ def get_pnl_series(
     # ─────────────────────────────────────────────
     inv = get_inventory_snapshot(
         base_currency_symbol=base_currency_symbol,
+        admin_filter=admin_filter,
         db=db,
         admin=admin,
     )
@@ -431,6 +454,7 @@ def get_pnl_series(
 @router.get("/inventory")
 def get_inventory_snapshot(
     base_currency_symbol: str = Query("USDT"),
+    admin_filter: Optional[str] = Query(None),
     db:    Session = Depends(get_db),
     admin = Depends(get_admin),
 ):
@@ -443,9 +467,11 @@ def get_inventory_snapshot(
     if not has_access(admin, "exchange.manage"):
         raise HTTPException(403, "Access denied")
 
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+
     LEDGER_BASE = "USDT"  # rate_to_base_at_trade was recorded against this
 
-    rows = (
+    rows_query = (
         db.query(
             ExchangeInventoryLedger.currency_id,
             ExchangeInventoryLedger.currency_symbol,
@@ -455,6 +481,17 @@ def get_inventory_snapshot(
                 func.coalesce(ExchangeInventoryLedger.rate_to_base_at_trade, 1.0)
             ).label("cost_basis_in_ledger_base"),
         )
+    )
+
+    if not scope_all:
+        rows_query = (
+            rows_query
+            .join(ExchangeOrder, ExchangeInventoryLedger.order_id == ExchangeOrder.id)
+            .filter(ExchangeOrder.admin_id == scope_admin_id)
+        )
+
+    rows = (
+        rows_query
         .group_by(ExchangeInventoryLedger.currency_id, ExchangeInventoryLedger.currency_symbol)
         .all()
     )
@@ -496,37 +533,43 @@ def get_inventory_snapshot(
 def get_volume_by_pair(
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
+    admin_filter: Optional[str] = Query(None),
     db:    Session = Depends(get_db),
     admin = Depends(get_admin),
 ):
     if not has_access(admin, "exchange.manage"):
         raise HTTPException(403, "Access denied")
 
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+
     dt_from, dt_to = _parse_date_range(date_from, date_to)
 
-    rows = (
-        db.query(
+    query = db.query(
             ExchangeOrder.from_currency_id,
             ExchangeOrder.to_currency_id,
             func.count(ExchangeOrder.id).label("order_count"),
             func.sum(ExchangeOrder.from_amount).label("total_from_amount"),
             func.sum(ExchangeOrder.fee_amount).label("total_fee_amount"),
-        )
-        .filter(
+        ).filter(
             ExchangeOrder.status     == "completed",
             ExchangeOrder.created_at >= dt_from,
             ExchangeOrder.created_at <= dt_to,
         )
-        .group_by(ExchangeOrder.from_currency_id, ExchangeOrder.to_currency_id)
-        .all()
-    )
+
+    if not scope_all:
+        query = query.filter(ExchangeOrder.admin_id == scope_admin_id)
+
+    rows = query.group_by(ExchangeOrder.from_currency_id, ExchangeOrder.to_currency_id).all()
 
     results = []
     for r in rows:
-        pair    = db.query(ExchangePair).filter(
+        pair_query = db.query(ExchangePair).filter(
             ExchangePair.from_currency_id == r.from_currency_id,
             ExchangePair.to_currency_id   == r.to_currency_id,
-        ).first()
+        )
+        if not scope_all:
+            pair_query = pair_query.filter(ExchangePair.admin_id == scope_admin_id)
+        pair    = pair_query.first()
         from_c = db.query(Currency).filter(Currency.id == r.from_currency_id).first()
         to_c   = db.query(Currency).filter(Currency.id == r.to_currency_id).first()
         results.append({

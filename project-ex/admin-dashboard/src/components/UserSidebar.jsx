@@ -240,7 +240,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
   }), [currentUser]);
 
  
-  // helper
+  // Get USERNAME by ID
   async function getUsernameById(userId) {
     if (!userId) return "";
     const res = await fetch(`${API_URL}/admin/users/username/${userId}`, {
@@ -251,7 +251,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     return data.username || "";
   }
 
-  // usage
+  // usage of UsernameByID
   useEffect(() => {
     if (user?.admin_id) getUsernameById(user.admin_id).then(setAdminUsername);
     else setAdminUsername("");

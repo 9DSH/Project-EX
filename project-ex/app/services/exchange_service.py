@@ -15,6 +15,8 @@ from app.services.sweep_service import sweep_specific_amount
 from app.services.exchange_analysis_service import log_inventory_for_order
 from app.models.user import User
 from decimal import Decimal, getcontext
+from app.constants.transaction_types import EXCHANGE_COMMISSION, EXCHANGE_IN,EXCHANGE_OUT
+from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 
 getcontext().prec = 28
 
@@ -31,6 +33,7 @@ def execute_exchange(
     from_currency_symbol: str,
     to_currency_symbol: str,
     amount: float,
+    admin_id: int | None = None,
     from_network_id: int = None,
     to_network_id: int = None,
     custom_rate: float | None = None
@@ -112,8 +115,17 @@ def execute_exchange(
         )
     ).first()
 
+    if admin_id is not None:
+        pair_query = pair_query.filter(ExchangePair.admin_id == admin_id)
+
+    pair = pair_query.first()
+
     if not pair:
         raise HTTPException(400, "Exchange pair not available")
+
+    # Cross-tenant guardrail: the acting admin_id (if given) must own the pair.
+    if admin_id is not None and pair.admin_id != admin_id:
+        raise HTTPException(403, "Pair not available for this account")
 
     # =========================
     # GET USER FROM BALANCE
@@ -249,6 +261,7 @@ def execute_exchange(
         rate=selected_rate,
         fee_percent=pair.fee_percent,
         fee_amount=fee_amount,
+        admin_id=pair.admin_id,
         status="completed"
     )
     db.add(exchange_order)
@@ -269,16 +282,16 @@ def execute_exchange(
         currency_id=from_currency.id,
         network_id=from_network.id,
         amount=-amount,
-        type="exchange_out",
-        status="completed"
+        type=EXCHANGE_OUT,
+        status=COMPLETED
     ))
     db.add(Transaction(
         user_id=user_id,
         currency_id=to_currency.id,
         network_id=to_network.id,
         amount=converted_amount ,
-        type="exchange_in",
-        status="completed"
+        type=EXCHANGE_IN,
+        status=COMPLETED
     ))
 
     # =========================
@@ -289,8 +302,8 @@ def execute_exchange(
         currency_id=to_currency.id,
         network_id=to_network.id,
         amount=fee_amount,
-        type="exchange_commission",
-        status="completed"
+        type=EXCHANGE_COMMISSION,
+        status=COMPLETED
     ))
 
     # =========================
@@ -308,7 +321,8 @@ def execute_exchange(
         amount=float(amount),
         currency_symbol=from_currency_symbol,
         network=from_network.chain,
-        reason=f"exchange_{from_currency_symbol.lower()}_to_{to_currency_symbol.lower()}"
+        reason=f"exchange_{from_currency_symbol.lower()}_to_{to_currency_symbol.lower()}",
+        exchange_order_id=exchange_order.id,
     )
 
     sweep_ok = sweep_result.get("status") == "success"
@@ -339,6 +353,7 @@ def get_exchange_rate(
     db: Session,
     from_currency_symbol: str,
     to_currency_symbol: str,
+    admin_id: int | None = None,
     custom_rate: float | None = None,
     amount: float | None = None  
 ):
@@ -359,8 +374,16 @@ def get_exchange_rate(
         ExchangePair.is_active == True
     ).first()
 
+    if admin_id is not None:
+        pair_query = pair_query.filter(ExchangePair.admin_id == admin_id)
+
+    pair = pair_query.first()
+
     if not pair:
         raise HTTPException(400, "Pair not available")
+
+    if admin_id is not None and pair.admin_id != admin_id:
+        raise HTTPException(403, "Pair not available for this account")
 
     selected_rate = custom_rate if custom_rate is not None else pair.rate
 

@@ -29,6 +29,8 @@ const ACCESS_OPTIONS = [
   // ───────────────── EXCHANGE
   { key: "exchange.view", label: "View Exchanges", group: "exchange" },
   { key: "exchange.manage", label: "Manage Exchanges", group: "exchange" },
+  { key: "platform_exchange_management", label: "Platform Exchange Management (Cross-Admin)", group: "exchange" },
+
 
   // ───────────────── WIRE TRANSFER
   { key: "wire_transfer.view",   label: "View Wire Transfers",   group: "wire_transfer" },

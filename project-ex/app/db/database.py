@@ -341,6 +341,7 @@ def ensure_schema():
         # --- Step 1: admin_id on rates / pairs / orders ---
         for table_name in (
             "exchange_rates",
+            "exchange_pairs",
             "wire_transfer_pairs",
             "exchange_orders",
             "wire_transfer_orders",
@@ -349,8 +350,11 @@ def ensure_schema():
 
         _backfill_admin_id_to_master(conn, "exchange_rates")
         _backfill_admin_id_to_master(conn, "wire_transfer_pairs")
+        _backfill_admin_id_to_master(conn, "exchange_pairs")
+        _recompute_exchange_order_admin_from_pair(conn)
         _backfill_admin_id_from_user(conn, "exchange_orders")
         _backfill_admin_id_from_user(conn, "wire_transfer_orders")
+        _recompute_wire_order_admin_from_pair(conn)
 
         _migrate_exchange_rate_history_changed_by(conn)
 
@@ -361,3 +365,70 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+
+def _recompute_exchange_order_admin_from_pair(conn) -> None:
+    """
+    exchange_orders.admin_id was originally backfilled from the buyer's
+    User.admin_id (Step 1, before ExchangePair.admin_id existed). Now that
+    pairs carry their true owner, re-derive admin_id from the matching
+    ExchangePair (same from/to currency + admin) wherever the match is
+    unambiguous. Orders whose currency pair no longer resolves to exactly
+    one pair are left untouched (fresh orders created after this fix
+    already carry the correct value from the application code).
+    """
+    if not _table_exists(conn, "exchange_orders") or not _table_exists(conn, "exchange_pairs"):
+        print("[ensure_schema] skip exchange_orders admin recompute: table(s) missing")
+        return
+
+    conn.execute(
+        text(
+            """
+            UPDATE exchange_orders eo
+            SET admin_id = matched.admin_id
+            FROM (
+                SELECT from_currency_id, to_currency_id, admin_id
+                FROM exchange_pairs
+                GROUP BY from_currency_id, to_currency_id, admin_id
+                HAVING COUNT(*) = (
+                    SELECT COUNT(*) FROM exchange_pairs ep2
+                    WHERE ep2.from_currency_id = exchange_pairs.from_currency_id
+                      AND ep2.to_currency_id = exchange_pairs.to_currency_id
+                )
+            ) matched
+            WHERE eo.from_currency_id = matched.from_currency_id
+              AND eo.to_currency_id = matched.to_currency_id
+              AND eo.admin_id IS DISTINCT FROM matched.admin_id
+              AND (
+                  SELECT COUNT(*) FROM exchange_pairs ep3
+                  WHERE ep3.from_currency_id = eo.from_currency_id
+                    AND ep3.to_currency_id = eo.to_currency_id
+              ) = 1
+            """
+        )
+    )
+
+
+def _recompute_wire_order_admin_from_pair(conn) -> None:
+    """
+    Same rationale as _recompute_exchange_order_admin_from_pair: wire_transfer_orders.admin_id
+    was originally backfilled from the buyer's User.admin_id before pairs had
+    a real owner concept enforced at creation. Re-derive from the unambiguous
+    matching pair.
+    """
+    if not _table_exists(conn, "wire_transfer_orders") or not _table_exists(conn, "wire_transfer_pairs"):
+        print("[ensure_schema] skip wire_transfer_orders admin recompute: table(s) missing")
+        return
+
+    conn.execute(
+        text(
+            """
+            UPDATE wire_transfer_orders wto
+            SET admin_id = wtp.admin_id
+            FROM wire_transfer_pairs wtp
+            WHERE wto.pair_id = wtp.id
+              AND wto.admin_id IS DISTINCT FROM wtp.admin_id
+            """
+        )
+    )

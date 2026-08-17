@@ -60,6 +60,7 @@ def login_user(username: str, password: str, telegram_id: str = None):
             "sub": user.username,
             "role": user.role,
             "user_id": user.user_id,
+            "admin_id": user.admin_id,
             "access_points": access_points
         })
         # =========================

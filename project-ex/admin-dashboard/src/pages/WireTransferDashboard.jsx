@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
 import {
   Landmark, Plus, Edit3, Trash2, Power, PowerOff, X, Save,
   CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown,
-  ChevronUp, Send, Ban, RefreshCw, Timer, GitCompare, FileText,
+  ChevronUp, Send, Ban, RefreshCw, Timer, GitCompare, FileText, Search, Users,
 } from "lucide-react";
 
 const API = "http://127.0.0.1:8000";
@@ -195,6 +195,79 @@ const Field = ({ label, children }) => (
     {children}
   </div>
 );
+
+// ─── ADMIN FILTER DROPDOWN ─────────────────────────────────────
+function AdminFilterDropdown({ value, onChange, adminList, currentUsername }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const currentLabel =
+    value === "all" ? "All Admins" :
+    value === "mine" ? `My Rates (${currentUsername})` :
+    adminList.find(a => String(a.user_id) === String(value))?.username
+      ? `Admin: ${adminList.find(a => String(a.user_id) === String(value)).username}`
+      : "My Rates";
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: open ? "rgba(139,92,246,.16)" : "rgba(139,92,246,.1)",
+          border: `1px solid ${open ? "#8b5cf6" : "rgba(139,92,246,.28)"}`,
+          color: "#c4b5fd", borderRadius: 7, padding: "7px 9px",
+          fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        <Users size={12} />
+        {currentLabel}
+        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 220,
+          background: "#0d1424", border: "1px solid rgba(139,92,246,.25)", borderRadius: 10,
+          zIndex: 50, boxShadow: "0 12px 32px rgba(0,0,0,.5)", overflow: "hidden",
+        }}>
+          <div
+            onClick={() => { onChange("mine"); setOpen(false); }}
+            style={{ padding: "9px 12px", cursor: "pointer", fontSize: 12, fontWeight: value === "mine" ? 700 : 500, color: value === "mine" ? "#a78bfa" : "#94a3b8", background: value === "mine" ? "rgba(139,92,246,.1)" : "transparent" }}
+          >
+            My Rates ({currentUsername})
+          </div>
+          <div
+            onClick={() => { onChange("all"); setOpen(false); }}
+            style={{ padding: "9px 12px", cursor: "pointer", fontSize: 12, fontWeight: value === "all" ? 700 : 500, color: value === "all" ? "#a78bfa" : "#94a3b8", background: value === "all" ? "rgba(139,92,246,.1)" : "transparent", borderTop: "1px solid rgba(255,255,255,.05)" }}
+          >
+            All Admins (Platform)
+          </div>
+          {adminList.length > 0 && (
+            <div style={{ maxHeight: 220, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,.05)" }}>
+              {adminList.map(a => (
+                <div
+                  key={a.user_id}
+                  onClick={() => { onChange(String(a.user_id)); setOpen(false); }}
+                  style={{ padding: "9px 12px", cursor: "pointer", fontSize: 12, fontWeight: String(value) === String(a.user_id) ? 700 : 500, color: String(value) === String(a.user_id) ? "#a78bfa" : "#94a3b8", background: String(value) === String(a.user_id) ? "rgba(139,92,246,.1)" : "transparent", display: "flex", justifyContent: "space-between", gap: 8 }}
+                >
+                  <span>{a.username}</span>
+                  <span style={{ color: "#4b5563", fontSize: 10 }}>{a.role === "master" ? "MASTER" : `#${a.user_id}`}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── STEP BUILDER ─────────────────────────────────────────────
 function StepBuilder({ fields, onChange }) {
@@ -739,7 +812,7 @@ function StatusTimeline({ order }) {
 }
 
 // ─── ORDER SIDEBAR ────────────────────────────────────────────
-function WireSidebar({ order, onAction, onClose }) {
+function WireSidebar({ order, onAction, onClose, showOwner }) {
   const [showFail, setShowFail] = useState(false);
   const [showDeliver, setShowDeliver] = useState(false);
   if (!order) return null;
@@ -772,6 +845,10 @@ function WireSidebar({ order, onAction, onClose }) {
             <StatusBadge status={order.status} />
             {order.status === "pending" && order.expires_at && <Countdown expiresAt={order.expires_at} />}
           </div>
+
+          {showOwner && order.admin_id != null && (
+            <div style={{ fontSize: 12, color: "#a78bfa" }}>Pair owner: {order.admin_username || `#${order.admin_id}`}</div>
+          )}
 
           {/* status timeline — ordered / approved (by who) / delivered (by who) / rejected / failed */}
           <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 14 }}>
@@ -866,11 +943,21 @@ function Row({ k, v, accent }) {
 }
 
 // ─── PAIR ROW ─────────────────────────────────────────────────
-function PairRow({ p, selected, onClick }) {
+function PairRow({ p, selected, onClick, showOwner }) {
   return (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 16px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selected ? "rgba(59,130,246,.3)" : "transparent"}`, background: selected ? "rgba(59,130,246,.08)" : "transparent", transition: "all .15s", marginBottom: 3 }}>
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 16px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selected ? "rgba(59,130,246,.3)" : "transparent"}`, background: selected ? "rgba(59,130,246,.08)" : "transparent", transition: "all .15s", marginBottom: 3 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: p.is_active ? "#22c55e" : "#374151", flexShrink: 0, boxShadow: p.is_active ? "0 0 6px rgba(34,197,94,.4)" : "none" }} />
       <span style={{ fontSize: 14, fontWeight: 700, color: selected ? "white" : "#94a3b8", flex: 1 }}>{p.from_currency?.symbol} → {p.to_currency?.symbol}</span>
+      {showOwner && p.admin_id != null && (
+        <span style={{
+          fontSize: 10, fontWeight: 700, color: "#a78bfa",
+          background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.25)",
+          borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap",
+          maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {p.admin_username || `#${p.admin_id}`}
+        </span>
+      )}
       <span style={{ fontSize: 13, color: "#3b82f6", fontWeight: 700 }}>{p.is_active ? fmt(p.rate, 4) : "—"}</span>
     </div>
   );
@@ -894,6 +981,9 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
             {pair.is_active ? "LIVE" : "OFF"}
           </span>
         </div>
+        {pair.admin_username && (
+          <div style={{ marginTop: 6, fontSize: 11, color: "#a78bfa" }}>Owner: {pair.admin_username} (#{pair.admin_id})</div>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "13px 15px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -966,14 +1056,17 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
 }
 
 // ─── ORDERS TABLE ─────────────────────────────────────────────
-function OrdersTable({ orders, onSelectOrder, loading }) {
+function OrdersTable({ orders, onSelectOrder, loading, showOwner }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filtered = orders.filter(o => {
     const matchStatus = statusFilter === "all" || o.status === statusFilter;
     const q = search.toLowerCase();
-    const matchSearch = !q || (o.username || "").toLowerCase().includes(q) || String(o.id).includes(q);
+    const matchSearch = !q
+      || (o.username || "").toLowerCase().includes(q)
+      || String(o.id).includes(q)
+      || (showOwner && ((o.admin_username || "").toLowerCase().includes(q) || String(o.admin_id || "").includes(q)));
     return matchStatus && matchSearch;
   });
 
@@ -981,7 +1074,7 @@ function OrdersTable({ orders, onSelectOrder, loading }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* toolbar */}
       <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-        <input style={{ ...S.input, flex: 1, minWidth: 140, padding: "7px 11px", fontSize: 12 }} placeholder="Search by user or order ID…" value={search} onChange={e => setSearch(e.target.value)} />
+        <input style={{ ...S.input, flex: 1, minWidth: 140, padding: "7px 11px", fontSize: 12 }} placeholder={showOwner ? "Search by user, order ID or admin…" : "Search by user or order ID…"} value={search} onChange={e => setSearch(e.target.value)} />
         <select style={{ ...S.input, width: "auto", padding: "7px 11px", fontSize: 12 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="all">All status</option>
           {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -1004,12 +1097,17 @@ function OrdersTable({ orders, onSelectOrder, loading }) {
             onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.055)"}>
             {/* header: id/user — status */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ color: "#475569", fontSize: 11 }}>#{o.id}</span>
                 <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>{o.username}</span>
                 {o.payment_method_label && (
                   <span style={{ fontSize: 10, color: "#86efac", background: "rgba(34,197,94,.12)", border: "1px solid rgba(34,197,94,.25)", borderRadius: 999, padding: "2px 7px" }}>
                     {o.payment_method_label}
+                  </span>
+                )}
+                {showOwner && o.admin_id != null && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.22)", borderRadius: 999, padding: "2px 7px" }}>
+                    {o.admin_username || `#${o.admin_id}`}
                   </span>
                 )}
               </div>
@@ -1078,25 +1176,50 @@ export default function WireTransferDashboard() {
   const [addForm, setAddForm] = useState(emptyWireForm());
   const [editPair, setEditPair] = useState(null);
 
+  // pairs search
+  const [pairSearch, setPairSearch] = useState("");
+
+  // cross-admin filter
+  const [adminFilter, setAdminFilter] = useState("mine"); // "mine" | "all" | "<user_id>"
+  const [filterAdmins, setFilterAdmins] = useState([]);
+  const [canFilterAdmins, setCanFilterAdmins] = useState(false);
+
+  const currentUsername = localStorage.getItem("username") || "Me";
+  const showOwnerColumns = canFilterAdmins && adminFilter !== "mine";
+
   // fiat-only currencies for the pair selects
   const fiatCurrencies = useMemo(() => currencies.filter(isFiat), [currencies]);
+
+  // ── fetch filter-admins (once) ──────────────────────────────
+  const fetchFilterAdmins = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/admin/wire-transfer/filter-admins`, auth());
+      setFilterAdmins((r.data || []).filter(a => a.username !== currentUsername));
+      setCanFilterAdmins(true);
+    } catch {
+      setCanFilterAdmins(false);
+      setFilterAdmins([]);
+    }
+  }, []);
+
+  useEffect(() => { fetchFilterAdmins(); }, [fetchFilterAdmins]);
 
   // ── fetch ──────────────────────────────────────────────────
   const fetchPairs = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/admin/wire-transfer/pairs`, auth());
+      const r = await axios.get(`${API}/admin/wire-transfer/pairs`, { ...auth(), params: { admin_filter: adminFilter } });
       setPairs(r.data);
       setPairsLoading(false);
     } catch { setPairsLoading(false); }
-  }, []);
+  }, [adminFilter]);
 
   const fetchOrders = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/admin/wire-transfer/orders`, auth());
+      const r = await axios.get(`${API}/admin/wire-transfer/orders`, { ...auth(), params: { admin_filter: adminFilter } });
       setOrders(r.data);
       setOrdersLoading(false);
     } catch { setOrdersLoading(false); }
-  }, []);
+  }, [adminFilter]);
 
   const fetchCurrencies = useCallback(async () => {
     try {
@@ -1113,6 +1236,14 @@ export default function WireTransferDashboard() {
     const id = setInterval(fetchOrders, 15000);
     return () => clearInterval(id);
   }, [fetchPairs, fetchOrders, fetchCurrencies]);
+
+  useEffect(() => {
+    if (selectedPair) {
+      const fresh = pairs.find(p => p.id === selectedPair.id);
+      if (fresh) setSelectedPair(fresh);
+      else setSelectedPair(null);
+    }
+  }, [pairs]);
 
   // ── pair actions ───────────────────────────────────────────
   const savePair = async (form) => {
@@ -1211,6 +1342,16 @@ export default function WireTransferDashboard() {
     }
   };
 
+  const filteredPairs = useMemo(() => {
+    const q = pairSearch.toLowerCase();
+    if (!q) return pairs;
+    return pairs.filter(p =>
+      p.from_currency?.symbol?.toLowerCase().includes(q) ||
+      p.to_currency?.symbol?.toLowerCase().includes(q) ||
+      (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
+    );
+  }, [pairs, pairSearch, showOwnerColumns]);
+
   // ── header stats ───────────────────────────────────────────
   const activePairs   = pairs.filter(p => p.is_active).length;
   const pendingCount  = orders.filter(o => o.status === "pending").length;
@@ -1271,23 +1412,46 @@ export default function WireTransferDashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <Landmark size={16} color="#3b82f6" />
                 <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Pairs</span>
-                <span style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa", borderRadius: 20, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{pairs.length}</span>
+                <span style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa", borderRadius: 20, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{filteredPairs.length}</span>
               </div>
-              <button
-                onClick={() => setAddOpen(true)}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,.14)", border: "1px solid rgba(59,130,246,.28)", color: "#93c5fd", borderRadius: 7, padding: "7px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <Plus size={12} />Add
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {canFilterAdmins && (
+                  <AdminFilterDropdown
+                    value={adminFilter}
+                    onChange={setAdminFilter}
+                    adminList={filterAdmins}
+                    currentUsername={currentUsername}
+                  />
+                )}
+                <button
+                  onClick={() => setAddOpen(true)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,.14)", border: "1px solid rgba(59,130,246,.28)", color: "#93c5fd", borderRadius: 7, padding: "7px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  <Plus size={12} />Add
+                </button>
+              </div>
+            </div>
+
+            {/* search */}
+            <div style={{ padding: "7px 10px", borderBottom: "1px solid rgba(255,255,255,.04)", flexShrink: 0 }}>
+              <div style={{ background: "#060c18", border: "1px solid rgba(255,255,255,.07)", borderRadius: 7, padding: "5px 9px", display: "flex", alignItems: "center", gap: 6 }}>
+                <Search size={12} color="#515c6dff" />
+                <input
+                  placeholder={showOwnerColumns ? "Search pair or admin…" : "Search pair…"}
+                  value={pairSearch}
+                  onChange={e => setPairSearch(e.target.value)}
+                  style={{ background: "transparent", border: "none", outline: "none", color: "white", fontSize: 11, width: "100%" }}
+                />
+              </div>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px" }}>
               {pairsLoading ? (
                 [...Array(5)].map((_, i) => <div key={i} style={{ padding: "9px 11px", marginBottom: 3 }}><Sk h={14} /></div>)
-              ) : pairs.length === 0 ? (
-                <div style={{ color: "#475569", textAlign: "center", paddingTop: 30, fontSize: 12 }}>No pairs yet.</div>
-              ) : pairs.map(p => (
-                <PairRow key={p.id} p={p} selected={selectedPair?.id === p.id} onClick={() => setSelectedPair(prev => (prev?.id === p.id ? null : p))} />
+              ) : filteredPairs.length === 0 ? (
+                <div style={{ color: "#475569", textAlign: "center", paddingTop: 30, fontSize: 12 }}>No pairs found.</div>
+              ) : filteredPairs.map(p => (
+                <PairRow key={p.id} p={p} selected={selectedPair?.id === p.id} showOwner={showOwnerColumns} onClick={() => setSelectedPair(prev => (prev?.id === p.id ? null : p))} />
               ))}
             </div>
           </div>
@@ -1357,7 +1521,7 @@ export default function WireTransferDashboard() {
             </div>
             <button onClick={fetchOrders} style={{ ...S.iconBtn }}><RefreshCw size={14} /></button>
           </div>
-          <OrdersTable orders={orders} onSelectOrder={selectOrder} loading={ordersLoading} />
+          <OrdersTable orders={orders} onSelectOrder={selectOrder} loading={ordersLoading} showOwner={showOwnerColumns} />
         </div>
 
         {/* ── ORDER SIDEBAR ── */}
@@ -1366,6 +1530,7 @@ export default function WireTransferDashboard() {
             order={selectedOrder}
             onAction={handleOrderAction}
             onClose={() => setSelectedOrder(null)}
+            showOwner={showOwnerColumns}
           />
         )}
       </div>

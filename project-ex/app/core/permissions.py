@@ -23,6 +23,7 @@ class Permissions:
    # EXCHANGE
     EXCHANGE_VIEW = "exchange.view"
     EXCHANGE_MANAGE = "exchnage.manage"
+    PLATFORM_EXCHANGE_MANAGEMENT = "platform_exchange_management"
 
     # WIRE TRANSFER
     WIRE_TRANSFER_VIEW   = "wire_transfer.view"
@@ -110,4 +111,8 @@ def has_access(user, permission: str):
     if allowed == "*":
         return True
 
-    return permission in allowed
+    if permission in allowed:
+        return True
+
+    access_points = user.get("access_points") or []
+    return permission in access_points

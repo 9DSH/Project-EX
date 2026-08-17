@@ -144,7 +144,8 @@ export default function Users() {
 
   // ── Filter + sort ─────────────────────────────────────────
   const getUserActivityScore = (u) => {
-    return (u.pending_orders || 0) + (u.approved_orders || 0) + (u.unread_messages || 0);
+    return (u.pending_orders || 0) + (u.approved_orders || 0) + (u.unread_messages || 0)
+      + (u.pending_wire_transfers || 0) + (u.pending_withdrawals || 0);
   };
 
   const getUserBalanceValue = (u, currency) => {
@@ -803,11 +804,16 @@ export default function Users() {
 
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <div style={{ display: "flex", gap: 7 }}>
-                    {[["💬", u.unread_messages, "badgeRed"], ["📦", (u.pending_orders || 0) + (u.approved_orders || 0), "badgeAmber"]].map(([icon, count, cls], i) => (
+                    {[
+                      ["💬", u.unread_messages, "#ef4444"],
+                      ["📦", (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
+                      ["🏦", u.pending_wire_transfers || 0, "#3b82f6"],
+                      ["💵", u.pending_withdrawals || 0, "#a855f7"],
+                    ].map(([icon, count, color], i) => (
                       <div key={i} style={{ width: 34, height: 34, borderRadius: 9, background: "#0b1220", border: "1px solid #1a2540", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, position: "relative" }}>
                         {icon}
                         {count > 0 && (
-                          <span style={{ position: "absolute", top: -4, right: -4, fontSize: 10, fontWeight: 700, padding: "1px 4px", borderRadius: 999, color: "black", lineHeight: 1.4, background: cls === "badgeRed" ? "#ef4444" : "#f59e0b" }}>{count}</span>
+                          <span style={{ position: "absolute", top: -4, right: -4, fontSize: 10, fontWeight: 700, padding: "1px 4px", borderRadius: 999, color: "black", lineHeight: 1.4, background: color }}>{count}</span>
                         )}
                       </div>
                     ))}

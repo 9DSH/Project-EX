@@ -15,7 +15,7 @@ from app.models.currency import Currency
 from app.models.transaction import Transaction
 from app.services.wire_transfer_expiry import expire_pending_wire_orders, utc_now_naive
 from app.services.exchange_service import normalize_db_rate
-from app.constants.transaction_types import WIRE_TRANSFER
+from app.constants.transaction_types import WIRE_TRANSFER, WIRE_REFUND
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 
 router = APIRouter(prefix="/wire-transfer", tags=["Wire Transfer"])
@@ -133,6 +133,11 @@ def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Ses
     if not pair:
         raise HTTPException(404, "Pair not found or inactive")
 
+    # Cross-tenant guardrail: user may only place orders against their own
+    # admin's pairs.
+    if pair.admin_id != user.get("admin_id"):
+        raise HTTPException(403, "Pair not available for this account")
+
     sender_fields, receiver_methods = _decode_pair_config(pair)
     from_symbol = (pair.from_currency.symbol or "").upper() if pair.from_currency else ""
     receiver_method_keys = {m.get("key") for m in receiver_methods if m.get("key")}
@@ -191,6 +196,7 @@ def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Ses
         status            = "pending",
         expires_at        = expires_at,
         balance_was_insufficient = shortfall > 0,
+        admin_id          = pair.admin_id,
     )
     if from_symbol == "IRT" and balance_row and current_balance is not None and current_balance >= amount:
         balance_row.available_balance -= amount
@@ -227,7 +233,6 @@ def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Ses
         "from_currency_symbol": pair.from_currency.symbol,
         "to_currency_symbol": pair.to_currency.symbol,
     }
-
 
 @router.get("/orders/my")
 def my_orders(user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -381,7 +386,7 @@ def cancel_order(order_id: int, body: CancelOrderRequest, user=Depends(get_curre
                 currency_id=order.pair.from_currency.id,
                 amount=refund_amount,
                 type=WIRE_REFUND,
-                status="completed",
+                status=COMPLETED,
                 wire_transfer_order_id=order.id,
                 blockchain="internal",
             ))

@@ -2,13 +2,13 @@ import json
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import get_db
-from app.core.security import get_current_user
-from app.core.permissions import has_access
+from app.core.security import get_current_user, is_master
+from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.wire_transfer_order import WireTransferOrder
 from app.models.user import User
@@ -17,6 +17,7 @@ from app.models.currency import Currency
 from app.models.transaction import Transaction
 from app.services.telegram_service import send_telegram_message
 from app.services.wire_transfer_expiry import expire_pending_wire_orders
+from app.services.exchange_scope import can_view_all_admins, resolve_admin_scope
 from app.constants.transaction_types import WIRE_TRANSFER, WIRE_REFUND
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 
@@ -30,6 +31,16 @@ def get_admin(user=Depends(get_current_user)):
     if not has_access(user, "wire_transfer.view"):
         raise HTTPException(status_code=403, detail="Wire Transfer permission required")
     return user
+
+
+def _admin_username_map(db: Session, admin_ids: set):
+    admin_ids = {a for a in admin_ids if a}
+    if not admin_ids:
+        return {}
+    return {
+        u.user_id: u.username
+        for u in db.query(User).filter(User.user_id.in_(admin_ids)).all()
+    }
 
 
 # ─────────────────────────────────────────
@@ -169,8 +180,9 @@ def _apply_irt_lock_delta(db: Session, order: WireTransferOrder, available_delta
     balance.frozen_balance += frozen_delta
 
 
-def _pair_out(pair: WireTransferPair):
+def _pair_out(pair: WireTransferPair, admins_map: dict | None = None):
     sender_fields, receiver_methods = _decode_pair_config(pair)
+    admins_map = admins_map or {}
     return {
         "id":               pair.id,
         "from_currency":    {"id": pair.from_currency.id, "symbol": pair.from_currency.symbol, "name": pair.from_currency.name},
@@ -185,10 +197,12 @@ def _pair_out(pair: WireTransferPair):
         "receiver_methods": receiver_methods,
         "is_active":        pair.is_active,
         "created_at":       _to_iso_utc(pair.created_at),
+        "admin_id":         pair.admin_id,
+        "admin_username":   admins_map.get(pair.admin_id),
     }
 
 
-def _order_out(order: WireTransferOrder):
+def _order_out(order: WireTransferOrder, admins_map: dict | None = None):
     raw_input_data = {}
     if order.input_data:
         try:
@@ -205,6 +219,7 @@ def _order_out(order: WireTransferOrder):
         if not str(k).startswith("__")
     }
 
+    admins_map = admins_map or {}
     pair = order.pair
     user = order.user
     return {
@@ -238,7 +253,44 @@ def _order_out(order: WireTransferOrder):
         "rejected_by":       order.rejected_by,
         "delivered_by":      order.delivered_by,
         "failed_by":         order.failed_by,
+        "admin_id":          order.admin_id,
+        "admin_username":    admins_map.get(order.admin_id),
     }
+
+
+# ─────────────────────────────────────────
+# CROSS-ADMIN FILTER SUPPORT
+# ─────────────────────────────────────────
+
+@router.get("/filter-admins")
+def list_filterable_admins(
+    db: Session = Depends(get_db),
+    admin=Depends(get_admin),
+):
+    if not can_view_all_admins(admin):
+        raise HTTPException(403, "Access denied")
+
+    candidates = db.query(User).filter(User.role.in_(["admin", "master"])).all()
+
+    result = []
+    for u in candidates:
+        access_points = u.access_points or []
+        role_default = ROLE_PERMISSIONS.get(u.role, [])
+        eligible = (
+            u.role == "master"
+            or role_default == "*"
+            or "wire_transfer.manage" in role_default
+            or "wire_transfer.manage" in access_points
+        )
+        if eligible:
+            result.append({
+                "user_id": u.user_id,
+                "username": u.username,
+                "role": u.role,
+            })
+
+    result.sort(key=lambda x: (x["username"] or "").lower())
+    return result
 
 
 # ─────────────────────────────────────────
@@ -246,14 +298,24 @@ def _order_out(order: WireTransferOrder):
 # ─────────────────────────────────────────
 
 @router.get("/pairs")
-def list_pairs(admin=Depends(get_admin), db: Session = Depends(get_db)):
-    pairs = (
+def list_pairs(
+    admin_filter: Optional[str] = Query(None),
+    admin=Depends(get_admin),
+    db: Session = Depends(get_db),
+):
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+
+    query = (
         db.query(WireTransferPair)
         .options(joinedload(WireTransferPair.from_currency), joinedload(WireTransferPair.to_currency))
-        .order_by(WireTransferPair.id)
-        .all()
     )
-    return [_pair_out(p) for p in pairs]
+    if not scope_all:
+        query = query.filter(WireTransferPair.admin_id == scope_admin_id)
+
+    pairs = query.order_by(WireTransferPair.id).all()
+
+    admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    return [_pair_out(p, admins_map) for p in pairs]
 
 
 @router.post("/pairs")
@@ -271,6 +333,8 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
     sender_fields = body.sender_fields if body.sender_fields is not None else (body.required_fields or {})
     receiver_methods = body.receiver_methods or []
 
+    owner_admin_id = admin["user_id"]
+
     pair = WireTransferPair(
         from_currency_id=body.from_currency_id,
         to_currency_id=body.to_currency_id,
@@ -280,6 +344,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
         max_amount=body.max_amount,
         timeout_minutes=body.timeout_minutes,
         required_fields=_encode_pair_config(sender_fields, receiver_methods),
+        admin_id=owner_admin_id,
     )
     db.add(pair)
     db.commit()
@@ -289,7 +354,8 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
         joinedload(WireTransferPair.from_currency),
         joinedload(WireTransferPair.to_currency)
     ).filter(WireTransferPair.id == pair.id).first()
-    return _pair_out(pair)
+    admins_map = _admin_username_map(db, {pair.admin_id})
+    return _pair_out(pair, admins_map)
 
 
 @router.put("/pairs/{pair_id}")
@@ -303,6 +369,9 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
     ).filter(WireTransferPair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
+
+    if not is_master(admin) and pair.admin_id != admin["user_id"]:
+        raise HTTPException(403, "Not authorized to modify this pair")
 
     if body.rate is not None:
         if body.rate <= 0:
@@ -329,7 +398,8 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
         joinedload(WireTransferPair.from_currency),
         joinedload(WireTransferPair.to_currency)
     ).filter(WireTransferPair.id == pair_id).first()
-    return _pair_out(pair)
+    admins_map = _admin_username_map(db, {pair.admin_id})
+    return _pair_out(pair, admins_map)
 
 
 @router.delete("/pairs/{pair_id}")
@@ -339,6 +409,10 @@ def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(ge
     pair = db.query(WireTransferPair).filter(WireTransferPair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
+
+    if not is_master(admin) and pair.admin_id != admin["user_id"]:
+        raise HTTPException(403, "Not authorized to delete this pair")
+
     db.delete(pair)
     db.commit()
     return {"ok": True}
@@ -349,19 +423,30 @@ def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(ge
 # ─────────────────────────────────────────
 
 @router.get("/orders")
-def list_orders(admin=Depends(get_admin), db: Session = Depends(get_db)):
+def list_orders(
+    admin_filter: Optional[str] = Query(None),
+    admin=Depends(get_admin),
+    db: Session = Depends(get_db),
+):
     _expire_pending_orders(db)
-    orders = (
+
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+
+    query = (
         db.query(WireTransferOrder)
         .options(
             joinedload(WireTransferOrder.user),
             joinedload(WireTransferOrder.pair).joinedload(WireTransferPair.from_currency),
             joinedload(WireTransferOrder.pair).joinedload(WireTransferPair.to_currency),
         )
-        .order_by(WireTransferOrder.created_at.desc())
-        .all()
     )
-    return [_order_out(o) for o in orders]
+    if not scope_all:
+        query = query.filter(WireTransferOrder.admin_id == scope_admin_id)
+
+    orders = query.order_by(WireTransferOrder.created_at.desc()).all()
+
+    admins_map = _admin_username_map(db, {o.admin_id for o in orders})
+    return [_order_out(o, admins_map) for o in orders]
 
 
 @router.get("/orders/{order_id}")
@@ -379,7 +464,12 @@ def get_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get
     )
     if not order:
         raise HTTPException(404, "Order not found")
-    return _order_out(order)
+
+    if not is_master(admin) and order.admin_id != admin["user_id"] and not can_view_all_admins(admin):
+        raise HTTPException(403, "Not authorized to view this order")
+
+    admins_map = _admin_username_map(db, {order.admin_id})
+    return _order_out(order, admins_map)
 
 
 async def _notify(user: User, text: str):
@@ -390,9 +480,15 @@ async def _notify(user: User, text: str):
             pass  # notification failure must not block admin action
 
 
+def _assert_order_owner(admin: dict, order: WireTransferOrder):
+    if is_master(admin):
+        return
+    if order.admin_id != admin["user_id"]:
+        raise HTTPException(403, "Not authorized to act on this order")
+
+
 @router.post("/orders/{order_id}/approve")
 async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db)):
-    print(admin)
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
@@ -403,6 +499,9 @@ async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = D
     ).filter(WireTransferOrder.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found")
+
+    _assert_order_owner(admin, order)
+
     if order.status != "pending":
         raise HTTPException(400, f"Order is {order.status}, cannot approve")
 
@@ -470,6 +569,9 @@ async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = De
     ).filter(WireTransferOrder.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found")
+
+    _assert_order_owner(admin, order)
+
     if order.status != "pending":
         raise HTTPException(400, f"Order is {order.status}, cannot reject")
     order.status = "rejected"
@@ -518,6 +620,9 @@ async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(
     ).filter(WireTransferOrder.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found")
+
+    _assert_order_owner(admin, order)
+
     if order.status != "approved":
         raise HTTPException(400, f"Order is {order.status}, cannot deliver (must be approved first)")
     order.status = "delivered"
@@ -566,6 +671,9 @@ async def fail_order(order_id: int, body: OrderFailRequest, admin=Depends(get_ad
     ).filter(WireTransferOrder.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found")
+
+    _assert_order_owner(admin, order)
+
     if order.status != "approved":
         raise HTTPException(400, f"Order is {order.status}, cannot mark failed (must be approved first)")
     order.status      = "failed"

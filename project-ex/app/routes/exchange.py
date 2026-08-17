@@ -13,10 +13,7 @@ from decimal import Decimal, getcontext
 
 getcontext().prec = 28
 
-router = APIRouter(
-    prefix="/exchange",
-    tags=["Exchange"]
-)
+router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
 
 # =========================
@@ -26,7 +23,6 @@ class ExchangeRequest(BaseModel):
 
     from_currency: str
     to_currency: str
-
     amount: float
 
 # =========================
@@ -39,10 +35,9 @@ def get_pairs(
 ):
 
     pairs = db.query(ExchangePair).filter(
-        ExchangePair.is_active == True
+        ExchangePair.is_active == True,
+        ExchangePair.admin_id == user["admin_id"]
     ).all()
-
-    
 
     result = []
 
@@ -86,7 +81,7 @@ def preview_exchange(
     pair = db.query(ExchangePair).filter(
 
         ExchangePair.is_active == True,
-
+        ExchangePair.admin_id == user["admin_id"],
         ExchangePair.from_currency.has(
             symbol=payload.from_currency.upper()
         ),
@@ -102,6 +97,9 @@ def preview_exchange(
             400,
             "Exchange pair unavailable"
         )
+
+    if pair.admin_id != user["admin_id"]:
+        raise HTTPException(403, "Pair not available for this account")
     
     amount = Decimal(str(payload.amount))
 
@@ -170,13 +168,10 @@ def exchange(
     result = execute_exchange(
 
         db=db,
-
         user_id=user["user_id"],
-
+        admin_id=user["admin_id"],
         from_currency_symbol=payload.from_currency,
-
         to_currency_symbol=payload.to_currency,
-
         amount=payload.amount
     )
 

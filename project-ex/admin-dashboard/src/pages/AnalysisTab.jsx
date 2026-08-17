@@ -212,7 +212,7 @@ function ChartCard({ title, subtitle, children, height = 280 }) {
 
 // ── Main export ───────────────────────────────────────────────
 
-export default function AnalysisTab({ pairs, headers }) {
+export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
   const [selectedPairId, setSelectedPairId] = useState(null);
   const [range,          setRange]          = useState("30");
   const [timeframe,      setTimeframe]      = useState("4h");
@@ -225,8 +225,8 @@ export default function AnalysisTab({ pairs, headers }) {
   const [loading,   setLoading]   = useState(false);
 
   useEffect(() => {
-    if (!selectedPairId && pairs?.length) setSelectedPairId(pairs[0].id);
-  }, [pairs, selectedPairId]);
+    setSelectedPairId(pairs?.length ? pairs[0].id : null);
+  }, [pairs]);
 
   const baseCurrencyOptions = useMemo(() => {
     const s = new Set();
@@ -252,19 +252,19 @@ export default function AnalysisTab({ pairs, headers }) {
       const [ohlcRes, pnlRes, invRes, volRes] = await Promise.all([
         api.get("/admin/exchange/analysis/rate-ohlc", {
           headers,
-          params: { pair_id: selectedPairId, timeframe, from: dateRange.from, to: dateRange.to },
+          params: { pair_id: selectedPairId, timeframe, from: dateRange.from, to: dateRange.to, admin_filter: adminFilter },
         }),
         api.get("/admin/exchange/analysis/pnl", {
           headers,
-          params: { from: dateRange.from, to: dateRange.to, base_currency_symbol: baseCurrency },
+          params: { from: dateRange.from, to: dateRange.to, base_currency_symbol: baseCurrency, admin_filter: adminFilter },
         }),
         api.get("/admin/exchange/analysis/inventory", {
           headers,
-          params: { base_currency_symbol: baseCurrency },
+          params: { base_currency_symbol: baseCurrency, admin_filter: adminFilter },
         }),
         api.get("/admin/exchange/analysis/volume", {
           headers,
-          params: { from: dateRange.from, to: dateRange.to },
+          params: { from: dateRange.from, to: dateRange.to, admin_filter: adminFilter },
         }),
       ]);
       setOhlc(ohlcRes.data     || { candles: [], truncated: false, total: 0 });
@@ -275,7 +275,7 @@ export default function AnalysisTab({ pairs, headers }) {
       /* keep last good data on screen */
     }
     setLoading(false);
-  }, [selectedPairId, timeframe, dateRange, baseCurrency, headers]);
+  }, [selectedPairId, timeframe, dateRange, baseCurrency, headers, adminFilter]);
 
   useEffect(() => { loadAnalysis(); }, [loadAnalysis]);
 
@@ -327,6 +327,11 @@ export default function AnalysisTab({ pairs, headers }) {
           {loading ? "…" : "Refresh"}
         </button>
       </div>
+
+      {!pairs?.length ? (
+        <div style={T.emptyState}>No pairs available for this scope yet.</div>
+      ) : (
+      <>
 
       {/* ── Truncation notice ── */}
       {ohlc.truncated && (
@@ -416,7 +421,7 @@ export default function AnalysisTab({ pairs, headers }) {
               >
                 {pairs?.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.from_currency?.symbol} → {p.to_currency?.symbol}
+                    {p.from_currency?.symbol} → {p.to_currency?.symbol}{p.admin_username ? ` (${p.admin_username})` : ""}
                   </option>
                 ))}
               </select>
@@ -567,6 +572,8 @@ export default function AnalysisTab({ pairs, headers }) {
           <div style={T.emptyState}>No completed orders in this period</div>
         )}
       </div>
+      </>
+      )}
 
     </div>
   );

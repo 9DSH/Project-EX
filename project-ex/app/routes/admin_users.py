@@ -13,6 +13,7 @@ from app.models.order_item import OrderItem
 from app.models.transaction import Transaction
 from app.core.security import get_current_user, is_master, is_admin_or_above
 from app.schemas.user import UserCreate
+
 import uuid
 from app.core.security import hash_password
 from sqlalchemy import func, or_
@@ -21,6 +22,7 @@ from typing import Optional
 from app.models.user import UserWallet
 from app.models.external_wallet import ExternalWallet
 from app.models.user_bank_info import UserBankInfo
+from app.models.wire_transfer_order import WireTransferOrder
 from app.services.auth_service import reset_user_password 
 from app.services.wallet_derivation_service import get_or_create_wallet_for_pair, create_default_wallets_for_user
 from app.routes.admin_orders import  build_order_response
@@ -105,6 +107,17 @@ def serialize_user(u, db):
         OrderItem.status == "approved"
     ).scalar()
 
+    pending_wire_transfers = db.query(func.count(WireTransferOrder.id)).filter(
+        WireTransferOrder.user_id == u.user_id,
+        WireTransferOrder.status == "pending"
+    ).scalar()
+
+    pending_withdrawals = db.query(func.count(Transaction.id)).filter(
+        Transaction.user_id == u.user_id,
+        Transaction.type == "withdraw",
+        Transaction.status == "pending"
+    ).scalar()
+
     return {
         "user_id": u.user_id,
         "username": u.username,
@@ -129,6 +142,8 @@ def serialize_user(u, db):
         "unread_messages": unread_messages or 0,
         "pending_orders": pending_orders or 0,
         "approved_orders": approved_orders or 0,
+        "pending_wire_transfers": pending_wire_transfers or 0,
+        "pending_withdrawals": pending_withdrawals or 0,
         "balances": [
             {
                 "currency_id": b.currency_id,
