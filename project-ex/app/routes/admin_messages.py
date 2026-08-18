@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from pydantic import BaseModel
 from typing import Optional
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.user import User
 from app.models.messages import Conversation, Message
 from app.core.security import get_current_user, is_master, is_admin_or_above
@@ -59,7 +59,7 @@ async def save_base64_file(base64_data: str, media_type: str) -> tuple[str, str]
 @router.post("/send")
 async def admin_send_message(
     payload: AdminSendMessage,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):  
     
@@ -136,7 +136,7 @@ async def admin_send_message(
 # =========================
 @router.get("/conversations")
 def get_conversations(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):  
     
@@ -192,7 +192,7 @@ def get_conversations(
 @router.get("/conversation/{conversation_id}")
 async def get_conversation_messages(
     conversation_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):  
     
@@ -253,7 +253,7 @@ async def get_conversation_messages(
 @router.post("/start")
 def start_conversation(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):  
     
@@ -294,7 +294,7 @@ def start_conversation(
 # =====================================================
 @router.get("/users")
 def get_users(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):  
     

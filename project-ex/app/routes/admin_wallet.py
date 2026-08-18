@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.services.sweep_service import sweep_to_hot_wallet, sweep_hot_to_master
 from app.core.security import get_current_user
 from app.models.transaction import Transaction
@@ -22,7 +22,7 @@ def verify_admin(user):
 
 @router.post("/sweep")
 def sweep(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     verify_admin(user)
@@ -46,7 +46,7 @@ def get_wallet_transactions(
     type_filter: str = None,  # deposit, sweep, withdrawal
     status_filter: str = None,
     user_id_filter: int = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     """Get deposit/sweep/withdrawal transaction history for master dashboard"""
@@ -105,7 +105,7 @@ def get_wallet_transactions(
 # =====================================================
 @router.get("/status", tags=["Admin Wallet"])
 def get_wallet_status(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     """Get hot wallet and master wallet status with all pair balances"""
@@ -195,7 +195,7 @@ def get_wallet_status(
 # =====================================================
 @router.get("/gas-status", tags=["Admin Wallet"])
 def get_gas_status(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     """Get gas status and transaction fees for all networks"""
@@ -248,7 +248,7 @@ def get_gas_status(
 # =====================================================
 @router.get("/pairs", tags=["Admin Wallet"])
 def list_all_pairs(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user),
     include_inactive: bool = False
 ):
@@ -290,7 +290,7 @@ def list_all_pairs(
 def update_pair_settings(
     pair_id: int,
     settings: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     """Update pair settings (enable/disable deposits/withdrawals, fees, etc)"""
@@ -338,7 +338,7 @@ def update_pair_settings(
 @router.get("/user/{user_id}/wallets", tags=["Admin Wallet"])
 def get_user_wallets(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin_user=Depends(get_current_user)
 ):
     """Get all wallet addresses for a specific user"""

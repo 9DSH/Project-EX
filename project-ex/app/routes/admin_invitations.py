@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master
 from app.models.invitation_code import InvitationCode
 from app.services.invitation_service import (
@@ -18,7 +17,7 @@ router = APIRouter(prefix="/admin/invitations", tags=["Invitations"])
 # GET ALL CODES
 # =========================
 @router.get("/")
-def get_all_codes(db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_all_codes(db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
 
     if not is_master(user):
         raise HTTPException(403, "Master only")
@@ -34,7 +33,7 @@ def get_all_codes(db: Session = Depends(get_db), user=Depends(get_current_user))
 # =========================
 @router.post("/generate-pool")
 def generate_pool(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -64,7 +63,7 @@ def generate_pool(
 @router.post("/revoke/{code_id}")
 def revoke_code(
     code_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 

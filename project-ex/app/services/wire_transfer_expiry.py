@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, set_session_master
 from app.models.wire_transfer_order import WireTransferOrder
 from app.models.user_balance import UserBalance
 from app.models.transaction import Transaction
@@ -69,6 +69,7 @@ def expire_pending_wire_orders(db: Session) -> int:
 async def wire_order_expiry_loop(interval_seconds: int = 5):
     while True:
         db = SessionLocal()
+        set_session_master(db) 
         try:
             changed = expire_pending_wire_orders(db)
             if changed:

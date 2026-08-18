@@ -287,6 +287,15 @@ def _migrate_exchange_rate_history_changed_by(conn) -> None:
             print(f"[ensure_schema] skip FK {fk_name}: {e}")
 
 
+def set_session_master(db):
+    """
+    For standalone SessionLocal() sessions in background jobs/workers that
+    aren't wrapped in the per-request RLS dependency. Uses session-level SET
+    (not SET LOCAL) since these sessions commit multiple times across a long
+    loop body and SET LOCAL would be wiped after the first commit.
+    """
+    db.execute(text("SET app.is_master = 'true'"))
+
 def ensure_schema():
     with engine.begin() as conn:
         if _table_exists(conn, "transactions") and not _column_exists(conn, "transactions", "platform_bank_account_id"):
@@ -358,7 +367,128 @@ def ensure_schema():
 
         _migrate_exchange_rate_history_changed_by(conn)
 
+def _rls_enabled(conn, table_name: str) -> bool:
+    return bool(
+        conn.execute(
+            text(
+                "SELECT relrowsecurity FROM pg_class "
+                "WHERE relname = :t AND relnamespace = 'public'::regnamespace"
+            ),
+            {"t": table_name},
+        ).scalar()
+    )
 
+
+def _policy_exists(conn, table_name: str, policy_name: str) -> bool:
+    return bool(
+        conn.execute(
+            text(
+                "SELECT 1 FROM pg_policies "
+                "WHERE schemaname = 'public' AND tablename = :t AND policyname = :p"
+            ),
+            {"t": table_name, "p": policy_name},
+        ).scalar()
+    )
+
+
+def _apply_rls(conn, table_name: str, using_sql: str, policy_name: str | None = None):
+    if not _table_exists(conn, table_name):
+        print(f"[ensure_rls] skip {table_name}: table does not exist")
+        return
+
+    policy_name = policy_name or f"rls_{table_name}"
+
+    conn.execute(text(f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY"))
+    # Without FORCE, the table owner (usually the app's own DB role) bypasses
+    # RLS entirely, silently making every policy below a no-op.
+    conn.execute(text(f"ALTER TABLE {table_name} FORCE ROW LEVEL SECURITY"))
+
+    if not _policy_exists(conn, table_name, policy_name):
+        conn.execute(text(f"CREATE POLICY {policy_name} ON {table_name} USING ({using_sql})"))
+
+
+# =========================
+# RLS BUCKETS
+# =========================
+
+# Bucket A: direct admin_id column
+_BUCKET_A_TABLES = [
+    "users",
+    "products",
+    "exchange_pairs",
+    "wire_transfer_pairs",
+    "exchange_orders",
+    "wire_transfer_orders",
+    "platform_bank_accounts",
+]
+
+# Bucket B: scoped via user_id -> users.admin_id
+_BUCKET_B_TABLES = [
+    "user_balances",
+    "transactions",
+    "user_wallets",
+    "external_wallets",
+    "user_bank_info",
+    "withdrawals",
+    "failed_sweeps",
+    "conversations",
+]
+
+# Bucket D — deliberately no RLS. Access is controlled entirely by
+# access_points at the application layer:
+#   currencies, networks, currency_networks, categories, system_wallet
+
+
+def ensure_rls_policies():
+    with engine.begin() as conn:
+        is_master = "current_setting('app.is_master', true)::boolean IS TRUE"
+        cur_admin = "NULLIF(current_setting('app.current_admin_id', true), '')::int"
+
+        # ── Bucket A ──────────────────────────────────────────
+        for table in _BUCKET_A_TABLES:
+            _apply_rls(conn, table, f"{is_master} OR admin_id = {cur_admin}")
+
+        # ── Bucket B ──────────────────────────────────────────
+        # NOTE: includes `OR user_id = {cur_admin}` beyond the literal spec —
+        # without it an admin's own rows (their own balance/transaction rows)
+        # would be invisible, since the subquery only returns their
+        # *end-users*, never themselves. Flagging this deviation explicitly.
+        for table in _BUCKET_B_TABLES:
+            _apply_rls(
+                conn, table,
+                f"{is_master} OR user_id = {cur_admin} "
+                f"OR user_id IN (SELECT user_id FROM users WHERE admin_id = {cur_admin})"
+            )
+
+        # ── messages: two-hop via conversation_id -> conversations.user_id -> users.admin_id
+        _apply_rls(
+            conn, "messages",
+            f"{is_master} OR conversation_id IN ("
+            f"SELECT c.id FROM conversations c JOIN users u ON u.user_id = c.user_id "
+            f"WHERE u.admin_id = {cur_admin} OR c.user_id = {cur_admin})"
+        )
+
+        # ── Bucket C — special cases ────────────────────────────
+        _apply_rls(
+            conn, "order_items",
+            f"{is_master} OR product_id IN (SELECT id FROM products WHERE admin_id = {cur_admin})"
+        )
+        _apply_rls(
+            conn, "exchange_inventory_ledger",
+            f"{is_master} OR order_id IN (SELECT id FROM exchange_orders WHERE admin_id = {cur_admin})"
+        )
+        _apply_rls(
+            conn, "exchange_rate_history",
+            f"{is_master} OR pair_id IN (SELECT id FROM exchange_pairs WHERE admin_id = {cur_admin})"
+        )
+        _apply_rls(
+            conn, "invitation_codes",
+            f"{is_master} OR created_by_user_id = {cur_admin} OR created_by_user_id IS NULL"
+        )
+
+        print("[ensure_rls] RLS policies applied")
+
+        
 def get_db():
     db = SessionLocal()
     try:

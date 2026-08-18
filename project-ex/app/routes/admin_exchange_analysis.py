@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.core.permissions import has_access
 from app.services.exchange_scope import resolve_admin_scope
@@ -132,7 +132,7 @@ def get_rate_history(
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
     admin_filter: Optional[str] = Query(None),
-    db:    Session = Depends(get_db),
+    db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
     if not has_access(admin, "exchange.manage"):
@@ -197,7 +197,7 @@ def get_rate_ohlc(
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
     admin_filter: Optional[str] = Query(None),
-    db:    Session = Depends(get_db),
+    db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
     """
@@ -344,7 +344,7 @@ def get_pnl_series(
     date_to: Optional[str] = Query(None, alias="to"),
     base_currency_symbol: str = Query("USDT"),
     admin_filter: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     """
@@ -455,7 +455,7 @@ def get_pnl_series(
 def get_inventory_snapshot(
     base_currency_symbol: str = Query("USDT"),
     admin_filter: Optional[str] = Query(None),
-    db:    Session = Depends(get_db),
+    db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
     """
@@ -534,7 +534,7 @@ def get_volume_by_pair(
     date_from: Optional[str] = Query(None, alias="from"),
     date_to:   Optional[str] = Query(None, alias="to"),
     admin_filter: Optional[str] = Query(None),
-    db:    Session = Depends(get_db),
+    db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
     if not has_access(admin, "exchange.manage"):

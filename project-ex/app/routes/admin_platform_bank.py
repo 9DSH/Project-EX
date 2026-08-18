@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.models.platform_bank_account import PlatformBankAccount
 from app.models.transaction import Transaction
@@ -66,7 +65,7 @@ def _can_edit(account: PlatformBankAccount, db: Session):
 
 @router.get("/")
 def list_accounts(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)
@@ -80,7 +79,7 @@ def list_accounts(
 @router.post("/")
 def create_account(
     payload: PlatformBankAccountCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)
@@ -107,7 +106,7 @@ def create_account(
 def update_account(
     account_id: int,
     payload: PlatformBankAccountUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)
@@ -147,7 +146,7 @@ def update_account(
 @router.delete("/{account_id}")
 def delete_account(
     account_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)

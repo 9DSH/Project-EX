@@ -3,9 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
-
-from app.db.database import get_db
-
+from app.core.rls import get_db_rls
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.withdrawal import Withdrawal
@@ -46,7 +44,7 @@ def _get_admin_user(user=Depends(get_current_user)):
 # ======================================================
 @router.get("/pending")
 def get_pending_withdrawals(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(_get_admin_user)
 ):
 
@@ -101,7 +99,7 @@ def get_pending_withdrawals(
 @router.post("/approve/{tx_id}")
 def approve_withdrawal(
     tx_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(_get_admin_user)
 ):
 
@@ -257,7 +255,7 @@ def approve_withdrawal(
 @router.post("/reject/{tx_id}")
 def reject_withdrawal(
     tx_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(_get_admin_user)
 ):
 

@@ -1,6 +1,6 @@
 import asyncio 
 from datetime import datetime
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, set_session_master
 from app.services.reconciliation_service import run_reconciliation
 from app.services.sweep_service import (
     sweep_to_hot_wallet,
@@ -35,7 +35,7 @@ async def sweep_worker_loop():
 
     while True:
         db = SessionLocal()
-
+        set_session_master(db) 
         try:
             print("🔄 Sweep cycle started")
 

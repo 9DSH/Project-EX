@@ -3,8 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_admin_or_above
 from app.models.user import TelegramBotSettings
 
@@ -44,7 +43,7 @@ def _get_or_create_settings(admin_id: int, db: Session) -> TelegramBotSettings:
 
 @router.get("/")
 def get_telegram_bot_settings(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     settings = _get_or_create_settings(admin.get("user_id"), db)
@@ -54,7 +53,7 @@ def get_telegram_bot_settings(
 @router.put("/")
 def update_telegram_bot_settings(
     payload: TelegramBotSettingsUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     settings = _get_or_create_settings(admin.get("user_id"), db)

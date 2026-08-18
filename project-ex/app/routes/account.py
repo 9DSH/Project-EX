@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.user_bank_info import UserBankInfo
@@ -52,7 +51,7 @@ def _serialize_bank_info(bank_info: Optional[UserBankInfo]):
 
 @router.get("/me")
 def get_my_account(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     user = db.query(User).filter(User.user_id == current_user.get("user_id")).first()
@@ -77,7 +76,7 @@ def get_my_account(
 @router.put("/me")
 def update_my_account(
     payload: ProfileUpdatePayload,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     user = db.query(User).filter(User.user_id == current_user.get("user_id")).first()
@@ -95,7 +94,7 @@ def update_my_account(
 
 @router.get("/bank-info")
 def get_bank_info(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     user = db.query(User).filter(User.user_id == current_user.get("user_id")).first()
@@ -112,7 +111,7 @@ def get_bank_info(
 @router.put("/bank-info")
 def upsert_bank_info(
     payload: BankInfoPayload,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     user = db.query(User).filter(User.user_id == current_user.get("user_id")).first()
@@ -136,7 +135,7 @@ def upsert_bank_info(
 
 @router.get("/active-bank-account")
 def get_active_bank_account(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     account = db.query(PlatformBankAccount).filter(PlatformBankAccount.is_active == True).order_by(PlatformBankAccount.id.desc()).first()

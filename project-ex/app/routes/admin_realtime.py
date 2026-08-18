@@ -1,5 +1,5 @@
 from fastapi import APIRouter, WebSocket
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, set_session_master
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.order_item import OrderItem
@@ -17,7 +17,7 @@ router = APIRouter()
 # =========================
 async def get_stats():
     db = SessionLocal()
-
+    set_session_master(db)
     try:
         users = db.query(User).all()
 

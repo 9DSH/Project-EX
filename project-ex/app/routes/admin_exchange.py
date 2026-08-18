@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.models.user_balance import UserBalance
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master, is_admin_or_above
 from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.services.exchange_service import execute_exchange, get_exchange_rate, normalize_db_rate
@@ -165,7 +165,7 @@ def _resolve_pair_for_admin(db: Session, admin: dict, from_symbol: str, to_symbo
 @router.post("/preview")
 def admin_preview_exchange(
     payload: AdminExchangeExecuteRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
 
@@ -295,7 +295,7 @@ def admin_preview_exchange(
 @router.post("/execute")
 def admin_execute_exchange(
     payload: AdminExchangeExecuteRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
 
@@ -376,7 +376,7 @@ def admin_execute_exchange(
 @router.post("/rate")
 def get_rate_only(
     payload: AdminExchangeExecuteRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -401,7 +401,7 @@ def get_rate_only(
 # =========================
 @router.get("/filter-admins")
 def list_filterable_admins(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     if not can_view_all_admins(admin):
@@ -438,7 +438,7 @@ def list_filterable_admins(
 @router.get("/")
 def get_pairs(
     admin_filter: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -491,7 +491,7 @@ def get_pairs(
 @router.post("/")
 def create_pair(
     payload: ExchangePairCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -549,7 +549,7 @@ def create_pair(
 def update_pair(
     pair_id: int,
     payload: ExchangePairUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -618,7 +618,7 @@ def update_pair(
 @router.delete("/{pair_id}")
 def delete_pair(
     pair_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -642,7 +642,7 @@ def delete_pair(
 @router.get("/orders")
 def admin_all_orders(
     admin_filter: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -700,7 +700,7 @@ def admin_all_orders(
 @router.get("/users/{user_id}/orders")
 def admin_user_exchange_orders(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "exchange.manage"):
@@ -776,7 +776,7 @@ def admin_user_exchange_orders(
 def get_failed_sweeps(
     resolved: bool = False,
     admin_filter: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not (has_access(admin, "exchange.manage") and has_access(admin, "finance.manage")):
@@ -839,7 +839,7 @@ def get_failed_sweeps(
 @router.post("/failed-sweeps/{sweep_id}/retry")
 def manual_retry_sweep(
     sweep_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not (has_access(admin, "exchange.manage") and has_access(admin, "finance.manage")):

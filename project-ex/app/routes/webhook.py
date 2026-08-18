@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
+from app.core.rls import get_db_master
 import hmac
 import hashlib
 import asyncio
@@ -49,7 +50,7 @@ def _extract_symbol_and_chain(data: dict) -> tuple[str, str | None]:
 
 @router.post("/bsc")
 async def bsc_webhook(request: Request, 
-                      db: Session = Depends(get_db),
+                      db: Session = Depends(get_db_master),
                       x_signature: str | None = Header(default=None)):
     if not WEBHOOK_SECRET:
         raise HTTPException(status_code=500, detail="Webhook secret is not configured")

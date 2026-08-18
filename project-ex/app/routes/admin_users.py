@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.core.permissions import ROLE_PERMISSIONS
 from pydantic import BaseModel
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.user import User
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
@@ -207,7 +207,8 @@ def create_default_balances(db: Session, user_id: int):
             available_balance=0,
             frozen_balance=0
         ))
-
+        
+    """
     non_crypto = db.query(Currency).filter(
         Currency.is_active == True,
         Currency.type != "crypto"
@@ -241,7 +242,9 @@ def create_default_balances(db: Session, user_id: int):
             network_id=None,
             available_balance=0,
             frozen_balance=0
-        ))
+        ))  
+         
+           """
 
 def create_wallet_for_user(db: Session, user: User):
     """
@@ -258,7 +261,7 @@ def create_wallet_for_user(db: Session, user: User):
 # =========================
 @router.get("/")
 def get_users(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -283,7 +286,7 @@ def get_users(
 # =========================
 @router.get("/my-users")
 def get_my_users(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     if not is_admin_or_above(user):
@@ -303,7 +306,7 @@ def get_my_users(
 # =========================
 @router.get("/admins")
 def get_admins(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     if not is_master(user):
@@ -319,7 +322,7 @@ def get_admins(
 @router.get("/search")
 def search_users(
     q: str = "",
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user),
 ):
     if not is_admin_or_above(user):
@@ -358,7 +361,7 @@ def search_users(
 @router.post("/bootstrap-master")
 def bootstrap_master(
     payload: UserCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
 ):
     existing_users = db.query(User).count()
 
@@ -410,7 +413,7 @@ def bootstrap_master(
 @router.post("/create")
 def create_user(
     payload: UserCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     if not is_admin_or_above(user):
@@ -508,7 +511,7 @@ def create_user(
 def link_telegram(
     telegram_id: str,
     username: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_rls)
 ):
     user = db.query(User).filter(User.username == username).first()
 
@@ -529,7 +532,7 @@ def link_telegram(
 @router.post("/internal-transfer")
 def internal_transfer(
     payload: InternalTransferPayload,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user),
 ):
     if not is_admin_or_above(user):
@@ -630,7 +633,7 @@ def internal_transfer(
 @router.get("/username/{user_id}")
 def get_username_by_id(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user),
 ):
     """Given a user_id, return {"user_id": ..., "username": ...}."""
@@ -642,7 +645,7 @@ def get_username_by_id(
 # GET SINGLE USER
 # =========================
 @router.get("/{user_id}")
-def get_user(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_user(user_id: int, db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
 
@@ -662,7 +665,7 @@ def get_user(user_id: int, db: Session = Depends(get_db), user=Depends(get_curre
 # GET USER ORDERS
 # =========================
 @router.get("/{user_id}/orders")
-def get_user_orders(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_user_orders(user_id: int, db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
@@ -682,7 +685,7 @@ def get_user_orders(user_id: int, db: Session = Depends(get_db), user=Depends(ge
 @router.get("/{user_id}/transactions")
 def get_user_transactions(
     user_id: int, 
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db_rls), 
     admin=Depends(get_current_user)
     ):
     if not is_admin_or_above(admin):
@@ -725,7 +728,7 @@ def get_user_transactions(
 def update_balance(
     user_id: int, 
     payload: BalanceUpdate, 
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db_rls), 
     admin=Depends(get_current_user)
     ):
     if not is_admin_or_above(admin):
@@ -870,7 +873,7 @@ def update_balance(
 def delete_balance(
     user_id: int,
     payload: BalanceDeleteRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user)
 ):
     if not is_admin_or_above(admin):
@@ -958,7 +961,7 @@ def get_user_wallet_pair(
     user_id: int,
     currency_id: int,
     network_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user)
 ):
     if not is_admin_or_above(admin):
@@ -1028,7 +1031,7 @@ class WalletPairUpdate(BaseModel):
 def update_user_wallet_pair(
     user_id: int,
     payload: WalletPairUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user)
 ):
     """
@@ -1123,7 +1126,7 @@ def update_user_wallet_pair(
 
 # =========================
 @router.post("/{user_id}/update")
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
 
@@ -1180,7 +1183,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
 # DELETE USER
 # =========================
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def delete_user(user_id: int, db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
@@ -1207,7 +1210,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), user=Depends(get_cu
 def reset_password(
     user_id: int,
     payload: ResetPasswordRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user)
 ):
 
@@ -1244,7 +1247,7 @@ def reset_password(
 def update_user_bank_info(
     user_id: int,
     payload: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user),
 ):
     if not is_admin_or_above(user):

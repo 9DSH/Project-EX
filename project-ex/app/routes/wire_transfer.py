@@ -5,8 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.wire_transfer_order import WireTransferOrder
@@ -109,7 +108,7 @@ class PlaceOrderRequest(BaseModel):
 
 
 @router.get("/pairs")
-def list_active_pairs(db: Session = Depends(get_db)):
+def list_active_pairs(db: Session = Depends(get_db_rls)):
     """List all active wire transfer pairs (public, no auth required for display)."""
     pairs = (
         db.query(WireTransferPair)
@@ -122,7 +121,7 @@ def list_active_pairs(db: Session = Depends(get_db)):
 
 
 @router.post("/orders")
-def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Session = Depends(get_db)):
+def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Session = Depends(get_db_rls)):
     _expire_pending_orders(db)
     pair = (
         db.query(WireTransferPair)
@@ -235,7 +234,7 @@ def place_order(body: PlaceOrderRequest, user=Depends(get_current_user), db: Ses
     }
 
 @router.get("/orders/my")
-def my_orders(user=Depends(get_current_user), db: Session = Depends(get_db)):
+def my_orders(user=Depends(get_current_user), db: Session = Depends(get_db_rls)):
     _expire_pending_orders(db)
     orders = (
         db.query(WireTransferOrder)
@@ -288,7 +287,7 @@ def my_orders(user=Depends(get_current_user), db: Session = Depends(get_db)):
 
 
 @router.get("/orders/{order_id}")
-def get_order(order_id: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
+def get_order(order_id: int, user=Depends(get_current_user), db: Session = Depends(get_db_rls)):
     _expire_pending_orders(db)
     order = (
         db.query(WireTransferOrder)
@@ -347,7 +346,7 @@ class CancelOrderRequest(BaseModel):
 
 
 @router.post("/orders/{order_id}/cancel")
-def cancel_order(order_id: int, body: CancelOrderRequest, user=Depends(get_current_user), db: Session = Depends(get_db)):
+def cancel_order(order_id: int, body: CancelOrderRequest, user=Depends(get_current_user), db: Session = Depends(get_db_rls)):
     _expire_pending_orders(db)
     order = (
         db.query(WireTransferOrder)

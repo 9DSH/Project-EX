@@ -1,5 +1,5 @@
 # sweep_service.py
-
+from app.db.database import set_session_master
 from app.services.key_derivation_service import derive_bsc_private_key, derive_hot_wallet
 from app.services.tatum_service import transfer_token, get_token_balance, to_tatum_symbol
 from app.services.sweep_decision_engine import should_sweep_user
@@ -198,6 +198,7 @@ def _get_wallet_index(user_id: int, currency_id: int, network_id: int):
     """Lightweight helper — avoids passing db into _execute_sweep."""
     from app.db.database import SessionLocal
     db = SessionLocal()
+    set_session_master(db)
     try:
         wallet = db.query(UserWallet).filter(
             UserWallet.user_id == user_id,

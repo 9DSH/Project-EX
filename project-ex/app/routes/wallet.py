@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
-from app.db.database import get_db
-
+from app.core.rls import get_db_rls
 from app.models.user import User
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
@@ -105,7 +104,7 @@ def credit_user(
 # -------------------------
 @router.get("/balance")
 def get_balance(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -165,7 +164,7 @@ def deposit(
     amount: float,
     currency: str,
     network: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -212,7 +211,7 @@ def deposit(
 @router.post("/withdraw")
 def withdraw(
     req: WithdrawRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -299,7 +298,7 @@ def withdraw(
 # =====================================================
 @router.get("/transactions")
 def get_transactions(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -331,7 +330,7 @@ def get_transactions(
 # =====================================================
 @router.get("/currency-networks", tags=["wallet"])
 def get_active_currency_networks(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -388,7 +387,7 @@ def get_active_currency_networks(
 @router.post("/get-deposit-address", tags=["wallet"])
 def get_deposit_address(
     request: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -464,7 +463,7 @@ def get_deposit_address(
 # =====================================================
 @router.get("/external-wallets", tags=["wallet"])
 def list_external_wallets(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -500,7 +499,7 @@ def list_external_wallets(
 @router.post("/external-wallet", tags=["wallet"])
 def set_external_wallet(
     payload: ExternalWalletRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -556,7 +555,7 @@ def set_external_wallet(
 # =====================================================
 @router.get("/my-wallets", tags=["wallet"])
 def list_my_wallets(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     current_user: User = Depends(get_current_user)
 ):
     """Get all wallet addresses for this user"""

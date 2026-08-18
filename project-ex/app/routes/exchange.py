@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user
 from app.models.currency import Currency
 from app.models.exchange_pair import ExchangePair
@@ -30,7 +29,7 @@ class ExchangeRequest(BaseModel):
 # =========================
 @router.get("/pairs")
 def get_pairs(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -73,7 +72,7 @@ def get_pairs(
 @router.post("/preview")
 def preview_exchange(
     payload: ExchangeRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ): 
     
@@ -161,7 +160,7 @@ def preview_exchange(
 @router.post("/execute")
 def exchange(
     payload: ExchangeRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
 
@@ -182,7 +181,7 @@ def exchange(
 # EXCHANGE HISTORY
 # =========================
 @router.get("/history")
-def exchange_history(db: Session = Depends(get_db), user=Depends(get_current_user)):
+def exchange_history(db: Session = Depends(get_db_rls), user=Depends(get_current_user)):
 
     orders = db.query(ExchangeOrder).filter(
         ExchangeOrder.user_id == user["user_id"]

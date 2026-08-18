@@ -11,7 +11,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.product import Product
 from app.models.category import Category
 from app.core.security import get_current_user
@@ -38,7 +38,7 @@ def get_admin(user=Depends(get_current_user)):
 def get_all_products(
     category_id: Optional[int] = None,
     is_active: Optional[bool] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     query = db.query(Product)
@@ -58,7 +58,7 @@ def get_all_products(
 @router.post("/")
 def create_product(
     payload: ProductCreate, 
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db_rls), 
     admin=Depends(get_admin)
     ):
 
@@ -112,7 +112,7 @@ def create_product(
 @router.patch("/{product_id}/toggle-active")
 def toggle_product_active(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "products.management"):
@@ -149,7 +149,7 @@ def toggle_product_active(
 def update_product(
     product_id: int,
     payload: ProductUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "products.edit"):
@@ -229,7 +229,7 @@ async def upload_product_icon(
 @router.delete("/{product_id}")
 def delete_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "products.delete"):

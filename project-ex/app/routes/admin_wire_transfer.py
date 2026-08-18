@@ -5,8 +5,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
-
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master
 from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.models.wire_transfer_pair import WireTransferPair
@@ -264,7 +263,7 @@ def _order_out(order: WireTransferOrder, admins_map: dict | None = None):
 
 @router.get("/filter-admins")
 def list_filterable_admins(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     if not can_view_all_admins(admin):
@@ -301,7 +300,7 @@ def list_filterable_admins(
 def list_pairs(
     admin_filter: Optional[str] = Query(None),
     admin=Depends(get_admin),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
 ):
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
 
@@ -319,7 +318,7 @@ def list_pairs(
 
 
 @router.post("/pairs")
-def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = Depends(get_db)):
+def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
 
@@ -359,7 +358,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
 
 
 @router.put("/pairs/{pair_id}")
-def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db: Session = Depends(get_db)):
+def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
 
@@ -403,7 +402,7 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
 
 
 @router.delete("/pairs/{pair_id}")
-def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(get_db)):
+def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     pair = db.query(WireTransferPair).filter(WireTransferPair.id == pair_id).first()
@@ -426,7 +425,7 @@ def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(ge
 def list_orders(
     admin_filter: Optional[str] = Query(None),
     admin=Depends(get_admin),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
 ):
     _expire_pending_orders(db)
 
@@ -450,7 +449,7 @@ def list_orders(
 
 
 @router.get("/orders/{order_id}")
-def get_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db)):
+def get_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     _expire_pending_orders(db)
     order = (
         db.query(WireTransferOrder)
@@ -488,7 +487,7 @@ def _assert_order_owner(admin: dict, order: WireTransferOrder):
 
 
 @router.post("/orders/{order_id}/approve")
-async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db)):
+async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
@@ -558,7 +557,7 @@ async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = D
 
 
 @router.post("/orders/{order_id}/reject")
-async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db)):
+async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
@@ -609,7 +608,7 @@ async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = De
 
 
 @router.post("/orders/{order_id}/deliver")
-async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(get_admin), db: Session = Depends(get_db)):
+async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
@@ -661,7 +660,7 @@ async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(
 
 
 @router.post("/orders/{order_id}/fail")
-async def fail_order(order_id: int, body: OrderFailRequest, admin=Depends(get_admin), db: Session = Depends(get_db)):
+async def fail_order(order_id: int, body: OrderFailRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
     if not has_access(admin, "wire_transfer.manage"):
         raise HTTPException(403, "Manage permission required")
     order = db.query(WireTransferOrder).options(

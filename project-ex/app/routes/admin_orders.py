@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.user import User
@@ -182,7 +182,7 @@ def split_order_funds(order_item: OrderItem, db: Session):
 @router.post("/create")
 def create_order_for_user(
     payload: AdminCreateOrderRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     
@@ -321,7 +321,7 @@ def create_order_for_user(
 # -------------------------
 @router.get("/pending")
 def get_pending_orders(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     # -------------------------
@@ -329,9 +329,9 @@ def get_pending_orders(
     # -------------------------
     if not has_access(admin, "orders.manage"):
         raise HTTPException(403, "Access denied")
-
+    include_buyer_detail = has_access(admin, "users.view") 
     orders = db.query(OrderItem).filter(OrderItem.status == "pending").order_by(OrderItem.created_at.desc()).all()
-    return [build_order_response(o, db) for o in orders]
+    return [build_order_response(o, db, include_buyer_detail) for o in orders]
 
 
 # -------------------------
@@ -339,7 +339,7 @@ def get_pending_orders(
 # -------------------------
 @router.get("/all")
 def get_all_orders(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     # -------------------------
@@ -347,9 +347,9 @@ def get_all_orders(
     # -------------------------
     if not has_access(admin, "orders.view"):
         raise HTTPException(403, "Access denied")
-
+    include_buyer_detail = has_access(admin, "users.view") 
     orders = db.query(OrderItem).order_by(OrderItem.created_at.desc()).all()
-    return [build_order_response(o, db) for o in orders]
+    return [build_order_response(o, db, include_buyer_detail) for o in orders]
 
 
 # -------------------------
@@ -359,7 +359,7 @@ def get_all_orders(
 @router.post("/{order_id}/approve")
 def approve_order(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "orders.manage"):
@@ -428,7 +428,7 @@ def approve_order(
 @router.post("/{order_id}/reject")
 def reject_order(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     # -------------------------
@@ -542,7 +542,7 @@ def reject_order(
 async def deliver_order(
     order_id: int,
     delivery_info: Optional[dict] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     if not has_access(admin, "orders.manage"):
@@ -642,7 +642,7 @@ async def deliver_order(
 def update_order_price(
     order_id: int,
     new_price: float,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     # -------------------------
@@ -669,7 +669,7 @@ def update_order_price(
 # -------------------------
 @router.get("/transactions")
 def get_all_transactions(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
     # -------------------------
@@ -794,7 +794,7 @@ def get_all_transactions(
 # -------------------------
 # SHARED RESPONSE BUILDER (FULL PRODUCT INFO)
 # -------------------------
-def build_order_response(order_item: OrderItem, db: Session):
+def build_order_response(order_item: OrderItem, db: Session, include_buyer_detail: bool = True):
 
     user = db.query(User).filter(
         User.user_id == order_item.user_id
@@ -847,10 +847,10 @@ def build_order_response(order_item: OrderItem, db: Session):
 
         # USER
         "user_id": order_item.user_id,
-        "username": user.username if user else "unknown",
-        "user_admin_id": user.admin_id if user else None,
-        "telegram_id" : user.telegram_id if user else "unknown",
-        "user_status" : user.status if user else "unknown",
+        "username": user.username if user and include_buyer_detail else None,
+        "user_admin_id": user.admin_id if user and include_buyer_detail else None,
+        "telegram_id" : user.telegram_id if user and include_buyer_detail else None,
+        "user_status" : user.status if user and include_buyer_detail else None,
         "balances": [
                      {
                 "currency": b.currency.symbol if b.currency else None,
@@ -859,10 +859,10 @@ def build_order_response(order_item: OrderItem, db: Session):
                 "frozen": b.frozen_balance,
                       }
                    for b in balances
-                  ],
+                  ] if include_buyer_detail else [],
 
-        "created_date": user.created_date,
-        "access_points": user.access_points,
+        "created_date": user.created_date if include_buyer_detail else None,
+        "access_points": user.access_points if include_buyer_detail else None,
 
 
         # PRODUCT
@@ -917,7 +917,7 @@ def build_order_response(order_item: OrderItem, db: Session):
 
 @router.get("/analytics/products")
 def get_product_analytics(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
     """

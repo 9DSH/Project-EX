@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import asyncio
 import os
 from fastapi.staticfiles import StaticFiles
-from app.db.database import engine, Base, ensure_schema
+from app.db.database import engine, Base, ensure_schema, ensure_rls_policies
 from app.services.ws_manager import manager
 from app.services.sweep_scheduler import sweep_worker_loop
 from app.services.wire_transfer_expiry import wire_order_expiry_loop
@@ -80,6 +80,7 @@ app.add_middleware(
 def startup():
     Base.metadata.create_all(bind=engine)
     ensure_schema()
+    ensure_rls_policies()
     asyncio.create_task(sweep_worker_loop())
     asyncio.create_task(wire_order_expiry_loop())
 

@@ -1,6 +1,7 @@
 #app/routes/blockchain_webhook.py
 from fastapi import APIRouter, Request, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
+from app.core.rls import get_db_master
 import hmac
 import hashlib
 import json
@@ -41,7 +42,7 @@ def verify_signature(raw_body: bytes, signature: str):
 @router.post("/bsc")
 async def bsc_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_master),
     x_signature: str = Header(None)
 ):
 

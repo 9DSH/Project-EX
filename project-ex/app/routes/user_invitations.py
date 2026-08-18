@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.user import User
 from app.models.invitation_code import InvitationCode
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/user/invitations", tags=["User Invitations"])
 # GET MY OWNED INVITES
 # =========================
 @router.get("/")
-def get_my_invites(user_id: int, db: Session = Depends(get_db)):
+def get_my_invites(user_id: int, db: Session = Depends(get_db_rls)):
 
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
@@ -35,7 +35,7 @@ def get_my_invites(user_id: int, db: Session = Depends(get_db)):
 # REQUEST A CODE
 # =========================
 @router.post("/request")
-def request_invitation_code(user_id: int, db: Session = Depends(get_db)):
+def request_invitation_code(user_id: int, db: Session = Depends(get_db_rls)):
 
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
@@ -68,7 +68,7 @@ def request_invitation_code(user_id: int, db: Session = Depends(get_db)):
 # OPTIONAL: RELEASE CODE BACK TO POOL
 # =========================
 @router.post("/release/{code_id}")
-def release_code(code_id: int, user_id: int, db: Session = Depends(get_db)):
+def release_code(code_id: int, user_id: int, db: Session = Depends(get_db_rls)):
 
     code = db.query(InvitationCode).filter(
         InvitationCode.id == code_id,

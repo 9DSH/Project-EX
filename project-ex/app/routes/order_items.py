@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.database import get_db
+from app.core.rls import get_db_rls
 from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.user import User
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 def create_order(
     product_id: int,
     input_data: Optional[Dict[str, Any]] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     # -------------------------
@@ -186,7 +186,7 @@ def create_order(
 # =========================
 @router.get("/my")
 def get_my_orders(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     user_id = user.get("user_id") or user.get("id")
@@ -223,7 +223,7 @@ def get_my_orders(
 @router.get("/{order_id}")
 def get_order_detail(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     user=Depends(get_current_user)
 ):
     user_id = user.get("user_id") or user.get("id")
