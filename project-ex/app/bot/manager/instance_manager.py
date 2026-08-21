@@ -80,9 +80,14 @@ class InstanceManager:
     def _spawn(self, inst: BotInstance):
         env = {
             **os.environ,
-            "BOT_TOKEN": inst.token,
             "API_URL": API_URL,
         }
+        if inst.kind == "support":
+            env["SUPPORT_BOT_TOKEN"] = inst.token
+            env.pop("BOT_TOKEN", None)
+        else:
+            env["BOT_TOKEN"] = inst.token
+            env.pop("SUPPORT_BOT_TOKEN", None)
         if inst.admin_id is not None:
             env["BOT_ADMIN_ID"] = str(inst.admin_id)
         else:

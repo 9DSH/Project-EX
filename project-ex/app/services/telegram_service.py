@@ -2,8 +2,31 @@
 from telegram import Bot
 import os
 
-SUPPORT_BOT_TOKEN = os.environ["SUPPORT_BOT_TOKEN"]
+# Tokens now live in the DB (set via the admin panel), not env vars.
+# Don't crash at import time if it's unset — fall back to DB lookup at call time.
+SUPPORT_BOT_TOKEN = os.environ.get("SUPPORT_BOT_TOKEN")
 BACKEND_BASE_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+
+
+def _get_support_bot_token() -> str:
+    if SUPPORT_BOT_TOKEN:
+        return SUPPORT_BOT_TOKEN
+
+    from app.db.database import SessionLocal
+    from app.models.global_bot_settings import GlobalBotSettings
+
+    db = SessionLocal()
+    try:
+        settings = db.query(GlobalBotSettings).first()
+        if not settings or not settings.support_bot_token:
+            raise RuntimeError(
+                "Support bot token not configured. Set it in the admin panel "
+                "(Bot Infrastructure) or via SUPPORT_BOT_TOKEN env var."
+            )
+        return settings.support_bot_token
+    finally:
+        db.close()
+
 async def send_telegram_message(
     chat_id: int,                        # ← now takes chat_id directly
     text: str = None,
@@ -11,7 +34,8 @@ async def send_telegram_message(
     media_url: str = None,               # ← local path like /static/uploads/abc.jpg
     media_file_id: str = None,           # ← kept for user→admin direction (Telegram file IDs)
 ):
-    async with Bot(token=SUPPORT_BOT_TOKEN) as bot:
+    token = _get_support_bot_token()
+    async with Bot(token=token) as bot:
         if not media_type:
             await bot.send_message(chat_id=chat_id, text=text or "")
             return
