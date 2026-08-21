@@ -2,9 +2,8 @@
 from telegram import Bot
 import os
 
-BOT_TOKEN = "8902030905:AAGavbOWc3qXQybryUgJUsKKM5hYzLNpxaA"
-BACKEND_BASE_URL = "http://127.0.0.1:8000"  # used to build public URLs if needed
-
+SUPPORT_BOT_TOKEN = os.environ["SUPPORT_BOT_TOKEN"]
+BACKEND_BASE_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 async def send_telegram_message(
     chat_id: int,                        # ← now takes chat_id directly
     text: str = None,
@@ -12,7 +11,7 @@ async def send_telegram_message(
     media_url: str = None,               # ← local path like /static/uploads/abc.jpg
     media_file_id: str = None,           # ← kept for user→admin direction (Telegram file IDs)
 ):
-    async with Bot(token=BOT_TOKEN) as bot:
+    async with Bot(token=SUPPORT_BOT_TOKEN) as bot:
         if not media_type:
             await bot.send_message(chat_id=chat_id, text=text or "")
             return

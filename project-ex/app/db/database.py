@@ -318,6 +318,42 @@ def ensure_schema():
                 )
             )
 
+        telegram_bot_settings_columns = [
+            ("telegram_bot_settings", "main_bot_token", "VARCHAR"),
+            ("telegram_bot_settings", "is_active", "BOOLEAN DEFAULT FALSE"),
+            ("telegram_bot_settings", "bot_username", "VARCHAR"),
+            ("telegram_bot_settings", "last_validated_at", "TIMESTAMP"),
+            ("telegram_bot_settings", "last_validation_error", "TEXT"),
+            ("telegram_bot_settings", "created_at", "TIMESTAMP DEFAULT NOW()"),
+            ("telegram_bot_settings", "is_running", "BOOLEAN DEFAULT FALSE"),
+            ("telegram_bot_settings", "last_restart_at", "TIMESTAMP"),
+            ("telegram_bot_settings", "last_crash_error", "TEXT"),
+        ]
+        for table_name, column_name, column_type in telegram_bot_settings_columns:
+            if not _table_exists(conn, table_name):
+                continue
+            if _column_exists(conn, table_name, column_name):
+                continue
+            conn.execute(
+                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            )
+
+        global_bot_settings_columns = [
+            ("global_bot_settings", "is_running_support", "BOOLEAN DEFAULT FALSE"),
+            ("global_bot_settings", "is_running_main", "BOOLEAN DEFAULT FALSE"),
+            ("global_bot_settings", "support_last_restart_at", "TIMESTAMP"),
+            ("global_bot_settings", "main_last_restart_at", "TIMESTAMP"),
+            ("global_bot_settings", "support_last_crash_error", "TEXT"),
+            ("global_bot_settings", "main_last_crash_error", "TEXT"),
+        ]
+        for table_name, column_name, column_type in global_bot_settings_columns:
+            if not _table_exists(conn, table_name):
+                continue
+            if _column_exists(conn, table_name, column_name):
+                continue
+            conn.execute(
+                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            )
         wire_order_columns = [
             ("wire_transfer_orders", "approved_at", "TIMESTAMP"),
             ("wire_transfer_orders", "rejected_at", "TIMESTAMP"),

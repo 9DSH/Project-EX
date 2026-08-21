@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column,Boolean, Text, Integer, String, DateTime, JSON, ForeignKey, UniqueConstraint
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from app.db.database import Base
@@ -96,17 +96,22 @@ class UserWallet(Base):
 
 
 class TelegramBotSettings(Base):
-    """Per-admin Telegram bot configuration (Admin Profile → 'Telegram Bot
-    Settings' tab). One row per admin. New users who sign up through that
-    admin's bot are seeded with `default_language` until they change it
-    themselves via the bot's "🌐 Language" button.
-    """
     __tablename__ = "telegram_bot_settings"
  
     id = Column(Integer, primary_key=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, unique=True, index=True)
  
     default_language = Column(String(2), nullable=False, default="en", server_default="en")
+
+    main_bot_token = Column(String, nullable=True)
+    is_active = Column(Boolean, default=False, server_default="false")
+    bot_username = Column(String, nullable=True)
+    last_validated_at = Column(DateTime, nullable=True)
+    last_validation_error = Column(Text, nullable=True)
+
+    is_running = Column(Boolean, default=False, server_default="false")
+    last_restart_at = Column(DateTime, nullable=True)
+    last_crash_error = Column(Text, nullable=True)
  
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

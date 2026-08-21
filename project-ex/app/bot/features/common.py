@@ -1,4 +1,5 @@
 import logging
+import os
 from urllib.parse import quote_plus
 
 import httpx
@@ -8,8 +9,14 @@ from app.bot.bot_content import t, DEFAULT_LANGUAGE
 
 logger = logging.getLogger(__name__)
 
-TOKEN = "8669503549:AAGBIzsen2rdPfQ6gK189NhsNNBDVuyamAc"
-API_URL = "http://127.0.0.1:8000"
+TOKEN = os.environ["BOT_TOKEN"]
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+
+# None for the Global WIRES bot / support bot, an int string for every
+# per-admin process. Process-local constant — safe because each process
+# serves exactly one admin (or none) for its entire lifetime.
+_raw_admin_id = os.environ.get("BOT_ADMIN_ID")
+BOT_ADMIN_ID = int(_raw_admin_id) if _raw_admin_id and _raw_admin_id.isdigit() else None
 
 user_state = {}
 user_tokens = {}

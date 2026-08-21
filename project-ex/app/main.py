@@ -14,6 +14,7 @@ from app.routes.auth import router as auth_router
 from app.routes.categories import router as categories_router
 from app.routes.wallet import router as wallet_router
 from app.routes.user_invitations import router as user_invitations_router
+from app.bot.manager.instance_manager import manager as bot_manager
 
 # New Product & Order Routers
 from app.routes.products import router as products_router          # Public products
@@ -35,6 +36,7 @@ from app.routes.admin_withdrawals import router as admin_withdrawals_router
 from app.routes.admin_currencies import router as admin_currencies_router
 from app.routes.account import router as account_router
 from app.routes.admin_telegram_bot_settings import router as admin_telegram_bot_settings_router
+from app.routes.admin_global_bot_settings import router as admin_global_bot_settings_router
 from app.routes.admin_platform_bank import router as admin_platform_bank_router
 from app.routes.admin_networks import router as admin_networks_router
 from app.routes.admin_currency_networks import router as admin_currency_networks_router
@@ -42,6 +44,7 @@ from app.routes.admin_exchange import router as admin_exchange_router
 from app.routes.admin_exchange_analysis import router as admin_exchange_analysis_router
 from app.routes.admin_wire_transfer import router as admin_wire_transfer_router
 from app.routes.wire_transfer import router as wire_transfer_router
+from app.routes.admin_bot_control import router as admin_bot_control_router
     
 from app.routes.exchange import router as exchange_router
 from app.routes.admin_invitations import router as admin_invitations_router
@@ -83,8 +86,12 @@ def startup():
     ensure_rls_policies()
     asyncio.create_task(sweep_worker_loop())
     asyncio.create_task(wire_order_expiry_loop())
+    asyncio.create_task(bot_manager.start())
 
 
+@app.on_event("shutdown")
+async def shutdown():
+    await bot_manager.shutdown()
 # =========================
 # WEBSOCKET
 # =========================
@@ -138,7 +145,9 @@ app.include_router(product_approvals_router)
 app.include_router(admin_invitations_router)
 app.include_router(account_router)
 app.include_router(admin_telegram_bot_settings_router)
+app.include_router(admin_global_bot_settings_router)
 app.include_router(admin_platform_bank_router)
+app.include_router(admin_bot_control_router)
 
 
 # =========================

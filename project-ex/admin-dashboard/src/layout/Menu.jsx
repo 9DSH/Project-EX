@@ -125,6 +125,14 @@ export default function Menu() {
         </Link>
 
 
+        {role === "master" && (
+          <Link to="/bot_infrastructure" style={linkStyle(isActive("/bot_infrastructure"))}>
+            <Shield size={16} />
+            Bot Infrastructure
+          </Link>
+        )}
+
+
       {/* USERS */}
       <Link to="/users" style={linkStyle(isActive("/users"))}>
         <Users size={16} />

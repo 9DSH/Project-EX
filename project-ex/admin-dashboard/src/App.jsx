@@ -15,6 +15,7 @@ import AssetManager from "./pages/AssetManager";
 import ExchangeDashboard from "./pages/ExchangeDashboard";
 import WireTransferDashboard from "./pages/WireTransferDashboard";
 import AdminProfile from "./pages/AdminProfile";
+import BotInfrastructure from "./pages/BotInfrastructure";
 
 export default function App() {
   const [logged, setLogged] = useState(
@@ -56,6 +57,7 @@ export default function App() {
 
           {/* Admin Profile */}
           <Route path="/admin_profile" element={<AdminProfile />} />
+          <Route path="/bot_infrastructure" element={<BotInfrastructure />} />
 
           {/* MESSAGES (NEW FEATURE) */}
           <Route path="/messages" element={<MessagesPage />} />

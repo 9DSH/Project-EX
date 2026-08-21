@@ -1,9 +1,10 @@
+import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 import httpx
 
-TOKEN = "8902030905:AAGavbOWc3qXQybryUgJUsKKM5hYzLNpxaA"
-API_URL = "http://127.0.0.1:8000"
+TOKEN = os.environ["SUPPORT_BOT_TOKEN"]
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

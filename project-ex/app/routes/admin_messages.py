@@ -17,7 +17,7 @@ from telegram import Bot
 router = APIRouter(prefix="/admin/messages", tags=["Admin Messages"])
 
 UPLOADS_DIR = "uploads/telegram"
-BOT_TOKEN = "8902030905:AAGavbOWc3qXQybryUgJUsKKM5hYzLNpxaA"
+SUPPORT_BOT_TOKEN = os.environ.get("SUPPORT_BOT_TOKEN")
 
 class AdminSendMessage(BaseModel):
     conversation_id: int

@@ -29,7 +29,16 @@ export default function AdminProfile() {
   const [success, setSuccess] = useState("");
 
   // Telegram Bot Settings
-  const [botSettings, setBotSettings] = useState({ default_language: "en" });
+  const [botSettings, setBotSettings] = useState({
+    default_language: "en",
+    main_bot_token_set: false,
+    main_bot_token_masked: null,
+    is_active: false,
+    bot_username: null,
+    last_validated_at: null,
+    last_validation_error: null,
+  });
+  const [botTokenInput, setBotTokenInput] = useState("");
   const [botSettingsLoading, setBotSettingsLoading] = useState(true);
   const [botSettingsSaving, setBotSettingsSaving] = useState(false);
   const [botSettingsError, setBotSettingsError] = useState("");
@@ -59,11 +68,8 @@ export default function AdminProfile() {
       const res = await axios.get(`${API}/admin/telegram-bot-settings/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setBotSettings({ default_language: res.data?.default_language || "en" });
+      setBotSettings(res.data);
     } catch (e) {
-      // If the endpoint / row doesn't exist yet, fall back to English rather
-      // than blocking the tab.
-      setBotSettings({ default_language: "en" });
       setBotSettingsError(e?.response?.data?.detail || "");
     } finally {
       setBotSettingsLoading(false);
@@ -75,12 +81,16 @@ export default function AdminProfile() {
     setBotSettingsError("");
     setBotSettingsSuccess("");
     try {
-      await axios.put(
+      const payload = { default_language: botSettings.default_language, is_active: botSettings.is_active };
+      if (botTokenInput.trim()) payload.main_bot_token = botTokenInput.trim();
+      const res = await axios.put(
         `${API}/admin/telegram-bot-settings/`,
-        { default_language: botSettings.default_language },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setBotSettingsSuccess("Default language updated.");
+      setBotSettings(res.data);
+      setBotTokenInput("");
+      setBotSettingsSuccess("Settings saved.");
     } catch (e) {
       setBotSettingsError(e?.response?.data?.detail || "Failed to save bot settings.");
     } finally {
@@ -315,8 +325,50 @@ export default function AdminProfile() {
               </>
             )}
           </div>
-        </div>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16, padding: 16, marginTop: 16 }}>
+  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Bot Token</div>
+  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 14 }}>
+    Connect your Telegram bot by pasting its token from @BotFather.
+  </div>
+
+  {botSettings.bot_username && (
+    <div style={{ marginBottom: 12, fontSize: 13, color: "#86efac" }}>
+      Connected: @{botSettings.bot_username}
+      {botSettings.last_validated_at && (
+        <span style={{ color: "#64748b" }}> · validated {new Date(botSettings.last_validated_at).toLocaleString()}</span>
       )}
+    </div>
+  )}
+
+  {botSettings.last_validation_error && (
+    <div style={{ marginBottom: 12, fontSize: 13, color: "#fda4af" }}>
+      Last error: {botSettings.last_validation_error}
+    </div>
+  )}
+
+  <input
+    style={styles.input}
+    type="password"
+    placeholder={botSettings.main_bot_token_masked || "Paste bot token"}
+    value={botTokenInput}
+    onChange={(e) => setBotTokenInput(e.target.value)}
+  />
+
+  <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#94a3b8", fontSize: 13, marginTop: 12 }}>
+    <input
+      type="checkbox"
+      checked={botSettings.is_active}
+      onChange={(e) => setBotSettings({ ...botSettings, is_active: e.target.checked })}
+    />
+    Bot active
+  </label>
+</div>
+        </div>
+
+        
+      )}
+      
+
     </div>
   );
 }

@@ -13,7 +13,7 @@ from app.services.ws_manager import manager
 router = APIRouter(prefix="/support/messages", tags=["Support Messages"])
 
 
-BOT_TOKEN = "8902030905:AAGavbOWc3qXQybryUgJUsKKM5hYzLNpxaA"
+SUPPORT_BOT_TOKEN = os.environ.get("SUPPORT_BOT_TOKEN")
 UPLOADS_DIR = "uploads/telegram"
 
 # =========================
@@ -27,7 +27,7 @@ class SupportIncoming(BaseModel):
 
 async def download_telegram_file(file_id: str) -> str:
     """Download file from Telegram and save locally. Returns the saved filename."""
-    async with Bot(token=BOT_TOKEN) as bot:
+    async with Bot(token=SUPPORT_BOT_TOKEN) as bot:
         file = await bot.get_file(file_id)
         file_url = file.file_path  # This is a full URL like https://api.telegram.org/file/bot.../photos/xxx.jpg
     
