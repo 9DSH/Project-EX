@@ -9,7 +9,7 @@ from app.bot.bot_content import t, DEFAULT_LANGUAGE
 
 logger = logging.getLogger(__name__)
 
-TOKEN = os.environ["BOT_TOKEN"]
+TOKEN = os.environ.get("BOT_TOKEN")
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 # None for the Global WIRES bot / support bot, an int string for every

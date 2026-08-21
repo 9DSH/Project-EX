@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 import httpx
 
-TOKEN = os.environ["SUPPORT_BOT_TOKEN"]
+TOKEN = os.environ.get("SUPPORT_BOT_TOKEN")
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 

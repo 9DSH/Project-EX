@@ -423,7 +423,7 @@ export default function BotInfrastructure() {
 
       </div>
 
- {/* SYSTEM INFO */}
+      {/* SYSTEM INFO */}
       <div style={styles.systemCard}>
 
         <div style={styles.systemTitle}>
