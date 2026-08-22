@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.core.permissions import ROLE_PERMISSIONS
 from pydantic import BaseModel
-from app.core.rls import get_db_rls
+from app.core.rls import get_db_rls, get_db_master
 from app.models.user import User
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
@@ -361,7 +361,7 @@ def search_users(
 @router.post("/bootstrap-master")
 def bootstrap_master(
     payload: UserCreate,
-    db: Session = Depends(get_db_rls),
+    db: Session = Depends(get_db_master),
 ):
     existing_users = db.query(User).count()
 

@@ -1,18 +1,26 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.bot_content import t
-from app.bot.features.common import API_URL, exchange_state, g, safe_float, wrap, api_get, get_lang
+from app.bot.features.common import (
+    API_URL, exchange_state, g, safe_float, wrap, api_get, get_lang,
+    IS_GLOBAL_BOT, api_bot_context_get,
+)
 
 
 async def _show_wire_pairs(message, token):
     user_id = message.chat.id
     lang = get_lang(user_id)
-    res = await api_get(f"{API_URL}/wire-transfer/pairs", token)
-    if res.status_code != 200:
-        await message.reply_text(t("wire_err_load_pairs", lang))
-        return
 
-    pairs = res.json()
+    if IS_GLOBAL_BOT:
+        res = await api_bot_context_get("/bot-context/wire-pairs")
+        pairs = res.json() if res.status_code == 200 else []
+    else:
+        res = await api_get(f"{API_URL}/wire-transfer/pairs", token)
+        if res.status_code != 200:
+            await message.reply_text(t("wire_err_load_pairs", lang))
+            return
+        pairs = res.json()
+
     exchange_state.setdefault(user_id, {})["wire_pairs"] = pairs
 
     if not pairs:
@@ -34,11 +42,16 @@ async def _show_wire_pairs(message, token):
             f"{min(method_fees)}%-{max(method_fees)}%" if method_fees and min(method_fees) != max(method_fees)
             else f"{(method_fees[0] if method_fees else fallback_fee)}%"
         )
+        label = t("wire_pair_button", lang).format(from_symbol=from_symbol, to_symbol=to_symbol, rate=rate, fee=fee_text)
+
+        if IS_GLOBAL_BOT:
+            admin_id = g(pair, "admin_id")
+            admin_label = g(pair, "admin_username") or (f"Admin #{admin_id}" if admin_id else "")
+            if admin_label:
+                label += f" · {admin_label}"
+
         keyboard.append([
-            InlineKeyboardButton(
-                t("wire_pair_button", lang).format(from_symbol=from_symbol, to_symbol=to_symbol, rate=rate, fee=fee_text),
-                callback_data=f"wire_pair_{pair['id']}"
-            )
+            InlineKeyboardButton(label, callback_data=f"wire_pair_{pair['id']}")
         ])
     keyboard.append([InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")])
     await message.reply_text(

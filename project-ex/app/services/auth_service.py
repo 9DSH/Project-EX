@@ -2,7 +2,7 @@
 import secrets
 import string
 from sqlalchemy.orm import Session
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, set_session_master
 from app.models.user import User
 import json
 from app.models.user_balance import UserBalance
@@ -12,7 +12,7 @@ from app.core.security import verify_password, create_access_token, hash_passwor
 
 def login_user(username: str, password: str, telegram_id: str = None):
     db = SessionLocal()
-
+    set_session_master(db)
     try:
         user = db.query(User).filter(User.username == username).first()
 

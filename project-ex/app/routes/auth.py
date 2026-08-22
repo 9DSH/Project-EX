@@ -7,6 +7,7 @@ from app.services.wallet_derivation_service import create_default_wallets_for_us
 from app.routes.admin_users import create_default_balances
 from app.models.user_balance import UserBalance
 from app.db.database import get_db
+from app.core.rls import get_db_master
 from app.models.user import User, TelegramBotSettings
 from app.core.security import hash_password
 from app.services.invitation_service import (
@@ -86,7 +87,7 @@ def login(data: LoginRequest):
 # SIGNUP ENDPOINT
 # =========================
 @router.post("/signup")
-def signup(data: SignupRequest, db: Session = Depends(get_db)):
+def signup(data: SignupRequest, db: Session = Depends(get_db_master)):
 
     # 1. check user exists
     existing = db.query(User).filter(User.username == data.username).first()

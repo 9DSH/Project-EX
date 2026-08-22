@@ -6,7 +6,7 @@ const ACCESS_OPTIONS = [
   { key: "users.view", label: "View All Users", group: "basic" },
   { key: "users.create", label: "Create Users", group: "basic" },
   { key: "users.edit", label: "Edit Users", group: "basic" },
-
+  { key: "telegram_global_bot_access", label: "Global Bot Visibility", group: "basic" },
     // ───────────────── MESSAGE
   { key: "send.message", label: "Send Message", group: "basic" },
    { key: "broadcast.message", label: "Broadcast Message", group: "basic" },

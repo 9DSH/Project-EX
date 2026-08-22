@@ -3,7 +3,10 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardRemove,
+    KeyboardButton,
+    ReplyKeyboardMarkup
 )
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -41,7 +44,7 @@ from app.bot.features.orders import (
     _show_wire_order_detail as orders_show_wire_order_detail,
     _show_wire_orders as orders_show_wire_orders,
 )
-from app.bot.features.products import _show_categories as products_show_categories
+from app.bot.features.products import _get_products_by_category, _show_categories as products_show_categories
 from app.bot.features.wallet import (
     _find_external_wallet as wallet_find_external_wallet,
     _find_wallet_pair as wallet_find_wallet_pair,
@@ -63,6 +66,7 @@ from app.bot.features.wire_transfer import (
 )
 from app.bot.features import common as shared_common
 from app.bot.features.common import (
+    IS_GLOBAL_BOT,
     g,
     currency_symbol,
     safe_float,
@@ -81,6 +85,7 @@ from app.bot.features.common import (
     safe_inline,
     get_lang,
     set_lang,
+    get_bot_admin_access_points
 )
 
 logger = logging.getLogger(__name__)
@@ -114,28 +119,46 @@ async def _sync_lang_from_profile(user_id, token):
 # =====================================================
 # HELPERS: send the main menu message
 # =====================================================
+
 async def show_main_menu(update_or_message, text=None, user_id=None):
-    """Send the persistent reply keyboard to a logged-in user."""
     msg = update_or_message if hasattr(update_or_message, "reply_text") else update_or_message.message
-    uid = user_id
-    if uid is None:
-        uid = getattr(msg, "chat", None).id if getattr(msg, "chat", None) else None
+    uid = user_id or (getattr(msg, "chat", None).id if getattr(msg, "chat", None) else None)
     lang = get_lang(uid) if uid is not None else DEFAULT_LANGUAGE
     if text is None:
         text = t("main_menu_title", lang)
+
+    access_points, role = await get_bot_admin_access_points()
+    is_full_access = role == "master" or access_points == "*"
+
+    def allowed(*keys):
+        return is_full_access or any(k in access_points for k in keys)
+
+    keyboard_rows = [
+        [KeyboardButton(t("btn_wallet", lang)), KeyboardButton(t("btn_exchange", lang))],
+    ]
+    if allowed("products.view"):
+        keyboard_rows.append([KeyboardButton(t("btn_products", lang)), KeyboardButton(t("btn_orders", lang))])
+    else:
+        keyboard_rows.append([KeyboardButton(t("btn_orders", lang))])
+    if allowed("wire_transfer.manage", "wire_transfer.view"):
+        keyboard_rows.append([KeyboardButton(t("btn_wire", lang)), KeyboardButton(t("btn_my_account", lang))])
+    else:
+        keyboard_rows.append([KeyboardButton(t("btn_my_account", lang))])
+    keyboard_rows.append([KeyboardButton(t("btn_language", lang)), KeyboardButton(t("btn_support", lang))])
+    keyboard_rows.append([KeyboardButton(t("btn_logout", lang))])
+
+    reply_markup = ReplyKeyboardMarkup(keyboard_rows, resize_keyboard=True, is_persistent=False)
+
     token = user_tokens.get(uid) if uid is not None else None
     notice = ""
     if token:
         try:
             res = await api_get(f"{API_URL}/account/me", token)
-            if res.status_code == 200:
-                data = res.json()
-                if not data.get("personal_info_complete", False):
-                    notice = t("incomplete_profile_notice", lang)
+            if res.status_code == 200 and not res.json().get("personal_info_complete", False):
+                notice = t("incomplete_profile_notice", lang)
         except Exception:
             notice = ""
-    await msg.reply_text(f"{text}{notice}", reply_markup=main_reply_keyboard(lang))
-
+    await msg.reply_text(f"{text}{notice}", reply_markup=reply_markup)
 
 # =====================================================
 # /start
@@ -1536,8 +1559,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── PRODUCTS / CATEGORIES ─────────────────────────────────────
     if q.data.startswith("cat_"):
         cid      = q.data.replace("cat_", "")
-        res      = await api_get(f"{API_URL}/products/by-category/{cid}", token)
-        products = res.json()
+        products = await _get_products_by_category(cid, token)
         grouped  = group_products(products)
         keyboard = []
         product_map = []
@@ -1565,8 +1587,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         service_key = product_map[service_index]
         res         = await api_get(f"{API_URL}/products/by-category/{cid}", token)
-        products    = res.json()
-        matched     = [p for p in products if normalize_name(g(p, "name")) == service_key]
+        products = await _get_products_by_category(cid, token)
+        matched = [p for p in products if normalize_name(g(p, "name")) == service_key]
 
         if not matched:
             await q.message.edit_text(t("products_none_found", lang))
@@ -1586,6 +1608,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if region:
                 btn_text += f" | {region}"
             btn_text += f" | {price} {currency}"
+            if IS_GLOBAL_BOT:
+                admin_id = g(p, "admin_id")
+                admin_label = g(p, "admin_username") or (f"Admin #{admin_id}" if admin_id else "")
+                if admin_label:
+                    btn_text += f" | {admin_label}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"product_{cid}_{service_index}_{pid}")])
 
         keyboard.append([InlineKeyboardButton(t("btn_back_arrow", lang), callback_data=f"cat_{cid}")])

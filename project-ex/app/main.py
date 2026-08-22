@@ -45,7 +45,7 @@ from app.routes.admin_exchange_analysis import router as admin_exchange_analysis
 from app.routes.admin_wire_transfer import router as admin_wire_transfer_router
 from app.routes.wire_transfer import router as wire_transfer_router
 from app.routes.admin_bot_control import router as admin_bot_control_router
-    
+from app.routes.bot_context import router as bot_context_router    
 from app.routes.exchange import router as exchange_router
 from app.routes.admin_invitations import router as admin_invitations_router
 
@@ -148,6 +148,7 @@ app.include_router(admin_telegram_bot_settings_router)
 app.include_router(admin_global_bot_settings_router)
 app.include_router(admin_platform_bank_router)
 app.include_router(admin_bot_control_router)
+app.include_router(bot_context_router)
 
 
 # =========================

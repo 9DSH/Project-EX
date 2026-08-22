@@ -81,6 +81,7 @@ class InstanceManager:
         env = {
             **os.environ,
             "API_URL": API_URL,
+            "BOT_KIND": inst.kind,   # "admin" | "support" | "main_global" — add this line
         }
         if inst.kind == "support":
             env["SUPPORT_BOT_TOKEN"] = inst.token

@@ -478,17 +478,28 @@ _BUCKET_B_TABLES = [
 def ensure_rls_policies():
     with engine.begin() as conn:
         is_master = "current_setting('app.is_master', true)::boolean IS TRUE"
+        is_global_bot = "current_setting('app.is_global_bot', true)::boolean IS TRUE"
         cur_admin = "NULLIF(current_setting('app.current_admin_id', true), '')::int"
+        global_eligible_admins = (
+            "SELECT user_id FROM users "
+            "WHERE access_points @> '[\"telegram_global_bot_access\"]'::jsonb"
+        )
 
-        # ── Bucket A ──────────────────────────────────────────
+        # Tables where an admin's telegram_global_bot_access opt-in makes
+        # their rows visible to the Global bot session.
+        GLOBAL_BOT_TABLES = {"products", "exchange_pairs", "wire_transfer_pairs", "users"}
+
         for table in _BUCKET_A_TABLES:
-            _apply_rls(conn, table, f"{is_master} OR admin_id = {cur_admin}")
+            if table in GLOBAL_BOT_TABLES:
+                using_sql = (
+                    f"{is_master} OR admin_id = {cur_admin} "
+                    f"OR ({is_global_bot} AND admin_id IN ({global_eligible_admins}))"
+                )
+            else:
+                using_sql = f"{is_master} OR admin_id = {cur_admin}"
+            _apply_rls(conn, table, using_sql)
 
-        # ── Bucket B ──────────────────────────────────────────
-        # NOTE: includes `OR user_id = {cur_admin}` beyond the literal spec —
-        # without it an admin's own rows (their own balance/transaction rows)
-        # would be invisible, since the subquery only returns their
-        # *end-users*, never themselves. Flagging this deviation explicitly.
+        # ── Bucket B (unchanged) ──────────────────────────────
         for table in _BUCKET_B_TABLES:
             _apply_rls(
                 conn, table,

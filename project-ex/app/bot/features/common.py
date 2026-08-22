@@ -1,6 +1,8 @@
 import logging
 import os
 from urllib.parse import quote_plus
+from app.core.bot_service_auth import mint_bot_service_token
+import time
 
 import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
@@ -17,6 +19,13 @@ API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 # serves exactly one admin (or none) for its entire lifetime.
 _raw_admin_id = os.environ.get("BOT_ADMIN_ID")
 BOT_ADMIN_ID = int(_raw_admin_id) if _raw_admin_id and _raw_admin_id.isdigit() else None
+BOT_KIND = os.environ.get("BOT_KIND", "admin")
+# Informational only — never the security check. The real global-visibility
+# gate is the shared-secret header pair below.
+IS_GLOBAL_BOT = BOT_KIND == "main_global"
+
+BOT_SERVICE_TOKEN = mint_bot_service_token(BOT_ADMIN_ID)
+BOT_GLOBAL_SHARED_SECRET = os.environ.get("BOT_GLOBAL_SHARED_SECRET")
 
 user_state = {}
 user_tokens = {}
@@ -28,6 +37,47 @@ exchange_state = {}
 # immediately when the user taps "🌐 Language".
 user_languages = {}
 
+def _bot_context_headers():
+    headers = {"X-Bot-Service-Token": BOT_SERVICE_TOKEN}
+    if IS_GLOBAL_BOT and BOT_GLOBAL_SHARED_SECRET:
+        headers["X-Bot-Context"] = "global"
+        headers["X-Bot-Global-Secret"] = BOT_GLOBAL_SHARED_SECRET
+    return headers
+
+
+async def api_bot_context_get(path, params=None):
+    """GET a /bot-context/* menu-rendering endpoint using the bot's service
+    token — never a real user's JWT, and never usable for order/withdraw/
+    balance endpoints since the backend only mounts get_bot_service_context
+    on /bot-context/*."""
+    return await httpx.AsyncClient(timeout=30.0).get(
+        f"{API_URL}{path}", headers=_bot_context_headers(), params=params
+    )
+
+
+_access_points_cache = {"data": None, "role": None, "ts": 0.0}
+ACCESS_POINTS_TTL = 30  # seconds — fresh-fetched per interaction window, not cached at process start
+
+
+async def get_bot_admin_access_points():
+    if IS_GLOBAL_BOT:
+        # No single owning admin — menu visibility for the Global bot is
+        # governed per-item by telegram_global_bot_access, not by a
+        # single access_points list. Always show every top-level menu.
+        return "*", "global"
+
+    now = time.time()
+    if _access_points_cache["data"] is not None and now - _access_points_cache["ts"] < ACCESS_POINTS_TTL:
+        return _access_points_cache["data"], _access_points_cache["role"]
+    try:
+        res = await api_bot_context_get("/bot-context/access-points")
+        data = res.json() if res.status_code == 200 else {"access_points": [], "role": None}
+    except Exception:
+        data = {"access_points": [], "role": None}
+    _access_points_cache["data"] = data.get("access_points", [])
+    _access_points_cache["role"] = data.get("role")
+    _access_points_cache["ts"] = now
+    return _access_points_cache["data"], _access_points_cache["role"]
 
 def get_lang(user_id):
     return user_languages.get(user_id, DEFAULT_LANGUAGE)

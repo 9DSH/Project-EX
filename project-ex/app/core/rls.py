@@ -1,6 +1,6 @@
 from sqlalchemy import text
 from fastapi import Depends
-
+from app.core.bot_service_auth import get_bot_service_context
 from app.db.database import SessionLocal
 from app.core.security import get_current_user
 
@@ -50,6 +50,26 @@ def get_db_master():
     db = SessionLocal()
     try:
         db.execute(text("SET LOCAL app.is_master = 'true'"))
+        yield db
+    finally:
+        db.close()
+
+def get_db_rls_bot_context(ctx: dict = Depends(get_bot_service_context)):
+    """
+    DB session for /bot-context/* menu endpoints, driven by the bot
+    service context instead of a user JWT.
+    """
+    db = SessionLocal()
+    try:
+        db.execute(text("SET LOCAL app.is_master = 'false'"))
+        db.execute(
+            text("SET LOCAL app.is_global_bot = :v"),
+            {"v": "true" if ctx["is_global"] else "false"},
+        )
+        db.execute(
+            text("SET LOCAL app.current_admin_id = :v"),
+            {"v": str(ctx["admin_id"]) if ctx["admin_id"] is not None else ""},
+        )
         yield db
     finally:
         db.close()
