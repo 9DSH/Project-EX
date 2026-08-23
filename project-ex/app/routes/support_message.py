@@ -5,7 +5,7 @@ import httpx
 import uuid
 import os
 from telegram import Bot
-from app.core.rls import get_db_rls
+from app.core.rls import get_db_rls, get_db_master 
 from app.models.user import User
 from app.models.messages import Conversation, Message
 from app.services.ws_manager import manager
@@ -48,7 +48,7 @@ async def download_telegram_file(file_id: str) -> str:
 @router.post("/incoming")
 async def incoming_support_message(
     data: SupportIncoming,
-    db: Session = Depends(get_db_rls)
+    db: Session = Depends(get_db_master)
 ):
     
     print("\n================ BACKEND SUPPORT MESSAGE ================")

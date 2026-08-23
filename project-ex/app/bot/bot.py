@@ -70,7 +70,8 @@ from app.bot.features.wire_transfer import (
     _send_wire_method_selection as wire_send_method_selection,
     _show_wire_pairs as wire_show_pairs,
     _wire_effective_rate as wire_effective_rate,
-    _wire_receiver_field_lines as wire_receiver_field_lines,
+    _wire_receiver_field_lines as wire_receiver_field_lines,_wire_receiver_field_lines,
+    _wire_effective_rate
 )
 from app.bot.features import common as shared_common
 from app.bot.features.common import (
@@ -2414,7 +2415,7 @@ def main():
         write_timeout=20.0,
         pool_timeout=20.0,
     )
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).request(request).build()
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
