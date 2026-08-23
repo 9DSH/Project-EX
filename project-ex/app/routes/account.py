@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.core.rls import get_db_rls
+from app.core.rls import get_db_rls, get_db_master
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.user_bank_info import UserBankInfo
@@ -48,6 +48,25 @@ def _serialize_bank_info(bank_info: Optional[UserBankInfo]):
         "bank_sheba": bank_info.bank_sheba,
     }
 
+@router.get("/global-bot-eligibility")
+def check_global_bot_eligibility(
+    db: Session = Depends(get_db_master),
+    current_user=Depends(get_current_user),
+):
+    role = current_user.get("role")
+    if role == "master":
+        return {"eligible": True}
+
+    check_id = current_user.get("user_id") if role == "admin" else current_user.get("admin_id")
+    if not check_id:
+        return {"eligible": False}
+
+    admin_row = db.query(User).filter(User.user_id == check_id).first()
+    if not admin_row:
+        return {"eligible": False}
+
+    eligible = admin_row.role == "master" or "telegram_global_bot_access" in (admin_row.access_points or [])
+    return {"eligible": eligible}
 
 @router.get("/me")
 def get_my_account(

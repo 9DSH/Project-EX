@@ -27,6 +27,20 @@ IS_GLOBAL_BOT = BOT_KIND == "main_global"
 BOT_SERVICE_TOKEN = mint_bot_service_token(BOT_ADMIN_ID)
 BOT_GLOBAL_SHARED_SECRET = os.environ.get("BOT_GLOBAL_SHARED_SECRET")
 
+
+
+# Menu button text is resolved per-language, so matching incoming text
+# against a button must also be done in the user's current language rather
+# than a single hardcoded string.
+MENU_BUTTON_KEYS = [
+    "btn_wallet", "btn_exchange", "btn_products", "btn_orders",
+    "btn_wire", "btn_my_account", "btn_language", "btn_support", "btn_logout",
+]
+
+_access_points_cache = {"data": None, "role": None, "ts": 0.0}
+ACCESS_POINTS_TTL = 30  # seconds — fresh-fetched per interaction window, not cached at process start
+
+
 user_state = {}
 user_tokens = {}
 user_last_balance = {}
@@ -37,6 +51,18 @@ exchange_state = {}
 # immediately when the user taps "🌐 Language".
 user_languages = {}
 
+
+class _FakeResponse:
+    """Returned when a request never completes — every call site already
+    treats status_code != 200 as a soft failure, so this degrades gracefully
+    instead of raising into an unhandled exception mid-handler."""
+    status_code = 599
+    text = ""
+    def json(self):
+        return {}
+    
+_HTTPX_TIMEOUT = httpx.Timeout(15.0, connect=6.0)
+    
 def _bot_context_headers():
     headers = {"X-Bot-Service-Token": BOT_SERVICE_TOKEN}
     if IS_GLOBAL_BOT and BOT_GLOBAL_SHARED_SECRET:
@@ -45,25 +71,11 @@ def _bot_context_headers():
     return headers
 
 
-async def api_bot_context_get(path, params=None):
-    """GET a /bot-context/* menu-rendering endpoint using the bot's service
-    token — never a real user's JWT, and never usable for order/withdraw/
-    balance endpoints since the backend only mounts get_bot_service_context
-    on /bot-context/*."""
-    return await httpx.AsyncClient(timeout=30.0).get(
-        f"{API_URL}{path}", headers=_bot_context_headers(), params=params
-    )
-
-
-_access_points_cache = {"data": None, "role": None, "ts": 0.0}
-ACCESS_POINTS_TTL = 30  # seconds — fresh-fetched per interaction window, not cached at process start
-
 
 async def get_bot_admin_access_points():
     if IS_GLOBAL_BOT:
-        # No single owning admin — menu visibility for the Global bot is
-        # governed per-item by telegram_global_bot_access, not by a
-        # single access_points list. Always show every top-level menu.
+        # No single owning admin — visibility here is per-item via
+        # telegram_global_bot_access (RLS), not one admin's access_points.
         return "*", "global"
 
     now = time.time()
@@ -85,15 +97,6 @@ def get_lang(user_id):
 
 def set_lang(user_id, lang):
     user_languages[user_id] = lang
-
-
-# Menu button text is resolved per-language, so matching incoming text
-# against a button must also be done in the user's current language rather
-# than a single hardcoded string.
-MENU_BUTTON_KEYS = [
-    "btn_wallet", "btn_exchange", "btn_products", "btn_orders",
-    "btn_wire", "btn_my_account", "btn_language", "btn_support", "btn_logout",
-]
 
 
 def main_reply_keyboard(lang=DEFAULT_LANGUAGE):
@@ -205,11 +208,13 @@ def normalize_name(name: str) -> str:
 
 
 def group_products(products):
+    """Groups products by service (product) name so each distinct service
+    gets one button; each group holds its plan variants."""
     grouped = {}
     for p in products:
-        cat_id = g(p, "category_id") or g(p, "category", {}).get("id") if isinstance(g(p, "category", {}), dict) else None
-        cat_name = g(g(p, "category", {}), "name", "Other")
-        grouped.setdefault(cat_name, []).append(p)
+        name_key = normalize_name(g(p, "name"))
+        grouped.setdefault(name_key, {"display_name": g(p, "name", "Unknown"), "products": []})
+        grouped[name_key]["products"].append(p)
     return grouped
 
 
@@ -217,22 +222,45 @@ async def api_get(url, token=None):
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return await httpx.AsyncClient(timeout=30.0).get(url, headers=headers)
-
+    try:
+        async with httpx.AsyncClient(timeout=_HTTPX_TIMEOUT) as client:
+            return await client.get(url, headers=headers)
+    except Exception as e:
+        logger.error(f"GET {url} failed: {e}")
+        return _FakeResponse()
 
 async def api_post(url, token=None, json=None, params=None):
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return await httpx.AsyncClient(timeout=30.0).post(url, headers=headers, json=json, params=params)
-
+    try:
+        async with httpx.AsyncClient(timeout=_HTTPX_TIMEOUT) as client:
+            return await client.post(url, headers=headers, json=json, params=params)
+    except Exception as e:
+        logger.error(f"POST {url} failed: {e}")
+        return _FakeResponse()
+    
 
 async def api_put(url, token=None, json=None, params=None):
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return await httpx.AsyncClient(timeout=30.0).put(url, headers=headers, json=json, params=params)
+    try:
+        async with httpx.AsyncClient(timeout=_HTTPX_TIMEOUT) as client:
+            return await client.put(url, headers=headers, json=json, params=params)
+    except Exception as e:
+        logger.error(f"PUT {url} failed: {e}")
+        return _FakeResponse()
 
+
+async def api_bot_context_get(path, params=None):
+    try:
+        async with httpx.AsyncClient(timeout=_HTTPX_TIMEOUT) as client:
+            return await client.get(f"{API_URL}{path}", headers=_bot_context_headers(), params=params)
+    except Exception as e:
+        logger.error(f"bot-context GET {path} failed: {e}")
+        return _FakeResponse()
+    
 
 async def send_bot_message(user_id, text):
     return None

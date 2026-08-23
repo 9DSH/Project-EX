@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
+from app.bot.bot_content import t 
 from app.bot.features.common import (
     API_URL, g, wrap, api_get, get_lang,
     IS_GLOBAL_BOT, api_bot_context_get,

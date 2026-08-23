@@ -1,3 +1,4 @@
+from telegram.request import HTTPXRequest
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -25,6 +26,13 @@ from urllib.parse import quote_plus
 # Allow running as "python app/bot/bot.py" by ensuring project root is importable.
 if __package__ is None or __package__ == "":
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from app.bot.bot_content import t, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.bot.features.account import (
@@ -128,7 +136,7 @@ async def show_main_menu(update_or_message, text=None, user_id=None):
         text = t("main_menu_title", lang)
 
     access_points, role = await get_bot_admin_access_points()
-    is_full_access = role == "master" or access_points == "*"
+    is_full_access = role == "master" or role == "global" or access_points == "*"
 
     def allowed(*keys):
         return is_full_access or any(k in access_points for k in keys)
@@ -334,6 +342,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user_tokens[user_id] = token
+        if IS_GLOBAL_BOT:
+            elig_res = await api_get(f"{API_URL}/account/global-bot-eligibility", token)
+            eligible = elig_res.status_code == 200 and elig_res.json().get("eligible")
+            if not eligible:
+                user_tokens.pop(user_id, None)
+                user_state[user_id] = {}
+                await update.message.reply_text(
+                    "❌ This account is not available on this bot.",
+                    reply_markup=ReplyKeyboardRemove(),
+                )
+                return
         user_state[user_id]  = {}
         username = data.get("username", "user")
         if data.get("language") in SUPPORTED_LANGUAGES:
@@ -424,6 +443,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if auto_token:
             user_tokens[user_id] = auto_token
+            if IS_GLOBAL_BOT:
+                elig_res = await api_get(f"{API_URL}/account/global-bot-eligibility", auto_token)
+                eligible = elig_res.status_code == 200 and elig_res.json().get("eligible")
+                if not eligible:
+                    user_tokens.pop(user_id, None)
+                    user_state[user_id] = {}
+                    await update.message.reply_text(
+                        "❌ This account is not available on this bot.",
+                        reply_markup=ReplyKeyboardRemove(),
+                    )
+                    return
             await show_main_menu(update.message, t("auth_logged_in", lang), user_id=user_id)
         else:
             await update.message.reply_text(t("auth_signup_ok_login_failed", lang))
@@ -1586,8 +1616,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         service_key = product_map[service_index]
-        res         = await api_get(f"{API_URL}/products/by-category/{cid}", token)
-        products = await _get_products_by_category(cid, token)
+        products = await _get_products_by_category(cid, token)   # ← keep only this
         matched = [p for p in products if normalize_name(g(p, "name")) == service_key]
 
         if not matched:
@@ -2372,13 +2401,21 @@ async def _show_product_order_detail(message, token, order_id, user_id=None):
 async def _show_wire_order_detail(message, token, order_id, user_id=None):
     await orders_show_wire_order_detail(message, token, order_id, user_id=user_id)
 
+async def error_handler(update, context):
+    logger.error("Unhandled exception while processing update", exc_info=context.error)
 
 # =====================================================
 # MAIN
 # =====================================================
 def main():
+    request = HTTPXRequest(
+        connect_timeout=20.0,
+        read_timeout=30.0,
+        write_timeout=20.0,
+        pool_timeout=20.0,
+    )
     app = Application.builder().token(TOKEN).build()
-
+    app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))

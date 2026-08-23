@@ -49,6 +49,8 @@ MAX_CRASH_RETRIES = len(CRASH_BACKOFF)
 GLOBAL_SUPPORT_KEY = "global_support"
 GLOBAL_MAIN_KEY = "global_main"
 
+LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "logs", "bots")
+os.makedirs(LOG_DIR, exist_ok=True)
 
 @dataclass
 class BotInstance:
@@ -64,7 +66,7 @@ class BotInstance:
     restart_attempts: int = 0
     intentional_stop: bool = False
     token_version: str = field(default="")  # last-known token, to detect changes
-
+    log_file: Optional[object] = None
 
 class InstanceManager:
     def __init__(self):
@@ -81,7 +83,9 @@ class InstanceManager:
         env = {
             **os.environ,
             "API_URL": API_URL,
-            "BOT_KIND": inst.kind,   # "admin" | "support" | "main_global" — add this line
+            "BOT_KIND": inst.kind,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1",
         }
         if inst.kind == "support":
             env["SUPPORT_BOT_TOKEN"] = inst.token
@@ -96,10 +100,13 @@ class InstanceManager:
 
         logger.info(f"Spawning {inst.kind} bot [{inst.key}] module={inst.module}")
 
+        log_path = os.path.join(LOG_DIR, f"{inst.kind}_{inst.key}.log")
+        log_file = open(log_path, "a", encoding="utf-8")
+
         popen_kwargs = dict(
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
         )
         if os.name == "nt":
             popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
@@ -111,9 +118,11 @@ class InstanceManager:
             inst.last_error = f"Failed to spawn: {e}"
             self._persist_status(inst)
             logger.error(f"[{inst.key}] spawn failed: {e}")
+            log_file.close()
             return
 
         inst.process = proc
+        inst.log_file = log_file
         inst.status = "running"
         inst.last_restart_at = datetime.utcnow()
         inst.last_error = None
@@ -126,6 +135,12 @@ class InstanceManager:
         if not inst.process or inst.process.poll() is not None:
             inst.status = "stopped"
             self._persist_status(inst)
+            if inst.log_file:
+                try:
+                    inst.log_file.close()
+                except Exception:
+                    pass
+                inst.log_file = None
             return
 
         inst.intentional_stop = True

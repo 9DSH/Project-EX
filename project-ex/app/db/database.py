@@ -26,6 +26,40 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
+
+# =========================
+# RLS BUCKETS
+# =========================
+
+# Bucket A: direct admin_id column
+_BUCKET_A_TABLES = [
+    "users",
+    "products",
+    "exchange_pairs",
+    "wire_transfer_pairs",
+    "exchange_orders",
+    "wire_transfer_orders",
+    "platform_bank_accounts",
+]
+
+# Bucket B: scoped via user_id -> users.admin_id
+_BUCKET_B_TABLES = [
+    "user_balances",
+    "transactions",
+    "user_wallets",
+    "external_wallets",
+    "user_bank_info",
+    "withdrawals",
+    "failed_sweeps",
+    "conversations",
+]
+
+# Bucket D — deliberately no RLS. Access is controlled entirely by
+# access_points at the application layer:
+#   currencies, networks, currency_networks, categories, system_wallet
+
+
+
 def _table_exists(conn, table_name: str) -> bool:
     return bool(
         conn.execute(
@@ -298,6 +332,7 @@ def set_session_master(db):
 
 def ensure_schema():
     with engine.begin() as conn:
+        _ensure_global_eligibility_function(conn)
         if _table_exists(conn, "transactions") and not _column_exists(conn, "transactions", "platform_bank_account_id"):
             conn.execute(
                 text(
@@ -443,57 +478,27 @@ def _apply_rls(conn, table_name: str, using_sql: str, policy_name: str | None = 
         conn.execute(text(f"CREATE POLICY {policy_name} ON {table_name} USING ({using_sql})"))
 
 
-# =========================
-# RLS BUCKETS
-# =========================
-
-# Bucket A: direct admin_id column
-_BUCKET_A_TABLES = [
-    "users",
-    "products",
-    "exchange_pairs",
-    "wire_transfer_pairs",
-    "exchange_orders",
-    "wire_transfer_orders",
-    "platform_bank_accounts",
-]
-
-# Bucket B: scoped via user_id -> users.admin_id
-_BUCKET_B_TABLES = [
-    "user_balances",
-    "transactions",
-    "user_wallets",
-    "external_wallets",
-    "user_bank_info",
-    "withdrawals",
-    "failed_sweeps",
-    "conversations",
-]
-
-# Bucket D — deliberately no RLS. Access is controlled entirely by
-# access_points at the application layer:
-#   currencies, networks, currency_networks, categories, system_wallet
-
 
 def ensure_rls_policies():
     with engine.begin() as conn:
         is_master = "current_setting('app.is_master', true)::boolean IS TRUE"
         is_global_bot = "current_setting('app.is_global_bot', true)::boolean IS TRUE"
         cur_admin = "NULLIF(current_setting('app.current_admin_id', true), '')::int"
-        global_eligible_admins = (
-            "SELECT user_id FROM users "
-            "WHERE access_points @> '[\"telegram_global_bot_access\"]'::jsonb"
-        )
 
-        # Tables where an admin's telegram_global_bot_access opt-in makes
-        # their rows visible to the Global bot session.
-        GLOBAL_BOT_TABLES = {"products", "exchange_pairs", "wire_transfer_pairs", "users"}
+        GLOBAL_BOT_TABLES = {"products", "exchange_pairs", "wire_transfer_pairs"}
 
         for table in _BUCKET_A_TABLES:
-            if table in GLOBAL_BOT_TABLES:
+            if table == "users":
+                # admin_id may be NULL for master/top-level admin rows —
+                # fall back to checking the row's own user_id in that case.
                 using_sql = (
                     f"{is_master} OR admin_id = {cur_admin} "
-                    f"OR ({is_global_bot} AND admin_id IN ({global_eligible_admins}))"
+                    f"OR ({is_global_bot} AND is_admin_global_eligible(COALESCE(admin_id, user_id)))"
+                )
+            elif table in GLOBAL_BOT_TABLES:
+                using_sql = (
+                    f"{is_master} OR admin_id = {cur_admin} "
+                    f"OR ({is_global_bot} AND is_admin_global_eligible(admin_id))"
                 )
             else:
                 using_sql = f"{is_master} OR admin_id = {cur_admin}"
@@ -543,7 +548,25 @@ def get_db():
     finally:
         db.close()
 
-
+def _ensure_global_eligibility_function(conn):
+    conn.execute(text("""
+        CREATE OR REPLACE FUNCTION is_admin_global_eligible(check_admin_id integer)
+        RETURNS boolean
+        LANGUAGE sql
+        STABLE
+        SECURITY DEFINER
+        SET row_security = off
+        AS $$
+          SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE user_id = check_admin_id
+              AND (
+                role = 'master'
+                OR access_points::jsonb @> '["telegram_global_bot_access"]'::jsonb
+              )
+          );
+        $$;
+    """))
 
 def _recompute_exchange_order_admin_from_pair(conn) -> None:
     """
