@@ -6,6 +6,7 @@ from app.bot.bot_content import t
 from app.bot.features.common import (
     API_URL,
     balance_inline,
+    fmt_num,
     g,
     safe_inline,
     safe_float,
@@ -135,6 +136,7 @@ async def _prompt_external_wallet_input(message, user_id, pair, return_to="exter
         "network_id": pair.get("network_id"),
         "chain": g(pair, "chain", g(pair, "network", "N/A")),
         "return_to": return_to,
+        "back_to": "withdraw_network" if return_to == "withdraw" else "external_wallet_network",
     })
     user_state[user_id] = state
     await message.edit_text(
@@ -143,7 +145,7 @@ async def _prompt_external_wallet_input(message, user_id, pair, return_to="exter
             t("ext_wallet_set_body", lang).format(currency=pair.get("currency"), network=pair.get("network")),
             lang=lang,
         ),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="extwallet_cancel")]])
+        reply_markup=_back_cancel_kb(lang)
     )
 
 
@@ -159,6 +161,7 @@ async def _prompt_withdraw_amount(message, user_id, pair, wallet_address):
         "network": pair.get("network"),
         "network_id": pair.get("network_id"),
         "chain": g(pair, "chain", g(pair, "network", "N/A")),
+        "back_to": "withdraw_network",
     })
     user_state[user_id] = state
     min_withdraw = safe_float(g(pair, "min_withdraw", 0))
@@ -166,11 +169,11 @@ async def _prompt_withdraw_amount(message, user_id, pair, wallet_address):
     withdraw_fee = safe_float(g(pair, "withdraw_fee", 0))
     info_lines = []
     if min_withdraw > 0:
-        info_lines.append(t("withdraw_info_min", lang).format(amount=min_withdraw).rstrip("\n"))
+        info_lines.append(t("withdraw_info_min", lang).format(amount=fmt_num(min_withdraw)).rstrip("\n"))
     if max_withdraw > 0:
-        info_lines.append(t("withdraw_info_max", lang).format(amount=max_withdraw).rstrip("\n"))
+        info_lines.append(t("withdraw_info_max", lang).format(amount=fmt_num(max_withdraw)).rstrip("\n"))
     if withdraw_fee > 0:
-        info_lines.append(t("withdraw_info_fee", lang).format(fee=withdraw_fee, currency=pair["currency"]).rstrip("\n"))
+        info_lines.append(t("withdraw_info_fee", lang).format(fee=fmt_num(withdraw_fee), currency=pair["currency"]).rstrip("\n"))
     info_text = ""
     if info_lines:
         info_text = t("withdraw_info_header", lang) + "\n".join(info_lines) + "\n\n"

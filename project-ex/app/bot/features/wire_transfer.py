@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.bot_content import t
 from app.bot.features.common import (
-    API_URL, _back_cancel_kb, exchange_state, g, safe_float, wrap, api_get, get_lang,
+    API_URL, _back_cancel_kb, exchange_state, fmt_num, g, safe_float, wrap, api_get, get_lang,
     IS_GLOBAL_BOT, api_bot_context_get,
 )
 
@@ -104,10 +104,10 @@ async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang="en", us
    
     await send_fn(
         t("wire_amount_prompt", lang).format(
-            from_symbol=from_sym, to_symbol=to_sym, rate=g(pair, "rate", 0),
+            from_symbol=from_sym, to_symbol=to_sym, rate=fmt_num(g(pair, "rate", 0)),
             method_line=method_line, fee_pct=fee_pct, info=info,
         ),
-        reply_markup=markup,
+        reply_markup=_back_cancel_kb(lang),
     )
 
 

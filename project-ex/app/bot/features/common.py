@@ -282,3 +282,12 @@ def fmt_num(x, decimals=2):
     if val == int(val):
         return f"{int(val):,}"
     return f"{val:,.{decimals}f}"
+
+
+def _back_cancel_kb(lang, extra_rows=None):
+    rows = list(extra_rows or [])
+    rows.append([
+        InlineKeyboardButton(t("btn_back", lang), callback_data="flow_back"),
+        InlineKeyboardButton(t("btn_cancel", lang), callback_data="flow_cancel"),
+    ])
+    return InlineKeyboardMarkup(rows)

@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.bot_content import t
-from app.bot.features.common import API_URL, balance_inline, safe_inline, wrap, api_get, api_put, get_lang
+from app.bot.features.common import API_URL, _back_cancel_kb, balance_inline, safe_inline, wrap, api_get, api_put, get_lang
 
 
 async def _show_my_account_menu(message, token, user_id=None):
@@ -166,8 +166,10 @@ async def _prompt_account_edit_field(message, state, user_id):
     current_value = state.get("account_edit_current_values", {}).get(field, "")
     current_text = t("account_edit_current_suffix", lang).format(value=current_value) if current_value else ""
     label = t(ACCOUNT_FIELD_LABEL_KEYS[mode][field], lang)
-    await message.reply_text(t("account_edit_field_prompt", lang).format(label=label, current=current_text))
-
+    await message.reply_text(
+        t("account_edit_field_prompt", lang).format(label=label, current=current_text),
+        reply_markup=_back_cancel_kb(lang)
+    )
 
 async def _show_account_edit_preview(message, state, user_id):
     lang = get_lang(user_id)

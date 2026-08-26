@@ -315,7 +315,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["username"] = text
         state["step"]     = "login_password"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_enter_password", lang))
+        await update.message.reply_text(t("auth_enter_password", lang), reply_markup=_back_cancel_kb(lang))
         return
 
     # ── LOGIN: PASSWORD ───────────────────────────────────────────
@@ -390,15 +390,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["username"] = text
         state["step"]     = "signup_password"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_choose_password", lang))
+        await update.message.reply_text(t("auth_choose_password", lang), reply_markup=_back_cancel_kb(lang))
         return
 
-    # ── SIGNUP: PASSWORD ──────────────────────────────────────────
     if state.get("step") == "signup_password":
         state["password"] = text
         state["step"]     = "signup_invite"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_enter_invite_code", lang))
+        await update.message.reply_text(t("auth_enter_invite_code", lang), reply_markup=_back_cancel_kb(lang))
         return
 
     # ── SIGNUP: INVITATION CODE ───────────────────────────────────
@@ -614,7 +613,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["wire_collected"]   = collected
             user_state[user_id]       = state
             req_label = "" if next_field.get("required") else t("wire_field_optional_suffix", lang)
-            await update.message.reply_text(t("wire_field_prompt", lang).format(label=next_field.get("label", next_key), required=req_label))
+            await update.message.reply_text(
+                t("wire_field_prompt", lang).format(label=next_field.get("label", next_key), required=req_label),
+                reply_markup=_back_cancel_kb(lang)
+            )
             return
 
         # this batch is complete
@@ -635,6 +637,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _send_wire_method_selection(update.message.reply_text, pair, methods, lang)
             else:
                 state["step"] = "wire_amount"
+                state["back_to"] = "wire_pairs"
                 user_state[user_id] = state
                 await _prompt_wire_amount(update.message.reply_text, pair, lang=lang, user_id=user_id)
             return
@@ -643,6 +646,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["wire_method_collected"] = collected
         state["step"] = "wire_amount"
         user_state[user_id] = state
+        state["back_to"] = "wire_method_select"
         await _prompt_wire_amount(update.message.reply_text, pair, selected_method=state.get("wire_selected_method"), lang=lang, user_id=user_id)
         return
 
@@ -810,8 +814,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["field_queue"] = queue
             state["input_data"] = input_data
             user_state[user_id] = state
-
-            await update.message.reply_text(t("product_next_field", lang).format(field=next_field.get("label", next_key)))
+            await update.message.reply_text(
+                t("product_next_field", lang).format(field=next_field.get("label", next_key)),
+                reply_markup=_back_cancel_kb(lang)
+            )
             return
 
         # =====================================================
@@ -940,15 +946,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── AUTH ──────────────────────────────────────────────────────
     if q.data == "auth_login":
         user_state[user_id] = {"step": "login_username"}
-        await q.message.edit_text(t("auth_enter_username", lang))
+        await q.message.edit_text(t("auth_enter_username", lang), reply_markup=_back_cancel_kb(lang))
         return
 
     if q.data == "auth_signup":
         user_state[user_id] = {"step": "signup_username"}
-        await q.message.edit_text(
-            t("auth_signup_intro", lang),
-            parse_mode="Markdown",
-        )
+        await q.message.edit_text(t("auth_signup_intro", lang), parse_mode="Markdown", reply_markup=_back_cancel_kb(lang))
         return
 
     # ── WALLET SUBMENU ────────────────────────────────────────────
@@ -1296,9 +1299,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 currency=state.get("currency"), network=state.get("network"), chain=state.get("chain"),
                 warning=t(EXTERNAL_WALLET_WARNING_KEY, lang),
             ),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(t("btn_cancel", lang), callback_data="extwallet_cancel")]
-            ])
+            reply_markup=_back_cancel_kb(lang)
         )
         return
 
@@ -1940,15 +1941,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "product_id": pid,
             "fields": required,
             "field_queue": field_queue,
-            "input_data": {}
+            "input_data": {},
+            "cid": product.get("category_id"),
         }
 
-        # ask first field
         first_key = field_queue[0]
         first_field = required[first_key]
 
         await q.message.edit_text(
-            t("product_enter_field", lang).format(product=product.get("name"), field=first_field.get("label", first_key))
+            t("product_enter_field", lang).format(product=product.get("name"), field=first_field.get("label", first_key)),
+            reply_markup=_back_cancel_kb(lang)
         )
         return
 
@@ -1977,6 +1979,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "step":          "exchange_amount",
             "from_currency": from_currency,
             "to_currency":   to_currency,
+            "back_to":       "exchange_pairs",
         }
         await q.message.edit_text(
             t("exchange_pair_amount_prompt", lang).format(from_currency=from_currency, to_currency=to_currency),
@@ -2150,11 +2153,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "wire_field_queue": field_queue,
                 "wire_collected": {},
                 "wire_collect_purpose": "pair_fields",
+                "back_to": "wire_pairs",
             })
             user_state[user_id] = base_state
             first_field = required[field_queue[0]]
             req_label = "" if first_field.get("required") else t("wire_field_optional_suffix", lang)
-            await q.message.edit_text(t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label))
+            await q.message.edit_text(
+                t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label),
+                reply_markup=_back_cancel_kb(lang)
+            )
             return
 
         # No pair-level fields configured → go straight to method selection
@@ -2165,6 +2172,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
         else:
             base_state["step"] = "wire_amount"
+            base_state["back_to"] = "wire_pairs"
             user_state[user_id] = base_state
             await _prompt_wire_amount(q.message.edit_text, pair, lang=lang, user_id=user_id)
         return
@@ -2216,32 +2224,35 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "wire_field_queue": field_queue,
                     "wire_collected": {},
                     "wire_collect_purpose": "method_fields",
+                    "back_to": "wire_method_select",
                 })
                 user_state[user_id] = state
                 first_field = sender_fields[field_queue[0]]
                 req_label = "" if first_field.get("required") else t("wire_field_optional_suffix", lang)
                 await q.message.edit_text(
                     f"{instruction_text}\n" + t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]])
+                    reply_markup=_back_cancel_kb(lang)
                 )
                 return
 
             # no method-level sender fields configured → straight to amount
             state["step"] = "wire_amount"
+            state["back_to"] = "wire_method_select"
             user_state[user_id] = state
             await q.message.edit_text(
                 f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]])
+                reply_markup=_back_cancel_kb(lang)
             )
             return
 
         # Case B: the destination (IRT account) was already captured in step 1
         # — no separate per-method sender_fields collection needed here.
         state["step"] = "wire_amount"
+        state["back_to"] = "wire_method_select"
         user_state[user_id] = state
         await q.message.edit_text(
             f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]])
+            reply_markup=_back_cancel_kb(lang)
         )
         return
 
@@ -2346,10 +2357,220 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if q.data == "flow_cancel":
         user_state[user_id] = {}
+        token = user_tokens.get(user_id)
+        if not token:
+            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            return
         await q.message.edit_text(t("main_menu_choose", lang))
         await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
         return
 
+#-----------------------------------------------------------
+#------------ Handle back buttons --------------------
+#------------------------------------------------------------
+
+LOGIN_STEPS  = ["login_username", "login_password"]
+SIGNUP_STEPS = ["signup_username", "signup_password", "signup_invite"]
+
+LOGIN_PROMPTS  = {"login_username": "auth_enter_username", "login_password": "auth_enter_password"}
+SIGNUP_PROMPTS = {
+    "signup_username": "auth_enter_username",
+    "signup_password": "auth_choose_password",
+    "signup_invite":   "auth_enter_invite_code",
+}
+
+
+async def _render_back_target(q, state, lang, user_id):
+    step = state.get("step")
+
+    # ── AUTH CHAINS: rewind one step, or exit to auth menu if at step 0 ──
+    if step in LOGIN_STEPS:
+        idx = LOGIN_STEPS.index(step)
+        if idx == 0:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            return
+        prev = LOGIN_STEPS[idx - 1]
+        state["step"] = prev
+        user_state[user_id] = state
+        await q.message.edit_text(t(LOGIN_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang))
+        return
+
+    if step in SIGNUP_STEPS:
+        idx = SIGNUP_STEPS.index(step)
+        if idx == 0:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            return
+        prev = SIGNUP_STEPS[idx - 1]
+        state["step"] = prev
+        user_state[user_id] = state
+        await q.message.edit_text(t(SIGNUP_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang))
+        return
+
+    # ── ACCOUNT EDIT QUEUE: rewind to previous field ──
+    if step == "account_edit_collect":
+        index = state.get("account_edit_index", 0)
+        if index > 0:
+            state["account_edit_index"] = index - 1
+            state.get("account_edit_values", {}).pop(state["account_edit_fields"][index - 1], None)
+            user_state[user_id] = state
+            await _prompt_account_edit_field(q.message, state, user_id)
+            return
+        user_state[user_id] = {}
+        await _show_my_account_menu(q.message, user_tokens.get(user_id), user_id)
+        return
+
+    # ── WIRE FIELD QUEUE: rewind to previous field in this batch ──
+    if step == "wire_collect_fields":
+        fields   = state.get("wire_fields", {})
+        queue    = state.get("wire_field_queue", [])
+        collected = state.get("wire_collected", {})
+        asked_order = [k for k in fields.keys() if k not in queue]
+        if asked_order:
+            last_key = asked_order[-1]
+            collected.pop(last_key, None)
+            queue.insert(0, last_key)
+            state["wire_field_queue"] = queue
+            state["wire_collected"] = collected
+            user_state[user_id] = state
+            field_def = fields[last_key]
+            req_label = "" if field_def.get("required") else t("wire_field_optional_suffix", lang)
+            await q.message.edit_text(
+                t("wire_field_prompt", lang).format(label=field_def.get("label", last_key), required=req_label),
+                reply_markup=_back_cancel_kb(lang)
+            )
+            return
+        # nothing asked yet in this batch → exit to whatever preceded it
+        purpose = state.get("wire_collect_purpose", "method_fields")
+        pair = state.get("wire_pair")
+        methods = state.get("wire_receiver_methods", [])
+        user_state[user_id] = {}
+        if purpose == "pair_fields" or not pair:
+            await _show_wire_pairs(q.message, user_tokens.get(user_id))
+            return
+        state2 = {"wire_pair": pair, "wire_is_irt_source": state.get("wire_is_irt_source", False),
+                  "wire_receiver_methods": methods, "wire_pair_collected": {}, "wire_method_collected": {},
+                  "wire_selected_method": None, "step": "wire_select_method"}
+        user_state[user_id] = state2
+        await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
+        return
+
+    # ── PRODUCT FIELD QUEUE: rewind to previous field ──
+    if step == "collect_product_inputs":
+        fields = state.get("fields", {})
+        queue  = state.get("field_queue", [])
+        input_data = state.get("input_data", {})
+        asked_order = [k for k in fields.keys() if k not in queue]
+        if asked_order:
+            last_key = asked_order[-1]
+            input_data.pop(last_key, None)
+            queue.insert(0, last_key)
+            state["field_queue"] = queue
+            state["input_data"] = input_data
+            user_state[user_id] = state
+            field_def = fields[last_key]
+            await q.message.edit_text(
+                t("product_next_field", lang).format(field=field_def.get("label", last_key)),
+                reply_markup=_back_cancel_kb(lang)
+            )
+            return
+        cid = state.get("cid")
+        user_state[user_id] = {}
+        if cid:
+            products = await _get_products_by_category(cid, user_tokens.get(user_id))
+            grouped = group_products(products)
+            keyboard = []
+            product_map = []
+            for key, pdata in grouped.items():
+                keyboard.append([InlineKeyboardButton(pdata["display_name"], callback_data=f"service_{cid}_{len(product_map)}")])
+                product_map.append(key)
+            exchange_state[user_id] = {"cid": cid, "product_map": product_map}
+            await q.message.edit_text(t("products_select_service", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        await _show_categories(q.message, user_tokens.get(user_id), user_id=user_id)
+        return
+
+    # ── SINGLE-STEP PROMPTS: dispatch by tag ──
+    tag = state.get("back_to")
+
+    if tag == "wallet_menu":
+        user_state[user_id] = {}
+        await q.message.edit_text(
+            wrap(t("wallet_dashboard_title", lang), t("wallet_choose_option", lang), lang=lang),
+            reply_markup=wallet_inline(lang)
+        )
+        return
+
+    if tag == "withdraw_network":
+        pair = state.get("pair")
+        currency = state.get("currency") or (pair or {}).get("currency")
+        if not currency:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("wallet_err_session_expired_reselect", lang))
+            return
+        user_state[user_id] = {}
+        await _show_wallet_network_menu(
+            q.message, user_id, currency, "withdraw_network_",
+            t("wallet_select_network_title", lang).format(currency=currency).replace("\n\n", ""),
+            t("wallet_select_withdraw_network_subtitle", lang), "wallet_withdraw"
+        )
+        return
+
+    if tag == "external_wallet_currency":
+        user_state[user_id] = {}
+        data, error = await _load_wallet_pairs(user_id, user_tokens.get(user_id))
+        if error:
+            await q.message.edit_text(f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang))
+            return
+        await _show_wallet_currency_menu(
+            q.message, data.get("currencies", []), "extwallet_currency_",
+            t("wallet_select_currency_external_title", lang), t("wallet_select_currency_external_subtitle", lang),
+            "wallet_balance", lang=lang,
+        )
+        return
+
+    if tag == "external_wallet_network":
+        pair = state.get("pair")
+        currency = state.get("currency") or (pair or {}).get("currency")
+        if not currency:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("ext_wallet_session_expired_reselect", lang))
+            return
+        user_state[user_id] = {}
+        await _show_wallet_network_menu(
+            q.message, user_id, currency, "extwallet_network_",
+            t("wallet_select_network_title", lang).format(currency=currency).replace("\n\n", ""),
+            t("wallet_select_currency_external_subtitle", lang), "wallet_external"
+        )
+        return
+
+    if tag == "exchange_pairs":
+        user_state[user_id] = {}
+        await _show_exchange_pairs(q.message, user_tokens.get(user_id), user_id=user_id)
+        return
+
+    if tag == "wire_pairs":
+        user_state[user_id] = {}
+        await _show_wire_pairs(q.message, user_tokens.get(user_id))
+        return
+
+    if tag == "wire_method_select":
+        pair = state.get("wire_pair")
+        methods = state.get("wire_receiver_methods", [])
+        if not pair:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("wire_session_expired_reselect", lang))
+            return
+        state["step"] = "wire_select_method"
+        user_state[user_id] = state
+        await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
+        return
+
+    # default fallback
+    user_state[user_id] = {}
+    await q.message.edit_text(t("main_menu_choose", lang))
+    await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
 
 # =====================================================
 # WIRE TRANSFER HELPERS (branch-aware: IRT-source vs foreign-source)
@@ -2454,7 +2675,7 @@ async def _send_wire_method_selection(send_fn, pair, methods, lang=DEFAULT_LANGU
 
 
 async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang=DEFAULT_LANGUAGE, user_id=None):
-    await wire_prompt_amount(send_fn, pair, selected_method=selected_method, lang=lang)
+    await wire_prompt_amount(send_fn, pair, selected_method=selected_method, lang=lang, user_id=user_id)
 
 
 async def _show_wire_pairs(message, token):
