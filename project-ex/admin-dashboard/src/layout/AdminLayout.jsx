@@ -1,4 +1,5 @@
 import Menu from "./Menu";
+import TopBar from "./TopBar";
 
 export default function AdminLayout({ children }) {
   return (
@@ -15,13 +16,22 @@ export default function AdminLayout({ children }) {
       <div style={{
         flex: 1,
         background: "#020617",
-        padding: 20,
         display: "flex",
         flexDirection: "column",
         minHeight: 0,   // 🔥 THIS FIXES CLIPPING
-        overflow: "hidden"
       }}>
-        {children}
+        <TopBar />
+
+        <div style={{
+          flex: 1,
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden"
+        }}>
+          {children}
+        </div>
       </div>
 
     </div>

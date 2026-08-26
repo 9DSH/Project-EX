@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.bot_content import t
 from app.bot.features.common import (
-    API_URL, exchange_state, g, safe_float, wrap, api_get, get_lang,
+    API_URL, _back_cancel_kb, exchange_state, g, safe_float, wrap, api_get, get_lang,
     IS_GLOBAL_BOT, api_bot_context_get,
 )
 
@@ -83,7 +83,7 @@ async def _send_wire_method_selection(send_fn, pair, methods, lang="en"):
     )
 
 
-async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang="en"):
+async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang="en", user_id=None):
     min_a = g(pair, "min_amount", 0)
     max_a = g(pair, "max_amount", None)
     hints = []
@@ -99,12 +99,15 @@ async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang="en"):
     method_label = selected_method.get("label", selected_method.get("key", "")) if selected_method else None
     method_line = t("wire_amount_method_line", lang).format(method=method_label) if method_label else ""
 
+    kb_rows = []
+    markup = _back_cancel_kb(lang, kb_rows) if user_id else InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]])
+   
     await send_fn(
         t("wire_amount_prompt", lang).format(
             from_symbol=from_sym, to_symbol=to_sym, rate=g(pair, "rate", 0),
             method_line=method_line, fee_pct=fee_pct, info=info,
         ),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]]),
+        reply_markup=markup,
     )
 
 

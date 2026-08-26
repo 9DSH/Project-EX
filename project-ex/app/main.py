@@ -36,7 +36,6 @@ from app.routes.admin_withdrawals import router as admin_withdrawals_router
 from app.routes.admin_currencies import router as admin_currencies_router
 from app.routes.account import router as account_router
 from app.routes.admin_telegram_bot_settings import router as admin_telegram_bot_settings_router
-from app.routes.admin_global_bot_settings import router as admin_global_bot_settings_router
 from app.routes.admin_platform_bank import router as admin_platform_bank_router
 from app.routes.admin_networks import router as admin_networks_router
 from app.routes.admin_currency_networks import router as admin_currency_networks_router
@@ -145,7 +144,6 @@ app.include_router(product_approvals_router)
 app.include_router(admin_invitations_router)
 app.include_router(account_router)
 app.include_router(admin_telegram_bot_settings_router)
-app.include_router(admin_global_bot_settings_router)
 app.include_router(admin_platform_bank_router)
 app.include_router(admin_bot_control_router)
 app.include_router(bot_context_router)

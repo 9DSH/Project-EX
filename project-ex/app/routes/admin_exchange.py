@@ -14,6 +14,7 @@ from app.models.exchange_pair import ExchangePair
 from app.models.exchange_order import ExchangeOrder
 from app.models.exchange_analysis import ExchangeRateHistory
 from app.models.user import User
+from app.routes.shared_functions import _admin_username_map
 from sqlalchemy.orm import joinedload
 from decimal import Decimal, getcontext
 
@@ -35,17 +36,6 @@ def get_admin(user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
-
-
-def _admin_username_map(db: Session, admin_ids: set[int]) -> dict[int, str]:
-    admin_ids = {a for a in admin_ids if a}
-    if not admin_ids:
-        return {}
-    return {
-        u.user_id: u.username
-        for u in db.query(User).filter(User.user_id.in_(admin_ids)).all()
-    }
-
 
 
 # =========================

@@ -76,6 +76,8 @@ from app.bot.features.wire_transfer import (
 from app.bot.features import common as shared_common
 from app.bot.features.common import (
     IS_GLOBAL_BOT,
+    _back_cancel_kb,
+    fmt_num,
     g,
     currency_symbol,
     safe_float,
@@ -145,18 +147,29 @@ async def show_main_menu(update_or_message, text=None, user_id=None):
     keyboard_rows = [
         [KeyboardButton(t("btn_wallet", lang)), KeyboardButton(t("btn_exchange", lang))],
     ]
+    services = [t("btn_wallet", lang), t("btn_exchange", lang)]
+
     if allowed("products.view"):
         keyboard_rows.append([KeyboardButton(t("btn_products", lang)), KeyboardButton(t("btn_orders", lang))])
+        services += [t("btn_products", lang), t("btn_orders", lang)]
     else:
         keyboard_rows.append([KeyboardButton(t("btn_orders", lang))])
+        services.append(t("btn_orders", lang))
+
     if allowed("wire_transfer.manage", "wire_transfer.view"):
         keyboard_rows.append([KeyboardButton(t("btn_wire", lang)), KeyboardButton(t("btn_my_account", lang))])
+        services += [t("btn_wire", lang), t("btn_my_account", lang)]
     else:
         keyboard_rows.append([KeyboardButton(t("btn_my_account", lang))])
+        services.append(t("btn_my_account", lang))
+
     keyboard_rows.append([KeyboardButton(t("btn_language", lang)), KeyboardButton(t("btn_support", lang))])
     keyboard_rows.append([KeyboardButton(t("btn_logout", lang))])
 
     reply_markup = ReplyKeyboardMarkup(keyboard_rows, resize_keyboard=True, is_persistent=False)
+
+    services_text = "\n".join(f"• {s}" for s in services)
+    text = f"{text}\n\n{services_text}"
 
     token = user_tokens.get(uid) if uid is not None else None
     notice = ""
@@ -168,7 +181,6 @@ async def show_main_menu(update_or_message, text=None, user_id=None):
         except Exception:
             notice = ""
     await msg.reply_text(f"{text}{notice}", reply_markup=reply_markup)
-
 # =====================================================
 # /start
 # =====================================================
@@ -624,14 +636,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 state["step"] = "wire_amount"
                 user_state[user_id] = state
-                await _prompt_wire_amount(update.message.reply_text, pair, lang=lang)
+                await _prompt_wire_amount(update.message.reply_text, pair, lang=lang, user_id=user_id)
             return
 
         # purpose == "method_fields" (Case A): destination account captured → amount
         state["wire_method_collected"] = collected
         state["step"] = "wire_amount"
         user_state[user_id] = state
-        await _prompt_wire_amount(update.message.reply_text, pair, selected_method=state.get("wire_selected_method"), lang=lang)
+        await _prompt_wire_amount(update.message.reply_text, pair, selected_method=state.get("wire_selected_method"), lang=lang, user_id=user_id)
         return
 
     # ── WIRE TRANSFER: AMOUNT ─────────────────────────────────────
@@ -712,8 +724,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wrap(
                 t("wire_confirm_title", lang),
                 t("wire_confirm_body", lang).format(
-                    from_symbol=from_sym, to_symbol=to_sym, amount=amount, fee_amt=fee_amt, fee_pct=fee_pct,
-                    to_amount=to_amount, rate_display=rate_display, summary=summary, extra_block=extra_block,
+                    from_symbol=from_sym, to_symbol=to_sym, amount=fmt_num(amount), fee_amt=fmt_num(fee_amt), fee_pct=fee_pct,
+                    to_amount=to_amount, rate_display=fmt_num(rate_display), summary=summary, extra_block=extra_block,
                 ),
                 lang=lang,
             ),
@@ -756,8 +768,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 t("exchange_confirm_title", lang),
                 t("exchange_confirm_body", lang).format(
                     from_currency=preview["from_currency"], to_currency=preview["to_currency"],
-                    input_amount=preview["input_amount"], rate=preview["rate"],
-                    fee_amount=preview["fee_amount"], received_amount=preview["received_amount"],
+                    input_amount=fmt_num(preview["input_amount"]), rate=fmt_num(preview["rate"]),
+                    fee_amount=fmt_num(preview["fee_amount"]), received_amount=fmt_num(preview["received_amount"]),
                 ),
                 lang=lang,
             ),
@@ -952,8 +964,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for b in balances:
                 currency  = g(b, "currency",  "UNKNOWN")
                 network   = g(b, "network",   "UNKNOWN")
-                available = safe_float(g(b, "available", 0))
-                frozen    = safe_float(g(b, "frozen",    0))
+                available = fmt_num(safe_float(g(b, "available", 0)))
+                frozen    = fmt_num(safe_float(g(b, "frozen",    0)))
                 text += t("wallet_balance_row", lang).format(currency=currency, network=network, available=available, frozen=frozen)
         else:
             text += t("wallet_balance_none", lang)
@@ -1617,7 +1629,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         service_key = product_map[service_index]
-        products = await _get_products_by_category(cid, token)   # ← keep only this
+        products = await _get_products_by_category(cid, token)   
         matched = [p for p in products if normalize_name(g(p, "name")) == service_key]
 
         if not matched:
@@ -1679,7 +1691,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ----------------------------
 
         text = t("product_detail_header", lang).format(
-            name=g(product, "name"), price=g(product, "price"), currency=g(product, "currency"),
+            name=g(product, "name"), price=fmt_num(g(product, "price")), currency=g(product, "currency"),
             plan=g(product, "plan", "N/A"), product_type=g(product, "product_type", "N/A"),
         )
 
@@ -1777,7 +1789,22 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = {}
             return
 
-        user_state[user_id] = {}
+        if data.get("success") is False and data.get("error") == "INSUFFICIENT_BALANCE":
+            user_state[user_id] = {}
+            currency = data.get("currency")
+            missing_amount = data.get("missing_amount")
+            await q.message.edit_text(
+                t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
+                    currency=currency, current_balance=data.get("current_balance"),
+                    required_amount=data.get("required_amount"), missing_amount=missing_amount,
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(t("btn_deposit_amount_currency", lang).format(amount=missing_amount, currency=currency), callback_data="wallet_deposit")],
+                    [InlineKeyboardButton(t("btn_cancel", lang), callback_data="back_main")],
+                ]),
+            )
+            return
 
         # -------------------------
         # RESPONSE HANDLING
@@ -1788,7 +1815,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg = t("order_created_title", lang) + t("order_created_body", lang).format(
             order_id=data.get("order_id"), product_name=data.get("product_name"),
-            product_plan=data.get("product_plan"), price=data.get("price"), currency=data.get("currency"),
+            product_plan=data.get("product_plan"), price=fmt_num(data.get("price")), currency=data.get("currency"),
         )
         # -------------------------
         # AFTER LOGIN STEPS DISPLAY
@@ -1871,13 +1898,35 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 params={"product_id": pid},
                 json={}
             )
+            try:
+                data = res.json()
+            except Exception:
+                data = {}
 
-            data = res.json()
+            if res.status_code != 200 or data.get("success") is False:
+                if data.get("error") == "INSUFFICIENT_BALANCE":
+                    currency = data.get("currency")
+                    missing_amount = data.get("missing_amount")
+                    await q.message.edit_text(
+                        t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
+                            currency=currency, current_balance=data.get("current_balance"),
+                            required_amount=data.get("required_amount"), missing_amount=missing_amount,
+                        ),
+                        parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(t("btn_deposit_amount_currency", lang).format(amount=missing_amount, currency=currency), callback_data="wallet_deposit")],
+                            [InlineKeyboardButton(t("btn_cancel", lang), callback_data="back_main")],
+                        ]),
+                    )
+                    return
+                await q.message.edit_text(t("order_generic_error_data", lang).format(data=data.get("detail", data)))
+                return
+
             order_id    = data.get("order_id", "N/A")
             await q.message.edit_text(
                 t("order_receipt_title", lang) + t("order_receipt_body", lang).format(
                     order_id=order_id, name=product.get("name"), plan=product.get("plan"),
-                    price=product.get("price"), currency=product.get("currency"),
+                    price=fmt_num(product.get("price")), currency=product.get("currency"),
                     product_type=product.get("product_type"),
                 )
             )
@@ -1929,7 +1978,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "from_currency": from_currency,
             "to_currency":   to_currency,
         }
-        await q.message.edit_text(t("exchange_pair_amount_prompt", lang).format(from_currency=from_currency, to_currency=to_currency))
+        await q.message.edit_text(
+            t("exchange_pair_amount_prompt", lang).format(from_currency=from_currency, to_currency=to_currency),
+            reply_markup=_back_cancel_kb(lang)
+        )
         return
 
     if q.data == "exchange_confirm":
@@ -1976,11 +2028,31 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.edit_text(
             t("exchange_completed_title", lang) + t("exchange_completed_body", lang).format(
                 from_currency=data["from_currency"], to_currency=data["to_currency"],
-                from_amount=data["from_amount"], rate=data["rate"],
-                fee_amount=data["fee_amount"], received_amount=data["received_amount"],
+                from_amount=data["from_amount"], rate=fmt_num(data["rate"]),
+                fee_amount=fmt_num(data["fee_amount"]), received_amount=fmt_num(data["received_amount"]),
             ),
             parse_mode="Markdown",
         )
+
+        try:
+            bal_res = await api_get(f"{API_URL}/wallet/balance", token)
+            if bal_res.status_code == 200:
+                bal_data = bal_res.json()
+                balances = g(bal_data, "balances", [])
+                bal_text = t("wallet_balance_header", lang)
+                if balances:
+                    for b in balances:
+                        bal_text += t("wallet_balance_row", lang).format(
+                            currency=g(b, "currency", "UNKNOWN"),
+                            network=g(b, "network", "UNKNOWN"),
+                            available=fmt_num(safe_float(g(b, "available", 0))),
+                            frozen=fmt_num(safe_float(g(b, "frozen", 0))),
+                        )
+                else:
+                    bal_text += t("wallet_balance_none", lang)
+                await q.message.reply_text(wrap(t("wallet_balance_title", lang), bal_text, lang=lang), parse_mode="Markdown")
+        except Exception:
+            pass
         return
 
     if q.data == "exchange_cancel":
@@ -2094,7 +2166,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             base_state["step"] = "wire_amount"
             user_state[user_id] = base_state
-            await _prompt_wire_amount(q.message.edit_text, pair, lang=lang)
+            await _prompt_wire_amount(q.message.edit_text, pair, lang=lang, user_id=user_id)
         return
 
     if q.data.startswith("wire_method_"):
@@ -2219,12 +2291,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         message_text = t("wire_submitted_title", lang) + t("wire_submitted_body", lang).format(
-            order_id=data["id"], amount=amount, from_symbol=from_sym, to_amount=data["to_amount"],
-            to_symbol=to_sym, rate=data["locked_rate"], expires_at=data["expires_at"][:16].replace("T", " "),
+            order_id=data["id"], amount=fmt_num(amount), from_symbol=from_sym, to_amount=fmt_num(data["to_amount"]),
+            to_symbol=to_sym, rate=fmt_num(data["locked_rate"]), expires_at=data["expires_at"][:16].replace("T", " "),
         )
         if data.get("balance_status") == "insufficient":
-            shortfall = safe_float(data.get("shortfall", 0))
-            current_balance = safe_float(data.get("current_balance", 0))
+            shortfall = fmt_num(safe_float(data.get("shortfall", 0)))
+            current_balance = fmt_num(safe_float(data.get("current_balance", 0)))
             message_text += t("wire_insufficient_balance_note", lang).format(shortfall=shortfall, current_balance=current_balance)
             await _show_irt_deposit_instructions(
                 q.message,
@@ -2266,6 +2338,18 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    
+    if q.data == "flow_back":
+        state = user_state.get(user_id, {})
+        await _render_back_target(q, state, lang, user_id)
+        return
+
+    if q.data == "flow_cancel":
+        user_state[user_id] = {}
+        await q.message.edit_text(t("main_menu_choose", lang))
+        await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
+        return
+
 
 # =====================================================
 # WIRE TRANSFER HELPERS (branch-aware: IRT-source vs foreign-source)
@@ -2295,6 +2379,8 @@ def _wire_amount_prompt_text(pair, selected_method=None, lang=DEFAULT_LANGUAGE):
 # =====================================================
 # SHARED HELPERS (called from both command and message handler)
 # =====================================================
+
+
 async def _show_my_account_menu(message, token, user_id=None):
     await account_show_my_account_menu(message, token, user_id=user_id)
 
@@ -2367,7 +2453,7 @@ async def _send_wire_method_selection(send_fn, pair, methods, lang=DEFAULT_LANGU
     await wire_send_method_selection(send_fn, pair, methods, lang=lang)
 
 
-async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang=DEFAULT_LANGUAGE):
+async def _prompt_wire_amount(send_fn, pair, selected_method=None, lang=DEFAULT_LANGUAGE, user_id=None):
     await wire_prompt_amount(send_fn, pair, selected_method=selected_method, lang=lang)
 
 
@@ -2404,7 +2490,79 @@ async def _show_wire_order_detail(message, token, order_id, user_id=None):
 
 async def error_handler(update, context):
     logger.error("Unhandled exception while processing update", exc_info=context.error)
+    try:
+        chat = update.effective_chat if isinstance(update, Update) else None
+        if chat is not None:
+            lang = get_lang(chat.id)
+            await context.bot.send_message(chat_id=chat.id, text=t("generic_error", lang).format(error="Please try again."))
+    except Exception:
+        pass
 
+async def _render_back_target(q, state, lang, user_id):
+    tag = state.get("back_to")
+
+    if tag == "withdraw_network":
+        pair = state.get("pair")
+        currency = state.get("currency") or (pair or {}).get("currency")
+        if not currency:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("wallet_err_session_expired_reselect", lang))
+            return
+        user_state[user_id] = {}
+        await _show_wallet_network_menu(
+            q.message, user_id, currency, "withdraw_network_",
+            t("wallet_select_network_title", lang).format(currency=currency).replace("\n\n", ""),
+            t("wallet_select_withdraw_network_subtitle", lang), "wallet_withdraw"
+        )
+        return
+
+    if tag == "external_wallet_currency":
+        user_state[user_id] = {}
+        data, error = await _load_wallet_pairs(user_id, user_tokens.get(user_id))
+        if error:
+            await q.message.edit_text(f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang))
+            return
+        await _show_wallet_currency_menu(
+            q.message, data.get("currencies", []), "extwallet_currency_",
+            t("wallet_select_currency_external_title", lang), t("wallet_select_currency_external_subtitle", lang),
+            "wallet_balance", lang=lang,
+        )
+        return
+
+    if tag == "exchange_pairs":
+        user_state[user_id] = {}
+        await _show_exchange_pairs(q.message, user_tokens.get(user_id), user_id=user_id)
+        return
+
+    if tag == "wire_pairs":
+        user_state[user_id] = {}
+        await _show_wire_pairs(q.message, user_tokens.get(user_id))
+        return
+
+    if tag == "wire_method_select":
+        pair = state.get("wire_pair")
+        methods = state.get("wire_receiver_methods", [])
+        if not pair:
+            user_state[user_id] = {}
+            await q.message.edit_text(t("wire_session_expired_reselect", lang))
+            return
+        state["step"] = "wire_select_method"
+        user_state[user_id] = state
+        await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
+        return
+
+    if tag == "product_category":
+        cid = state.get("cid")
+        user_state[user_id] = {}
+        if cid:
+            await q.message.edit_text(t("products_select_service", lang))  # will be replaced by service list below
+        await _show_categories(q.message, user_tokens.get(user_id), user_id=user_id)
+        return
+
+    # default fallback
+    user_state[user_id] = {}
+    await q.message.edit_text(t("main_menu_choose", lang))
+    await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
 # =====================================================
 # MAIN
 # =====================================================
@@ -2415,7 +2573,7 @@ def main():
         write_timeout=20.0,
         pool_timeout=20.0,
     )
-    app = Application.builder().token(TOKEN).request(request).build()
+    app = Application.builder().token(TOKEN).request(request).concurrent_updates(True).build()
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))

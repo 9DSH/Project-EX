@@ -97,23 +97,32 @@ class UserWallet(Base):
 
 class TelegramBotSettings(Base):
     __tablename__ = "telegram_bot_settings"
- 
+
     id = Column(Integer, primary_key=True, index=True)
-    admin_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, unique=True, index=True)
- 
+    admin_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, index=True)
+
+    # "admin" (per-admin personal bot) | "global_main" (platform-wide main bot,
+    # owned by master) | "support" (platform-wide support bot, owned by master)
+    bot_kind = Column(String(20), nullable=False, default="admin", server_default="admin")
+
     default_language = Column(String(2), nullable=False, default="en", server_default="en")
 
     main_bot_token = Column(String, nullable=True)
     is_active = Column(Boolean, default=False, server_default="false")
-    bot_username = Column(String, nullable=True)
+    bot_username = Column(String, nullable=True)          # @handle, read-only (from getMe)
+    display_name = Column(String, nullable=True)           # settable via setMyName
     last_validated_at = Column(DateTime, nullable=True)
     last_validation_error = Column(Text, nullable=True)
 
     is_running = Column(Boolean, default=False, server_default="false")
     last_restart_at = Column(DateTime, nullable=True)
     last_crash_error = Column(Text, nullable=True)
- 
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
- 
+
     admin = relationship("User", backref="telegram_bot_settings", foreign_keys=[admin_id])
+
+    __table_args__ = (
+        UniqueConstraint("admin_id", "bot_kind", name="uq_telegram_bot_settings_admin_kind"),
+    )

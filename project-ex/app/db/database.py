@@ -357,12 +357,14 @@ def ensure_schema():
             ("telegram_bot_settings", "main_bot_token", "VARCHAR"),
             ("telegram_bot_settings", "is_active", "BOOLEAN DEFAULT FALSE"),
             ("telegram_bot_settings", "bot_username", "VARCHAR"),
+            ("telegram_bot_settings", "display_name", "VARCHAR"),
             ("telegram_bot_settings", "last_validated_at", "TIMESTAMP"),
             ("telegram_bot_settings", "last_validation_error", "TEXT"),
             ("telegram_bot_settings", "created_at", "TIMESTAMP DEFAULT NOW()"),
             ("telegram_bot_settings", "is_running", "BOOLEAN DEFAULT FALSE"),
             ("telegram_bot_settings", "last_restart_at", "TIMESTAMP"),
             ("telegram_bot_settings", "last_crash_error", "TEXT"),
+            ("telegram_bot_settings", "bot_kind", "VARCHAR(20) DEFAULT 'admin'"),
         ]
         for table_name, column_name, column_type in telegram_bot_settings_columns:
             if not _table_exists(conn, table_name):
@@ -373,22 +375,94 @@ def ensure_schema():
                 text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
             )
 
-        global_bot_settings_columns = [
-            ("global_bot_settings", "is_running_support", "BOOLEAN DEFAULT FALSE"),
-            ("global_bot_settings", "is_running_main", "BOOLEAN DEFAULT FALSE"),
-            ("global_bot_settings", "support_last_restart_at", "TIMESTAMP"),
-            ("global_bot_settings", "main_last_restart_at", "TIMESTAMP"),
-            ("global_bot_settings", "support_last_crash_error", "TEXT"),
-            ("global_bot_settings", "main_last_crash_error", "TEXT"),
-        ]
-        for table_name, column_name, column_type in global_bot_settings_columns:
-            if not _table_exists(conn, table_name):
-                continue
-            if _column_exists(conn, table_name, column_name):
-                continue
+        # backfill bot_kind for any pre-existing rows (all were per-admin bots)
+        if _table_exists(conn, "telegram_bot_settings"):
+            conn.execute(text(
+                "UPDATE telegram_bot_settings SET bot_kind = 'admin' WHERE bot_kind IS NULL"
+            ))
+
+        # swap the old single-column unique constraint for (admin_id, bot_kind)
+        if _table_exists(conn, "telegram_bot_settings"):
+            old_uq_names = [
+                        "telegram_bot_settings_admin_id_key",
+                    ]
+
+            for name in old_uq_names:
+                        if _constraint_exists(conn, name):
+                            conn.execute(
+                                text(
+                                    f"ALTER TABLE telegram_bot_settings "
+                                    f"DROP CONSTRAINT {name}"
+                                )
+                            )
             conn.execute(
-                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                text(
+                    "DROP INDEX IF EXISTS ix_telegram_bot_settings_admin_id"
+                )
             )
+
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS "
+                    "ix_telegram_bot_settings_admin_id "
+                    "ON telegram_bot_settings (admin_id)"
+                )
+            )
+
+            new_uq = "uq_telegram_bot_settings_admin_kind"
+            if not _constraint_exists(conn, new_uq):
+                conn.execute(text(f"SAVEPOINT sp_{new_uq}"))
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE telegram_bot_settings ADD CONSTRAINT {new_uq} "
+                        f"UNIQUE (admin_id, bot_kind)"
+                    ))
+                    conn.execute(text(f"RELEASE SAVEPOINT sp_{new_uq}"))
+                except Exception as e:
+                    conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_{new_uq}"))
+                    print(f"[ensure_schema] skip {new_uq}: {e}")
+
+        # one-time data migration: fold global_bot_settings into telegram_bot_settings
+        # as the master's global_main / support rows, then the old table can be dropped.
+        if _table_exists(conn, "global_bot_settings") and _table_exists(conn, "telegram_bot_settings"):
+            master_row = conn.execute(
+                text("SELECT user_id FROM users WHERE role = 'master' ORDER BY user_id LIMIT 1")
+            ).first()
+            if master_row:
+                master_id = master_row[0]
+                old = conn.execute(text("SELECT * FROM global_bot_settings LIMIT 1")).mappings().first()
+                if old:
+                    for kind, token_col, uname_col, running_col, restart_col, crash_col in [
+                        ("global_main", "main_bot_token", "main_bot_username",
+                         "is_running_main", "main_last_restart_at", "main_last_crash_error"),
+                        ("support", "support_bot_token", "support_bot_username",
+                         "is_running_support", "support_last_restart_at", "support_last_crash_error"),
+                    ]:
+                        token = old.get(token_col)
+                        exists = conn.execute(
+                            text(
+                                "SELECT 1 FROM telegram_bot_settings "
+                                "WHERE admin_id = :aid AND bot_kind = :kind"
+                            ),
+                            {"aid": master_id, "kind": kind},
+                        ).first()
+                        if not exists and token:
+                            conn.execute(
+                                text(
+                                    "INSERT INTO telegram_bot_settings "
+                                    "(admin_id, bot_kind, main_bot_token, bot_username, "
+                                    " is_active, is_running, last_restart_at, last_crash_error, default_language) "
+                                    "VALUES (:aid, :kind, :token, :uname, :active, :running, :restart, :crash, 'en')"
+                                ),
+                                {
+                                    "aid": master_id, "kind": kind, "token": token,
+                                    "uname": old.get(uname_col), "active": bool(token),
+                                    "running": bool(old.get(running_col)), "restart": old.get(restart_col),
+                                    "crash": old.get(crash_col),
+                                },
+                            )
+                conn.execute(text("DROP TABLE global_bot_settings"))
+                
         wire_order_columns = [
             ("wire_transfer_orders", "approved_at", "TIMESTAMP"),
             ("wire_transfer_orders", "rejected_at", "TIMESTAMP"),

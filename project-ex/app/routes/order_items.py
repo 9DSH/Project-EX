@@ -113,7 +113,15 @@ def create_order(
 
     available = Decimal(str(user_balance.available_balance or 0))
     if available < final_price:
-        raise HTTPException(400, "INSUFFICIENT_BALANCE")
+        missing = final_price - available
+        return {
+            "success": False,
+            "error": "INSUFFICIENT_BALANCE",
+            "currency": currency.symbol,
+            "current_balance": float(available),
+            "required_amount": float(final_price),
+            "missing_amount": float(missing),
+        }
 
     user_balance.available_balance = float(available - final_price)
     user_balance.frozen_balance = float(

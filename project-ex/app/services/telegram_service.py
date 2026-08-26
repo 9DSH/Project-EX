@@ -1,4 +1,6 @@
 # telegram_service.py
+
+from app.db.database import SessionLocal
 from telegram import Bot
 import os
 
@@ -13,19 +15,27 @@ def _get_support_bot_token() -> str:
         return SUPPORT_BOT_TOKEN
 
     from app.db.database import SessionLocal
-    from app.models.global_bot_settings import GlobalBotSettings
+    from app.models.user import TelegramBotSettings, User
 
     db = SessionLocal()
     try:
-        settings = db.query(GlobalBotSettings).first()
-        if not settings or not settings.support_bot_token:
+        master = db.query(User).filter(User.role == "master").order_by(User.user_id).first()
+        settings = (
+            db.query(TelegramBotSettings).filter(
+                TelegramBotSettings.admin_id == (master.user_id if master else -1),
+                TelegramBotSettings.bot_kind == "support",
+            ).first()
+            if master else None
+        )
+        if not settings or not settings.main_bot_token:
             raise RuntimeError(
                 "Support bot token not configured. Set it in the admin panel "
-                "(Bot Infrastructure) or via SUPPORT_BOT_TOKEN env var."
+                "(Telegram Management → Global Bots) or via SUPPORT_BOT_TOKEN env var."
             )
-        return settings.support_bot_token
+        return settings.main_bot_token
     finally:
         db.close()
+        
 
 async def send_telegram_message(
     chat_id: int,                        # ← now takes chat_id directly

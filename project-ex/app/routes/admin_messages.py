@@ -142,13 +142,19 @@ def get_conversations(
     
     if not has_access(admin, "send.message"):
         raise HTTPException(403, "Access denied")
-    
-    conversations = (
-            db.query(Conversation)
-            .join(Message, Message.conversation_id == Conversation.id)
-            .group_by(Conversation.id)
-            .all()
-        )
+
+    query = (
+        db.query(Conversation)
+        .join(Message, Message.conversation_id == Conversation.id)
+        .join(User, User.user_id == Conversation.user_id)
+    )
+
+    # Master sees every conversation; other admins only see
+    # conversations for users assigned to them.
+    if not is_master(admin):
+        query = query.filter(User.admin_id == admin["user_id"])
+
+    conversations = query.group_by(Conversation.id).all()
 
     result = []
 

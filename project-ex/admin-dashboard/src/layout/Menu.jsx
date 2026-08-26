@@ -119,18 +119,10 @@ export default function Menu() {
       </Link>
 
             {/* PROFILE */}
-        <Link to="/admin_profile" style={linkStyle(isActive("/admin_profile"))}>
+        <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))}>
           <Shield size={16} />
-          Admin Profile
+          Telegram Management
         </Link>
-
-
-        {role === "master" && (
-          <Link to="/bot_infrastructure" style={linkStyle(isActive("/bot_infrastructure"))}>
-            <Shield size={16} />
-            Bot Infrastructure
-          </Link>
-        )}
 
 
       {/* USERS */}

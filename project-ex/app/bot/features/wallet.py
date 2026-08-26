@@ -16,6 +16,7 @@ from app.bot.features.common import (
     user_last_balance,
     user_tokens,
     get_lang,
+    _back_cancel_kb
 )
 
 
@@ -177,9 +178,7 @@ async def _prompt_withdraw_amount(message, user_id, pair, wallet_address):
         t("withdraw_amount_prompt", lang).format(
             currency=pair["currency"], network=pair["network"], wallet=wallet_address, info=info_text
         ),
-        reply_markup=InlineKeyboardMarkup([
+        reply_markup=_back_cancel_kb(lang, [
             [InlineKeyboardButton(t("btn_change_external_wallet", lang), callback_data="withdraw_change_wallet")],
-            [InlineKeyboardButton(t("btn_cancel", lang), callback_data="withdraw_cancel")],
-            [InlineKeyboardButton(t("btn_back", lang), callback_data="wallet_withdraw")],
         ])
     )

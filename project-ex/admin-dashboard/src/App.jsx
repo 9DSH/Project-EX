@@ -14,8 +14,7 @@ import Withdraws from "./pages/Withdraws";
 import AssetManager from "./pages/AssetManager"; 
 import ExchangeDashboard from "./pages/ExchangeDashboard";
 import WireTransferDashboard from "./pages/WireTransferDashboard";
-import AdminProfile from "./pages/AdminProfile";
-import BotInfrastructure from "./pages/BotInfrastructure";
+import TelegramManagement from "./pages/TelegramManagement";
 
 export default function App() {
   const [logged, setLogged] = useState(
@@ -56,9 +55,8 @@ export default function App() {
           <Route path="/wire_transfer" element={<WireTransferDashboard />} />
 
           {/* Admin Profile */}
-          <Route path="/admin_profile" element={<AdminProfile />} />
-          <Route path="/bot_infrastructure" element={<BotInfrastructure />} />
-
+         
+          <Route path="/telegram_management" element={<TelegramManagement />} />
           {/* MESSAGES (NEW FEATURE) */}
           <Route path="/messages" element={<MessagesPage />} />
 

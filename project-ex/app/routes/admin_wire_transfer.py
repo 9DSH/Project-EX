@@ -11,6 +11,7 @@ from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.wire_transfer_order import WireTransferOrder
 from app.models.user import User
+from app.routes.shared_functions import _admin_username_map
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
 from app.models.transaction import Transaction
@@ -30,16 +31,6 @@ def get_admin(user=Depends(get_current_user)):
     if not has_access(user, "wire_transfer.view"):
         raise HTTPException(status_code=403, detail="Wire Transfer permission required")
     return user
-
-
-def _admin_username_map(db: Session, admin_ids: set):
-    admin_ids = {a for a in admin_ids if a}
-    if not admin_ids:
-        return {}
-    return {
-        u.user_id: u.username
-        for u in db.query(User).filter(User.user_id.in_(admin_ids)).all()
-    }
 
 
 # ─────────────────────────────────────────

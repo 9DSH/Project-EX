@@ -4,18 +4,13 @@ from sqlalchemy.orm import Session
 from app.core.rls import get_db_rls_bot_context
 from app.core.bot_service_auth import get_bot_service_context
 from app.models.exchange_pair import ExchangePair
+from app.services.exchange_service import normalize_db_rate
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.product import Product
-from app.models.user import User
+from app.models.user import User 
+from app.routes.shared_functions import _admin_username_map
 
 router = APIRouter(prefix="/bot-context", tags=["Bot Context"])
-
-
-def _admin_username_map(db: Session, admin_ids: set[int]):
-    admin_ids = {a for a in admin_ids if a}
-    if not admin_ids:
-        return {}
-    return {u.user_id: u.username for u in db.query(User).filter(User.user_id.in_(admin_ids)).all()}
 
 
 @router.get("/access-points")
@@ -41,7 +36,7 @@ def get_exchange_pairs(db: Session = Depends(get_db_rls_bot_context)):
         "id": p.id,
         "from_currency": {"symbol": p.from_currency.symbol},
         "to_currency": {"symbol": p.to_currency.symbol},
-        "rate": p.rate,
+        "rate": normalize_db_rate(p.rate, p.from_currency.symbol),
         "fee_percent": p.fee_percent,
         "admin_id": p.admin_id,
         "admin_username": admins_map.get(p.admin_id),

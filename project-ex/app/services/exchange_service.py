@@ -107,13 +107,13 @@ def execute_exchange(
     # =========================
     # GET ACTIVE PAIR
     # =========================
-    pair = db.query(ExchangePair).filter(
+    pair_query = db.query(ExchangePair).filter(
         and_(
             ExchangePair.from_currency_id == from_currency.id,
             ExchangePair.to_currency_id == to_currency.id,
             ExchangePair.is_active == True
         )
-    ).first()
+    )
 
     if admin_id is not None:
         pair_query = pair_query.filter(ExchangePair.admin_id == admin_id)
@@ -368,11 +368,11 @@ def get_exchange_rate(
     if not from_currency or not to_currency:
         raise HTTPException(404, "Currency not found")
 
-    pair = db.query(ExchangePair).filter(
+    pair_query = db.query(ExchangePair).filter(
         ExchangePair.from_currency_id == from_currency.id,
         ExchangePair.to_currency_id == to_currency.id,
         ExchangePair.is_active == True
-    ).first()
+    )
 
     if admin_id is not None:
         pair_query = pair_query.filter(ExchangePair.admin_id == admin_id)

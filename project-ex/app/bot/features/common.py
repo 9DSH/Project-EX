@@ -207,6 +207,14 @@ def normalize_name(name: str) -> str:
     return (name or "").strip().lower().replace(" ", "_")
 
 
+def _back_cancel_kb(lang, extra_rows=None):
+    rows = list(extra_rows or [])
+    rows.append([
+        InlineKeyboardButton(t("btn_back", lang), callback_data="flow_back"),
+        InlineKeyboardButton(t("btn_cancel", lang), callback_data="flow_cancel"),
+    ])
+    return InlineKeyboardMarkup(rows)
+
 def group_products(products):
     """Groups products by service (product) name so each distinct service
     gets one button; each group holds its plan variants."""
@@ -264,3 +272,13 @@ async def api_bot_context_get(path, params=None):
 
 async def send_bot_message(user_id, text):
     return None
+
+def fmt_num(x, decimals=2):
+    """1290000 -> '1,290,000'  |  1290000.5 -> '1,290,000.50'"""
+    try:
+        val = float(x)
+    except (TypeError, ValueError):
+        return str(x)
+    if val == int(val):
+        return f"{int(val):,}"
+    return f"{val:,.{decimals}f}"

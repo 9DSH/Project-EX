@@ -95,12 +95,12 @@ def main():
         write_timeout=20.0,
         pool_timeout=20.0,
     )
-    app = Application.builder().token(TOKEN).request(request).build()
+    app = Application.builder().token(TOKEN).request(request).concurrent_updates(True).build()
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_message))
 
-    print("Support bot running...") 
+    print("Support bot running...")
     app.run_polling(drop_pending_updates=True)
 
 
