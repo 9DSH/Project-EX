@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { API_URL } from "../config";
 import { hasPermission } from "../utils/permissions";
 
@@ -214,9 +215,7 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
   const hasExtraFeatures = extraFeatures.length > 0;
 
-
-  console.log(order)
-  return (
+  return createPortal(
 
     <>
       {/* OVERLAY */}
@@ -521,7 +520,8 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
 
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

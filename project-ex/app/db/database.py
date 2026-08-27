@@ -365,6 +365,7 @@ def ensure_schema():
             ("telegram_bot_settings", "last_restart_at", "TIMESTAMP"),
             ("telegram_bot_settings", "last_crash_error", "TEXT"),
             ("telegram_bot_settings", "bot_kind", "VARCHAR(20) DEFAULT 'admin'"),
+            ("telegram_bot_settings", "enabled_services", "JSON"),
         ]
         for table_name, column_name, column_type in telegram_bot_settings_columns:
             if not _table_exists(conn, table_name):

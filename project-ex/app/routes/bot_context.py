@@ -7,7 +7,7 @@ from app.models.exchange_pair import ExchangePair
 from app.services.exchange_service import normalize_db_rate
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.product import Product
-from app.models.user import User 
+from app.models.user import User , TelegramBotSettings
 from app.routes.shared_functions import _admin_username_map
 
 router = APIRouter(prefix="/bot-context", tags=["Bot Context"])
@@ -18,15 +18,20 @@ def get_admin_access_points(
     ctx: dict = Depends(get_bot_service_context),
     db: Session = Depends(get_db_rls_bot_context),
 ):
-    """Fresh access_points lookup for the running bot's owning admin —
-    fetched per interaction (short TTL cache lives bot-side, not here)."""
     if ctx["admin_id"] is None:
-        return {"access_points": [], "role": None}
+        return {"access_points": [], "role": None, "enabled_services": None}
     admin = db.query(User).filter(User.user_id == ctx["admin_id"]).first()
     if not admin:
-        return {"access_points": [], "role": None}
-    return {"access_points": admin.access_points or [], "role": admin.role}
-
+        return {"access_points": [], "role": None, "enabled_services": None}
+    settings = db.query(TelegramBotSettings).filter(
+        TelegramBotSettings.admin_id == ctx["admin_id"],
+        TelegramBotSettings.bot_kind == "admin",
+    ).first()
+    return {
+        "access_points": admin.access_points or [],
+        "role": admin.role,
+        "enabled_services": settings.enabled_services if settings else None,
+    }
 
 @router.get("/exchange-pairs")
 def get_exchange_pairs(db: Session = Depends(get_db_rls_bot_context)):

@@ -12,324 +12,230 @@ import {
   Wallet,
   MessageSquare,
   ChevronDown,
-  LogOut,
   Landmark,
   Shield,
 } from "lucide-react";
+import { TOPBAR_HEIGHT, COLLAPSED_WIDTH, EXPANDED_WIDTH } from "./AdminLayout";
 
-
-export default function Menu() {
-  const token = localStorage.getItem("token");
+export default function Menu({ pinned, setPinned }) {
   const location = useLocation();
+  const [hovered, setHovered] = useState(false);
+  const [open, setOpen] = useState({ products: false, exchange: false, wire_transfer: false });
 
-  const [open, setOpen] = useState({
-    products: false,
-    exchange: false,
-    wire_transfer: false,
-  });
+  const expanded = pinned || hovered;
+  const width = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
+  const floating = !pinned && hovered;
 
-  const toggle = (key) => {
-    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("username");
-    localStorage.removeItem("access_points");
-    window.location.reload();
-  };
-
+  const toggle = (key) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   const isActive = (path) => location.pathname === path;
+
+  const user = { role: localStorage.getItem("role") || "user" };
 
   const linkStyle = (active) => ({
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
-    borderRadius: 8,
+    gap: expanded ? 12 : 0, 
+    padding: expanded ? "10px 12px" : "10px 0",
+    justifyContent: expanded ? "flex-start" : "center",
+    borderRadius: 9,
     textDecoration: "none",
     color: active ? "white" : "#94a3b8",
-    background: active ? "#1d4fd871" : "transparent",
-    fontWeight: active ? 500 : 400,
+    background: active ? "rgba(59,130,246,.16)" : "transparent",
+    fontWeight: active ? 600 : 500,
+    fontSize: 13,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    transition: "background .15s, color .15s",
   });
 
   const sectionTitle = {
-    fontSize: 11,
-    color: "#64748b",
-    marginTop: 14,
-    marginBottom: 6,
-    letterSpacing: 1,
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 1.2,
+    color: "#3b4a68",
+    margin: "16px 0 6px",
+    padding: expanded ? "0 12px" : 0,
+    textAlign: expanded ? "left" : "center",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    opacity: expanded ? 1 : 0,
+    height: expanded ? "auto" : 0,
+    transition: "opacity .15s",
   };
 
   const submenu = {
     display: "flex",
     flexDirection: "column",
-    gap: 1,
-    paddingLeft: 14,
+    gap: 2,
+    paddingLeft: expanded ? 14 : 0,
+    overflow: "hidden",
   };
 
-  const arrow = (openState) => ({
-    marginLeft: "auto",
-    transform: openState ? "rotate(180deg)" : "rotate(0deg)",
-    transition: "0.2s",
-  });
+  const label = (text) => {
+    if (!expanded) return null;     
+    return (
+      <span
+        style={{
+          opacity: 1,
+          maxWidth: 200,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          transition: "opacity .15s, max-width .2s",
+        }}
+      >
+        {text}
+      </span>
+    );
+  };
 
-  // =========================
-  // USER INFO (FIXED)
-  // =========================
-  const rawUsername = localStorage.getItem("username") || "user";
-  const role = localStorage.getItem("role") || "user";
-
-  const username =
-    rawUsername.charAt(0).toUpperCase() + rawUsername.slice(1);
-
-  const roleLabel = {
-    master: "Master Admin",
-    admin: "Administrator",
-    user: "User",
-  }[role] || role;
-
-  const user = { role };
+  const arrow = (openState) => {
+    if (!expanded) return null;      
+    return (
+      <ChevronDown
+        size={13}
+        style={{
+          marginLeft: "auto",
+          flexShrink: 0,
+          transform: openState ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.2s",
+        }}
+      />
+    );
+  };
 
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        width: 250,
-        height: "100vh",
+        position: "fixed",
+        top: TOPBAR_HEIGHT,
+        left: 0,
+        bottom: 0,
+        width,
         background: "#0b1220",
-        borderRight: "1px solid #1f2937",
-        padding: 16,
+        borderRight: "1px solid #1a2333",
         display: "flex",
         flexDirection: "column",
+        padding: expanded ? "14px 10px" : "14px 6px",
+        boxSizing: "border-box",
+        overflowX: "hidden",
+        overflowY: "auto",
+        transition: "width .25s cubic-bezier(.4,0,.2,1), padding .25s",
+        zIndex: floating ? 6 : 2,
+        boxShadow: floating ? "8px 0 30px rgba(0,0,0,.55)" : "none",
       }}
     >
-      {/* HEADER */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Project EX</div>
-        <div style={{ fontSize: 12, color: "#64748b" }}>
-          Admin Console
-        </div>
-      </div>
-
-      {/* OVERVIEW */}
-      <Link to="/" style={linkStyle(isActive("/"))}>
-        <LayoutDashboard size={16} />
-        Overview
+      <Link to="/" style={linkStyle(isActive("/"))} title="Overview">
+        <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
+        {label("Overview")}
       </Link>
 
-            {/* PROFILE */}
-        <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))}>
-          <Shield size={16} />
-          Telegram Management
-        </Link>
-
-
-      {/* USERS */}
-      <Link to="/users" style={linkStyle(isActive("/users"))}>
-        <Users size={16} />
-        Users
+      <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))} title="Telegram Management">
+        <Shield size={17} style={{ flexShrink: 0 }} />
+        {label("Telegram Management")}
       </Link>
 
-      {/* SERVICES */}
+      <Link to="/users" style={linkStyle(isActive("/users"))} title="Users">
+        <Users size={17} style={{ flexShrink: 0 }} />
+        {label("Users")}
+      </Link>
+
       <div style={sectionTitle}>SERVICES</div>
 
-      {/* PRODUCTS */}
       {hasPermission(user, "products.view") && (
-      <div>
-        <div
-          onClick={() => toggle("products")}
-          style={{
-            ...linkStyle(false),
-            cursor: "pointer",
-          }}
-        >
-          <Package size={16} />
-          Products
-          <ChevronDown size={14} style={arrow(open.products)} />
+        <div>
+        <div onClick={() => expanded && toggle("products")} style={{ ...linkStyle(false), cursor: "pointer" }} title="Products">
+          <Package size={17} style={{ flexShrink: 0 }} />
+          {label("Products")}
+          {arrow(open.products)}
         </div>
-
-        {open.products && (
-          <div style={submenu}>
-            {hasPermission(user, "products.manage") && (
-            <Link
-              to="/ProductsManagement"
-              style={linkStyle(isActive("/ProductsManagement"))}
-            >
-              <Boxes size={14} />
-              Product Management
-            </Link>
-            )}
-
-            {hasPermission(user, "orders.view") && (
-
-            <Link
-              to="/OrdersManagement"
-              style={linkStyle(isActive("/OrdersManagement"))}
-            >
-              <ShoppingCart size={14} />
-              Orders & Analysis
-            </Link>
+          {expanded && open.products && (
+            <div style={submenu}>
+              {hasPermission(user, "products.manage") && (
+                <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))}>
+                  <Boxes size={14} style={{ flexShrink: 0 }} />
+                  {label("Product Management")}
+                </Link>
               )}
-          </div>
-        )}
-      </div>
+              {hasPermission(user, "orders.view") && (
+                <Link to="/OrdersManagement" style={linkStyle(isActive("/OrdersManagement"))}>
+                  <ShoppingCart size={14} style={{ flexShrink: 0 }} />
+                  {label("Orders & Analysis")}
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* EXCHANGE */}
       {hasPermission(user, "exchange.view") && (
-      <div>
-        <div
-          onClick={() => toggle("exchange")}
-          style={{
-            ...linkStyle(false),
-            cursor: "pointer",
-          }}
-        >
-          <ArrowLeftRight size={16} />
-          Exchange
-          <ChevronDown size={14} style={arrow(open.exchange)} />
-        </div>
-
-        {open.exchange && (
-          <div style={submenu}>
-            {hasPermission(user, "exchange.manage") && (
-            <Link
-              to="/exchange_dashboard"
-              style={linkStyle(isActive("/exchange_dashboard"))}
-            >
-              <ArrowLeftRight size={14} />
-              Exchange Management
-            </Link>
-             )}
+        <div>
+          <div onClick={() => expanded && toggle("exchange")} style={{ ...linkStyle(false), cursor: "pointer" }} title="Exchange">
+            <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
+            {label("Exchange")}
+            {arrow(open.exchange)}
           </div>
-           
-        )}
-      </div>
-
+          {expanded && open.exchange && (
+            <div style={submenu}>
+              {hasPermission(user, "exchange.manage") && (
+                <Link to="/exchange_dashboard" style={linkStyle(isActive("/exchange_dashboard"))}>
+                  <ArrowLeftRight size={14} style={{ flexShrink: 0 }} />
+                  {label("Exchange Management")}
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* WIRE TRANSFER */}
       {hasPermission(user, "wire_transfer.view") && (
-      <div>
-        <div
-          onClick={() => toggle("wire_transfer")}
-          style={{ ...linkStyle(false), cursor: "pointer" }}
-        >
-          <Landmark size={16} />
-          Wire Transfer
-          <ChevronDown size={14} style={arrow(open.wire_transfer)} />
-        </div>
-
-        {open.wire_transfer && (
-          <div style={submenu}>
-            {hasPermission(user, "wire_transfer.manage") && (
-            <Link
-              to="/wire_transfer"
-              style={linkStyle(isActive("/wire_transfer"))}
-            >
-              <Landmark size={14} />
-              Transfer Management
-            </Link>
-            )}
+        <div>
+          <div onClick={() => expanded && toggle("wire_transfer")} style={{ ...linkStyle(false), cursor: "pointer" }} title="Wire Transfer">
+            <Landmark size={17} style={{ flexShrink: 0 }} />
+            {label("Wire Transfer")}
+            {arrow(open.wire_transfer)}
           </div>
-        )}
-      </div>
+          {expanded && open.wire_transfer && (
+            <div style={submenu}>
+              {hasPermission(user, "wire_transfer.manage") && (
+                <Link to="/wire_transfer" style={linkStyle(isActive("/wire_transfer"))}>
+                  <Landmark size={14} style={{ flexShrink: 0 }} />
+                  {label("Transfer Management")}
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-
-
-      {/* FINANCE */}
       <div style={sectionTitle}>FINANCE</div>
-     {hasPermission(user, "finance.assets") && (
-      <Link to="/asset_manager" style={linkStyle(isActive("/asset_manager"))}>
-        <Wallet size={16} />
-        Asset Management
+
+      {hasPermission(user, "finance.assets") && (
+        <Link to="/asset_manager" style={linkStyle(isActive("/asset_manager"))} title="Asset Management">
+          <Wallet size={17} style={{ flexShrink: 0 }} />
+          {label("Asset Management")}
+        </Link>
+      )}
+
+      <Link to="/transactions" style={linkStyle(isActive("/transactions"))} title="Transactions">
+        <CreditCard size={17} style={{ flexShrink: 0 }} />
+        {label("Transactions")}
       </Link>
-     )}
 
-      <Link to="/transactions" style={linkStyle(isActive("/transactions"))}>
-        <CreditCard size={16} />
-        Transactions
-      </Link>
+      {hasPermission(user, "finance.withdraw") && (
+        <Link to="/withdraws" style={linkStyle(isActive("/withdraws"))} title="Withdrawals">
+          <Wallet size={17} style={{ flexShrink: 0 }} />
+          {label("Withdrawals")}
+        </Link>
+      )}
 
-       {hasPermission(user, "finance.withdraw") && (
-
-      <Link to="/withdraws" style={linkStyle(isActive("/withdraws"))}>
-        <Wallet size={16} />
-        Withdrawals
-      </Link>
-       )}
-
-      {/* COMMUNICATION */}
       <div style={sectionTitle}>COMMUNICATION</div>
 
-      <Link to="/messages" style={linkStyle(isActive("/messages"))}>
-        <MessageSquare size={16} />
-        Messages
+      <Link to="/messages" style={linkStyle(isActive("/messages"))} title="Messages">
+        <MessageSquare size={17} style={{ flexShrink: 0 }} />
+        {label("Messages")}
       </Link>
-
-      {/* FOOTER */}
-      <div
-        style={{
-          marginTop: "auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingTop: 14,
-          borderTop: "1px solid #1f2937",
-        }}
-      >
-        {/* USER INFO */}
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "white" }}>
-            {username}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: "#64748b",
-              letterSpacing: 1.2,
-              marginTop: 3,
-              textTransform: "capitalize",
-            }}
-          >
-            {roleLabel}
-          </div>
-        </div>
-
-        {/* LOGOUT */}
-        {token ? (
-          <button
-            onClick={logout}
-            style={{
-              background: "#62626246",
-              border: "1px solid #1f2937",
-              color: "#94a3b8",
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              transition: "0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(239,68,68,0.1)";
-              e.currentTarget.style.color = "#ef4444";
-              e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "#94a3b8";
-              e.currentTarget.style.borderColor = "#1f2937";
-            }}
-          >
-            <LogOut size={16} />
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }

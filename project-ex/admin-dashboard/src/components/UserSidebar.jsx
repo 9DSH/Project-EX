@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef,  useMemo } from "react";
+import { createPortal } from "react-dom";
 import { API_URL } from "../config";
 import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../constants/AccessPoints";
 import ChatWindow from "../components/ChatWindow";
@@ -633,47 +634,47 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     }
   };
 
-const resetPassword = async (newPassword = null) => {
-  if (!user?.user_id) return;
+  const resetPassword = async (newPassword = null) => {
+    if (!user?.user_id) return;
 
-  const confirm = window.confirm(
-    "Are you sure you want to reset this user's password?"
-  );
+    const confirm = window.confirm(
+      "Are you sure you want to reset this user's password?"
+    );
 
-  if (!confirm) return;
+    if (!confirm) return;
 
-  try {
-    const res = await fetch(
-      `${API_URL}/admin/users/${user.user_id}/reset-password`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          new_password: newPassword || null,
-        }),
+    try {
+      const res = await fetch(
+        `${API_URL}/admin/users/${user.user_id}/reset-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            new_password: newPassword || null,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+
+      if (!res.ok) {
+        alert(data.detail || "Failed to reset password");
+        return;
       }
-    );
 
-    const data = await res.json();
+      alert(
+        `Password reset successfully.\nTemporary password: ${data.new_password}`
+      );
 
-
-    if (!res.ok) {
-      alert(data.detail || "Failed to reset password");
-      return;
+    } catch (err) {
+      console.error(err);
+      alert("Network error while resetting password");
     }
-
-    alert(
-      `Password reset successfully.\nTemporary password: ${data.new_password}`
-    );
-
-  } catch (err) {
-    console.error(err);
-    alert("Network error while resetting password");
-  }
-};
+  };
 
   // =====================================================
   // BALANCE ACTION
@@ -1130,7 +1131,7 @@ const resetPassword = async (newPassword = null) => {
     currencies.find((c) => String(c.id) === String(transferCurrency))?.symbol ?? "";
    
 
-  return (
+  return createPortal(
     <>
       {/* OVERLAY */}
       <div onClick={handleClose} style={styles.overlay(visible)} />
@@ -1379,7 +1380,8 @@ const resetPassword = async (newPassword = null) => {
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1400,7 +1402,7 @@ const styles = {
     inset: 0,
     background: "rgba(0,0,0,0.45)",
     backdropFilter: "blur(4px)",
-    zIndex: 50,
+    zIndex: 1000,
     opacity: visible ? 1 : 0,
     transition: "opacity 250ms ease",
   }),
@@ -1414,7 +1416,7 @@ const styles = {
     background: "#0f172a",
     borderLeft: "2px solid #1e293b",
     color: "white",
-    zIndex: 60,
+    zIndex: 2000,
     display: "flex",
     flexDirection: "column",
 

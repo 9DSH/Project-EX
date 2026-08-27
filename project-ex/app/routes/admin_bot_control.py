@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+import os
+import re
+from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.models.user import TelegramBotSettings
@@ -9,7 +11,7 @@ from app.bot.manager.instance_manager import manager as bot_manager
 router = APIRouter(prefix="/admin/bot-control", tags=["Bot Control"])
 
 GLOBAL_KINDS = {"global_main", "support"}
-
+LOG_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs", "bots"))
 
 def get_admin(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
@@ -21,6 +23,44 @@ def get_master(user=Depends(get_current_user)):
     if not is_master(user):
         raise HTTPException(403, "Master access required")
     return user
+
+
+@router.get("/logs/{admin_id}")
+def get_admin_bot_logs(admin_id: int, hours: int = 24, master=Depends(get_master)):
+    log_path = os.path.join(LOG_DIR, f"admin_{admin_id}.log")
+    if not os.path.exists(log_path):
+        return {"lines": [], "message": "No log file found for this bot yet.", "has_timestamps": False}
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+    except Exception as e:
+        return {"lines": [], "message": f"Failed to read log file: {e}", "has_timestamps": False}
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    date_pat = re.compile(r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})")
+
+    any_dated = any(date_pat.search(l) for l in all_lines)
+    recent = []
+
+    if any_dated:
+        for line in all_lines:
+            m = date_pat.search(line)
+            if not m:
+                recent.append(line.rstrip("\n"))
+                continue
+            try:
+                ts = datetime.strptime(f"{m.group(1)} {m.group(2)}", "%Y-%m-%d %H:%M:%S")
+                if ts >= cutoff:
+                    recent.append(line.rstrip("\n"))
+            except Exception:
+                recent.append(line.rstrip("\n"))
+        recent = recent[-1000:]
+    else:
+        # No timestamps at all in this log — fall back to raw tail
+        recent = [l.rstrip("\n") for l in all_lines[-500:]]
+
+    return {"lines": recent, "has_timestamps": any_dated, "log_path": log_path}
 
 
 def _get_settings(admin_id: int, bot_kind: str, db: Session):

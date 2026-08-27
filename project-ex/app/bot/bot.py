@@ -96,7 +96,8 @@ from app.bot.features.common import (
     safe_inline,
     get_lang,
     set_lang,
-    get_bot_admin_access_points
+    get_bot_admin_access_points,
+    send_or_edit,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,41 @@ user_last_balance = shared_common.user_last_balance
 exchange_state = shared_common.exchange_state
 
 EXTERNAL_WALLET_WARNING_KEY = "ext_wallet_warning"
+
+
+async def _advance_prompt(message, state, text, **kwargs):
+    """Continue a text-input flow by editing the previous bot prompt message
+    in place instead of stacking a new one. `state` must be the dict that
+    carries "prompt_msg_id" (set whenever a prompt is first shown). Falls
+    back to sending a new message if there's nothing to edit, or if editing
+    fails (e.g. message too old / already gone)."""
+    bot = message.get_bot()
+    chat_id = message.chat_id
+    prompt_msg_id = (state or {}).get("prompt_msg_id")
+    if prompt_msg_id:
+        try:
+            sent = await bot.edit_message_text(chat_id=chat_id, message_id=prompt_msg_id, text=text, **kwargs)
+            if state is not None:
+                state["prompt_msg_id"] = getattr(sent, "message_id", prompt_msg_id)
+            return sent
+        except Exception:
+            pass
+    sent = await send_or_edit(message, text, **kwargs, edit=False)
+    if state is not None:
+        state["prompt_msg_id"] = sent.message_id
+    return sent
+
+
+async def _clear_prompt(message, state):
+    """Delete the tracked prompt message. Needed before sending a message
+    that requires a ReplyKeyboardMarkup (e.g. the main menu), since
+    edit_message_text can't attach one — so we can't just edit in place."""
+    prompt_msg_id = (state or {}).get("prompt_msg_id")
+    if prompt_msg_id:
+        try:
+            await message.get_bot().delete_message(chat_id=message.chat_id, message_id=prompt_msg_id)
+        except Exception:
+            pass
 
 
 async def _sync_lang_from_profile(user_id, token):
@@ -130,20 +166,24 @@ async def _sync_lang_from_profile(user_id, token):
 # =====================================================
 # HELPERS: send the main menu message
 # =====================================================
-
-async def show_main_menu(update_or_message, text=None, user_id=None):
+async def show_main_menu(update_or_message, text=None, user_id=None, show_services=False):
     msg = update_or_message if hasattr(update_or_message, "reply_text") else update_or_message.message
     uid = user_id or (getattr(msg, "chat", None).id if getattr(msg, "chat", None) else None)
     lang = get_lang(uid) if uid is not None else DEFAULT_LANGUAGE
     if text is None:
         text = t("main_menu_title", lang)
 
-    access_points, role = await get_bot_admin_access_points()
+    access_points, role, enabled_services = await get_bot_admin_access_points()
     is_full_access = role == "master" or role == "global" or access_points == "*"
 
     def allowed(*keys):
-        return is_full_access or any(k in access_points for k in keys)
-
+        permitted = is_full_access or any(k in access_points for k in keys)
+        if not permitted:
+            return False
+        if enabled_services is not None:
+            return any(k in enabled_services for k in keys)
+        return True
+    
     keyboard_rows = [
         [KeyboardButton(t("btn_wallet", lang)), KeyboardButton(t("btn_exchange", lang))],
     ]
@@ -168,8 +208,11 @@ async def show_main_menu(update_or_message, text=None, user_id=None):
 
     reply_markup = ReplyKeyboardMarkup(keyboard_rows, resize_keyboard=True, is_persistent=False)
 
-    services_text = "\n".join(f"• {s}" for s in services)
-    text = f"{text}\n\n{services_text}"
+    if show_services:
+        services_text = "\n".join(f"• {s}" for s in services)
+        text = f"{text}\n\n{services_text}"
+    else:
+        text = f"{text}\n\n{t('main_menu_use_buttons', lang)}"
 
     token = user_tokens.get(uid) if uid is not None else None
     notice = ""
@@ -180,7 +223,8 @@ async def show_main_menu(update_or_message, text=None, user_id=None):
                 notice = t("incomplete_profile_notice", lang)
         except Exception:
             notice = ""
-    await msg.reply_text(f"{text}{notice}", reply_markup=reply_markup)
+    await send_or_edit(msg, f"{text}{notice}", reply_markup=reply_markup, edit=False)
+
 # =====================================================
 # /start
 # =====================================================
@@ -191,7 +235,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if token:
         await _sync_lang_from_profile(user_id, token)
         lang = get_lang(user_id)
-        await show_main_menu(update.message, t("welcome_back_choose", lang), user_id=user_id)
+        await show_main_menu(
+            update.message, 
+            t("welcome_back_choose", lang), 
+            user_id=user_id,
+        show_services=True,
+            )
         return
 
     # New/unauthenticated users start on the bot-admin's configured default
@@ -199,10 +248,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # change it with the "🌐 Language" button.
     lang = get_lang(user_id)
     user_state[user_id] = {}
-    await update.message.reply_text(
-        t("welcome_login_prompt", lang),
-        reply_markup=auth_inline(lang),
-    )
+    await send_or_edit(update.message, t("welcome_login_prompt", lang), reply_markup=auth_inline(lang), edit=False)
 
 
 async def set_admin_default_language(default_language):
@@ -232,10 +278,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── GUARD: only logged-in users may use the main menu buttons ──
     if action and not token:
-        await update.message.reply_text(
-            t("please_login_first", lang),
-            reply_markup=auth_inline(lang),
-        )
+        await send_or_edit(update.message, t("please_login_first", lang), reply_markup=auth_inline(lang), edit=False)
         return
 
     # ==============================================================
@@ -244,10 +287,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── 💰 WALLET ─────────────────────────────────────────────────
     if action == "btn_wallet":
-        await update.message.reply_text(
-            wrap(t("wallet_dashboard_title", lang), t("wallet_dashboard_body", lang), lang=lang),
-            reply_markup=safe_inline(wallet_inline(lang), lang)
-        )
+        await send_or_edit(update.message, wrap(t("wallet_dashboard_title", lang), t("wallet_dashboard_body", lang), lang=lang), reply_markup=safe_inline(wallet_inline(lang), lang), edit=False)
         return
 
     # ── 🔄 EXCHANGE ───────────────────────────────────────────────
@@ -277,21 +317,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── 🌐 LANGUAGE ───────────────────────────────────────────────
     if action == "btn_language":
-        await update.message.reply_text(
-            wrap(t("language_title", lang), t("language_prompt", lang), lang=lang),
-            reply_markup=language_inline(lang),
-        )
+        await send_or_edit(update.message, wrap(t("language_title", lang), t("language_prompt", lang), lang=lang), reply_markup=language_inline(lang), edit=False)
         return
 
     # ── 🧠 SUPPORT ────────────────────────────────────────────────
     if action == "btn_support":
-        await update.message.reply_text(
-            wrap(t("support_title", lang), t("support_body", lang), lang=lang),
-            reply_markup=InlineKeyboardMarkup([
+        await send_or_edit(update.message, wrap(t("support_title", lang), t("support_body", lang), lang=lang), reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_open_support", lang), url="https://t.me/projectexTestkarman_bot")],
                 [InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]
-            ]),
-        )
+            ]), edit=False)
         return
 
     # ── 🚪 LOGOUT ─────────────────────────────────────────────────
@@ -300,10 +334,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state.pop(user_id, None)
         user_last_balance.pop(user_id, None)
         exchange_state.pop(user_id, None)
-        await update.message.reply_text(
-            t("auth_logged_out", lang),
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        await send_or_edit(update.message, t("auth_logged_out", lang), reply_markup=ReplyKeyboardRemove(), edit=False)
         return
 
     # ==============================================================
@@ -315,7 +346,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["username"] = text
         state["step"]     = "login_password"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_enter_password", lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(update.message, t("auth_enter_password", lang), reply_markup=_back_cancel_kb(lang), edit=False)
         return
 
     # ── LOGIN: PASSWORD ───────────────────────────────────────────
@@ -328,30 +359,22 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 data = res.json()
             except Exception:
-                await update.message.reply_text(
-                    t("auth_invalid_server_response", lang).format(status=res.status_code, raw=res.text)
-                )
+                await send_or_edit(update.message, t("auth_invalid_server_response", lang).format(status=res.status_code, raw=res.text), edit=False)
                 return
         except Exception as e:
-            await update.message.reply_text(t("auth_connection_error", lang).format(error=str(e)))
+            await send_or_edit(update.message, t("auth_connection_error", lang).format(error=str(e)), edit=False)
             return
 
         if res.status_code != 200:
             error_msg = data.get("detail", "Invalid username or password")
             user_state[user_id] = {}
-            await update.message.reply_text(
-                t("auth_login_failed", lang).format(error=error_msg),
-                reply_markup=auth_inline(lang),
-            )
+            await send_or_edit(update.message, t("auth_login_failed", lang).format(error=error_msg), reply_markup=auth_inline(lang), edit=False)
             return
 
         token = data.get("access_token")
         if not token:
             user_state[user_id] = {}
-            await update.message.reply_text(
-                t("auth_login_no_token", lang),
-                reply_markup=auth_inline(lang),
-            )
+            await send_or_edit(update.message, t("auth_login_no_token", lang), reply_markup=auth_inline(lang), edit=False)
             return
 
         user_tokens[user_id] = token
@@ -361,10 +384,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not eligible:
                 user_tokens.pop(user_id, None)
                 user_state[user_id] = {}
-                await update.message.reply_text(
-                    "❌ This account is not available on this bot.",
-                    reply_markup=ReplyKeyboardRemove(),
-                )
+                await send_or_edit(update.message, "❌ This account is not available on this bot.", reply_markup=ReplyKeyboardRemove(), edit=False)
                 return
         user_state[user_id]  = {}
         username = data.get("username", "user")
@@ -382,6 +402,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lang=lang,
             ),
             user_id=user_id,
+            show_services=True,
         )
         return
 
@@ -390,14 +411,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["username"] = text
         state["step"]     = "signup_password"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_choose_password", lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(update.message, t("auth_choose_password", lang), reply_markup=_back_cancel_kb(lang), edit=False)
         return
 
     if state.get("step") == "signup_password":
         state["password"] = text
         state["step"]     = "signup_invite"
         user_state[user_id] = state
-        await update.message.reply_text(t("auth_enter_invite_code", lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(update.message, t("auth_enter_invite_code", lang), reply_markup=_back_cancel_kb(lang), edit=False)
         return
 
     # ── SIGNUP: INVITATION CODE ───────────────────────────────────
@@ -413,34 +434,27 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 data = res.json()
             except Exception:
-                await update.message.reply_text(
-                    t("auth_signup_server_error", lang).format(status=res.status_code, raw=res.text)
-                )
+                await send_or_edit(update.message, t("auth_signup_server_error", lang).format(status=res.status_code, raw=res.text), edit=False)
                 return
         except Exception as e:
-            await update.message.reply_text(t("auth_connection_error", lang).format(error=str(e)))
+            await send_or_edit(update.message, t("auth_connection_error", lang).format(error=str(e)), edit=False)
             return
 
         if res.status_code != 200:
             error_msg = data.get("detail", "Sign up failed")
             user_state[user_id] = {}
-            await update.message.reply_text(
-                t("auth_signup_failed", lang).format(error=error_msg),
-                reply_markup=auth_inline(lang),
-            )
+            await send_or_edit(update.message, t("auth_signup_failed", lang).format(error=error_msg), reply_markup=auth_inline(lang), edit=False)
             return
 
         saved_username = state["username"]
         saved_password = state["password"]
         user_state[user_id] = {}
 
-        await update.message.reply_text(
-            t("auth_account_created", lang).format(
+        await send_or_edit(update.message, t("auth_account_created", lang).format(
                 username=saved_username,
                 password=saved_password,
                 wallet=data.get("wallet_address", "Pending"),
-            )
-        )
+            ), edit=False)
 
         # Auto-login
         try:
@@ -461,14 +475,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not eligible:
                     user_tokens.pop(user_id, None)
                     user_state[user_id] = {}
-                    await update.message.reply_text(
-                        "❌ This account is not available on this bot.",
-                        reply_markup=ReplyKeyboardRemove(),
-                    )
+                    await send_or_edit(update.message, "❌ This account is not available on this bot.", reply_markup=ReplyKeyboardRemove(), edit=False)
                     return
-            await show_main_menu(update.message, t("auth_logged_in", lang), user_id=user_id)
+            await show_main_menu(
+                update.message, 
+                t("auth_logged_in", lang), 
+                user_id=user_id,
+                show_services=True,
+                )
         else:
-            await update.message.reply_text(t("auth_signup_ok_login_failed", lang))
+            await send_or_edit(update.message, t("auth_signup_ok_login_failed", lang), edit=False)
         return
 
     # ── ACCOUNT EDIT: COLLECT VALUES ─────────────────────────────
@@ -511,16 +527,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         user_state[user_id] = {}
         if res.status_code == 200:
-            await update.message.reply_text(t("wallet_irt_confirmed_pending", lang))
+            await send_or_edit(update.message, t("wallet_irt_confirmed_pending", lang), edit=False)
         else:
-            await update.message.reply_text(t("wallet_deposit_failed", lang))
+            await send_or_edit(update.message, t("wallet_deposit_failed", lang), edit=False)
         return
 
     # ── WITHDRAW: AMOUNT ──────────────────────────────────────────
     if state.get("step") == "withdraw_amount":
         amount = safe_float(text)
         if amount <= 0:
-            await update.message.reply_text(t("wallet_invalid_amount_positive", lang))
+            await send_or_edit(update.message, t("wallet_invalid_amount_positive", lang), edit=False)
             return
         wallet_address = state.get("wallet_address")
         pair = state.get("pair")
@@ -530,7 +546,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not wallet_address or not pair or not currency or not network:
             user_state[user_id] = {}
-            await update.message.reply_text(t("wallet_err_session_expired_reselect", lang))
+            await send_or_edit(update.message, t("wallet_err_session_expired_reselect", lang), edit=False)
             return
         user_state[user_id] = {
             "step": "withdraw_confirm",
@@ -540,36 +556,33 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "currency": currency,
             "network": network,
             "chain": chain,
+            "back_to": "withdraw_amount",
         }
-        await update.message.reply_text(
-            wrap(
+        await send_or_edit(update.message, wrap(
                 t("wallet_confirm_withdrawal_title", lang),
                 t("wallet_confirm_withdrawal_body", lang).format(
                     amount=amount, currency=currency, network=network, chain=chain, wallet=wallet_address
                 ),
                 lang=lang,
-            ),
-            reply_markup=InlineKeyboardMarkup([
+            ), reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_confirm", lang), callback_data="withdraw_confirm"),
                 InlineKeyboardButton(t("btn_cancel", lang), callback_data="withdraw_cancel")],
-                [InlineKeyboardButton(t("btn_back", lang), callback_data="wallet_back")]
-            ]),
-        )
+                [InlineKeyboardButton(t("btn_back", lang), callback_data="flow_back")]
+            ]), edit=False)
         return
 
     # ── EXTERNAL WALLET: ADDRESS INPUT ────────────────────────────
     if state.get("step") == "external_wallet_input":
         wallet_address = text.strip()
         if not wallet_address:
-            await update.message.reply_text(t("ext_wallet_address_empty", lang))
+            await send_or_edit(update.message, t("ext_wallet_address_empty", lang), edit=False)
             return
 
         state["pending_address"] = wallet_address
         state["step"] = "external_wallet_confirm"
         user_state[user_id] = state
 
-        await update.message.reply_text(
-            wrap(
+        await send_or_edit(update.message, wrap(
                 t("ext_wallet_confirm_title", lang),
                 t("ext_wallet_confirm_body", lang).format(
                     currency=state.get("currency"),
@@ -579,13 +592,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     address=wallet_address,
                 ),
                 lang=lang,
-            ),
-            reply_markup=InlineKeyboardMarkup([
+            ), reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_confirm", lang), callback_data="extwallet_confirm")],
                 [InlineKeyboardButton(t("btn_re_enter", lang), callback_data="extwallet_reenter")],
                 [InlineKeyboardButton(t("btn_cancel", lang), callback_data="extwallet_cancel")],
-            ])
-        )
+            ]), edit=False)
         return
 
     # ── WIRE TRANSFER: COLLECT FIELDS ────────────────────────────
@@ -613,10 +624,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["wire_collected"]   = collected
             user_state[user_id]       = state
             req_label = "" if next_field.get("required") else t("wire_field_optional_suffix", lang)
-            await update.message.reply_text(
-                t("wire_field_prompt", lang).format(label=next_field.get("label", next_key), required=req_label),
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(update.message, t("wire_field_prompt", lang).format(label=next_field.get("label", next_key), required=req_label), reply_markup=_back_cancel_kb(lang), edit=False)
             return
 
         # this batch is complete
@@ -654,7 +662,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state.get("step") == "wire_amount":
         amount = safe_float(text)
         if amount <= 0:
-            await update.message.reply_text(t("wire_invalid_amount", lang))
+            await send_or_edit(update.message, t("wire_invalid_amount", lang), edit=False)
             return
 
         pair            = state["wire_pair"]
@@ -672,16 +680,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         max_a = safe_float(max_a_raw) if max_a_raw not in (None, "") else None
         cancel_markup = InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")]])
         if min_a > 0 and amount < min_a:
-            await update.message.reply_text(
-                t("wire_amount_min_error", lang).format(amount=min_a, currency=from_sym),
-                reply_markup=cancel_markup
-            )
+            await send_or_edit(update.message, t("wire_amount_min_error", lang).format(amount=min_a, currency=from_sym), reply_markup=cancel_markup, edit=False)
             return
         if max_a is not None and max_a > 0 and amount > max_a:
-            await update.message.reply_text(
-                t("wire_amount_max_error", lang).format(amount=max_a, currency=from_sym),
-                reply_markup=cancel_markup
-            )
+            await send_or_edit(update.message, t("wire_amount_max_error", lang).format(amount=max_a, currency=from_sym), reply_markup=cancel_markup, edit=False)
             return
 
         rate_display = safe_float(g(pair, "rate", 0))
@@ -724,27 +726,25 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 receiver_block = "\n   ".join(receiver_lines)
         extra_block = t("wire_send_to_block", lang).format(from_symbol=from_sym, receiver_block=receiver_block) if selected_method else ""
 
-        await update.message.reply_text(
-            wrap(
+        await send_or_edit(update.message, wrap(
                 t("wire_confirm_title", lang),
                 t("wire_confirm_body", lang).format(
                     from_symbol=from_sym, to_symbol=to_sym, amount=fmt_num(amount), fee_amt=fmt_num(fee_amt), fee_pct=fee_pct,
                     to_amount=to_amount, rate_display=fmt_num(rate_display), summary=summary, extra_block=extra_block,
                 ),
                 lang=lang,
-            ),
-            reply_markup=InlineKeyboardMarkup([
+            ), reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_confirm", lang), callback_data="wire_confirm"),
                  InlineKeyboardButton(t("btn_cancel", lang), callback_data="wire_cancel")],
-            ])
-        )
+                [InlineKeyboardButton(t("btn_back", lang), callback_data="flow_back")],
+            ]), edit=False)
         return
 
     # ── EXCHANGE: AMOUNT ──────────────────────────────────────────
     if state.get("step") == "exchange_amount":
         amount = safe_float(text)
         if amount <= 0:
-            await update.message.reply_text(t("exchange_invalid_amount", lang))
+            await send_or_edit(update.message, t("exchange_invalid_amount", lang), edit=False)
             return
 
         from_currency = state.get("from_currency")
@@ -760,15 +760,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 err = preview_res.json().get("detail", "Preview failed")
             except Exception:
                 err = "Preview failed"
-            await update.message.reply_text(t("exchange_preview_failed", lang).format(error=err))
+            await send_or_edit(update.message, t("exchange_preview_failed", lang).format(error=err), edit=False)
             return
 
         preview = preview_res.json()
-        state.update({"amount": amount, "preview": preview, "step": "exchange_confirm"})
+        state.update({"amount": amount, "preview": preview, "step": "exchange_confirm", "back_to": "exchange_amount"})
         user_state[user_id] = state
 
-        await update.message.reply_text(
-            wrap(
+        await send_or_edit(update.message, wrap(
                 t("exchange_confirm_title", lang),
                 t("exchange_confirm_body", lang).format(
                     from_currency=preview["from_currency"], to_currency=preview["to_currency"],
@@ -776,14 +775,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     fee_amount=fmt_num(preview["fee_amount"]), received_amount=fmt_num(preview["received_amount"]),
                 ),
                 lang=lang,
-            ),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
+            ), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_confirm", lang), callback_data="exchange_confirm"),
                 InlineKeyboardButton(t("btn_cancel", lang), callback_data="exchange_cancel")],
-                [InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]
-            ]),
-        )
+                [InlineKeyboardButton(t("btn_back", lang), callback_data="flow_back")]
+            ]), edit=False)
         return
     # =====================================================
     # DYNAMIC PRODUCT INPUT ENGINE (STEP 2)
@@ -814,10 +810,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["field_queue"] = queue
             state["input_data"] = input_data
             user_state[user_id] = state
-            await update.message.reply_text(
-                t("product_next_field", lang).format(field=next_field.get("label", next_key)),
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(update.message, t("product_next_field", lang).format(field=next_field.get("label", next_key)), reply_markup=_back_cancel_kb(lang), edit=False)
             return
 
         # =====================================================
@@ -834,19 +827,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             label = fields[k].get("label", k)
             summary += t("product_confirm_line", lang).format(label=label, value=v)
 
-        await update.message.reply_text(
-            wrap(
+        await send_or_edit(update.message, wrap(
                 t("product_confirm_details_title", lang),
                 summary + t("product_confirm_details_footer", lang),
                 lang=lang,
-            ),
-            reply_markup=InlineKeyboardMarkup([
+            ), reply_markup=InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(t("btn_confirm", lang), callback_data="confirm_input"),
                     InlineKeyboardButton(t("btn_reenter", lang), callback_data="reenter_input")
                 ]
-            ])
-        )
+            ]), edit=False)
         return
 
 
@@ -868,7 +858,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if q.data == "back_main":
         await q.message.delete()
-        await show_main_menu(q.message, t("main_menu_choose", lang), user_id=user_id)
+        await show_main_menu(
+            q.message, 
+            t("main_menu_choose", lang), 
+            user_id=user_id,
+            show_services=False,
+            )
         return
 
     # ── LANGUAGE SELECTION ──────────────────────────────────────────
@@ -880,16 +875,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await api_put(f"{API_URL}/account/me", token=token, json={"language": new_lang})
             except Exception:
                 pass
-        await q.message.edit_text(t("language_updated", new_lang))
-        await show_main_menu(q.message, t("main_menu_title", new_lang), user_id=user_id)
+        await send_or_edit(q.message, t("language_updated", new_lang), edit=True)
+        await show_main_menu(
+            q.message, 
+            t("main_menu_title", 
+              new_lang), 
+              user_id=user_id,
+              show_services=True,
+              )
         return
 
     if q.data == "myaccount_cancel":
         user_state[user_id] = {}
-        await q.message.edit_text(
-            t("account_cancelled", lang),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]])
-        )
+        await send_or_edit(q.message, t("account_cancelled", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
         return
 
     if q.data == "myaccount_edit_profile":
@@ -908,23 +906,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         values = state.get("account_edit_values", {})
 
         if not values:
-            await q.message.edit_text(t("account_no_changes", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]))
+            await send_or_edit(q.message, t("account_no_changes", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
             return
 
         res = await _save_account_edit(token, mode, values)
         if res.status_code in {200, 201, 204}:
             user_state[user_id] = {}
             section = t("account_profile_section", lang) if mode == "profile" else t("account_bank_section", lang)
-            await q.message.edit_text(
-                t("account_updated_success", lang).format(section=section),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]])
-            )
+            await send_or_edit(q.message, t("account_updated_success", lang).format(section=section), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
         else:
             try:
                 err = res.json().get("detail", "Update failed")
             except Exception:
                 err = "Update failed"
-            await q.message.edit_text(t("account_update_failed", lang).format(error=err), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]))
+            await send_or_edit(q.message, t("account_update_failed", lang).format(error=err), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
         return
 
     if q.data.startswith("myaccount_edit_again_"):
@@ -946,12 +941,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── AUTH ──────────────────────────────────────────────────────
     if q.data == "auth_login":
         user_state[user_id] = {"step": "login_username"}
-        await q.message.edit_text(t("auth_enter_username", lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(q.message, t("auth_enter_username", lang), edit=True)
         return
 
     if q.data == "auth_signup":
         user_state[user_id] = {"step": "signup_username"}
-        await q.message.edit_text(t("auth_signup_intro", lang), parse_mode="Markdown", reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(q.message, t("auth_signup_intro", lang), parse_mode="Markdown", reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     # ── WALLET SUBMENU ────────────────────────────────────────────
@@ -975,9 +970,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text += t("wallet_balance_address", lang).format(address=address)
 
-        await q.message.edit_text(wrap(t("wallet_balance_title", lang), text, lang=lang),
-                                  parse_mode="Markdown",
-                                  reply_markup=balance_inline(lang))
+        await send_or_edit(q.message, wrap(t("wallet_balance_title", lang), text, lang=lang), parse_mode="Markdown", reply_markup=balance_inline(lang), edit=True)
         return
 
     if q.data == "wallet_external":
@@ -985,27 +978,18 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = {}
             data, error = await _load_wallet_pairs(user_id, token)
             if error:
-                await q.message.edit_text(
-                    f"❌ {error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
 
             wallets, wallet_error = await _load_external_wallets(user_id, token)
             if wallet_error:
-                await q.message.edit_text(
-                    f"❌ {wallet_error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {wallet_error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
 
             _wallet_state(user_id)["external_wallets"] = wallets
             currencies = data.get("currencies", [])
             if not currencies:
-                await q.message.edit_text(
-                    t("wallet_err_load_external", lang),
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_load_external", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
 
             await _show_wallet_currency_menu(
@@ -1020,10 +1004,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         except Exception as e:
             logger.error(f"Error loading external wallets: {e}")
-            await q.message.edit_text(
-                t("wallet_generic_error", lang).format(error=str(e)),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_generic_error", lang).format(error=str(e)), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
     if q.data == "wallet_deposit":
@@ -1034,20 +1015,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 token
             )
             if res.status_code != 200:
-                await q.message.edit_text(
-                    t("wallet_err_load_deposit_options", lang),
-                    reply_markup=safe_inline(wallet_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_load_deposit_options", lang), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
                 return
 
             data = res.json()
             currencies = data.get("currencies", [])
 
             if not currencies:
-                await q.message.edit_text(
-                    t("wallet_err_no_deposit_currencies", lang),
-                    reply_markup=safe_inline(wallet_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_no_deposit_currencies", lang), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
                 return
 
             # Store currencies for later retrieval in network selection
@@ -1061,18 +1036,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             keyboard.append([InlineKeyboardButton(t("btn_back", lang), callback_data="wallet_back")])
 
-            await q.message.edit_text(
-                t("wallet_select_deposit_currency_title", lang) + t("wallet_select_deposit_currency_subtitle", lang),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await send_or_edit(q.message, t("wallet_select_deposit_currency_title", lang) + t("wallet_select_deposit_currency_subtitle", lang), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
             return
         except Exception as e:
             logger.error(f"Error loading currencies: {e}")
-            await q.message.edit_text(
-                t("wallet_err_load_currencies", lang).format(error=str(e)),
-                reply_markup=safe_inline(wallet_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_load_currencies", lang).format(error=str(e)), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
             return
 
     # ── DEPOSIT: CURRENCY SELECTION ────────────────────────────────────
@@ -1095,10 +1063,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 token
             )
             if res.status_code != 200:
-                await q.message.edit_text(
-                    t("wallet_err_load_currencies", lang).format(error="—"),
-                    reply_markup=safe_inline(wallet_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_load_currencies", lang).format(error="—"), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
                 return
             pairs = res.json().get("pairs", [])
             exchange_state[user_id]["pairs"] = pairs
@@ -1107,10 +1072,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         networks = [p for p in pairs if p["currency"] == currency]
 
         if not networks:
-            await q.message.edit_text(
-                t("wallet_err_no_networks_for_currency", lang).format(currency=currency),
-                reply_markup=safe_inline(wallet_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_no_networks_for_currency", lang).format(currency=currency), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
             return
 
         # Build network selection menu
@@ -1127,11 +1089,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_back", lang), callback_data="wallet_deposit")
         ])
 
-        await q.message.edit_text(
-            t("wallet_select_network_title", lang).format(currency=currency) + t("wallet_select_network_subtitle", lang),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await send_or_edit(q.message, t("wallet_select_network_title", lang).format(currency=currency) + t("wallet_select_network_subtitle", lang), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
         return
 
     # ── DEPOSIT: NETWORK SELECTION & ADDRESS DISPLAY ────────────────────
@@ -1145,7 +1103,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         matching = [p for p in state_pairs if p["currency"] == currency and p["network_id"] == network_id]
 
         if not matching:
-            await q.message.edit_text(t("wallet_err_invalid_selection", lang), reply_markup=safe_inline(wallet_inline(lang), lang))
+            await send_or_edit(q.message, t("wallet_err_invalid_selection", lang), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
             return
 
         pair = matching[0]
@@ -1167,10 +1125,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if wallet_res.status_code != 200:
                 error_detail = wallet_res.json().get("detail", "Failed to generate wallet")
-                await q.message.edit_text(
-                    t("wallet_err_generate_wallet", lang).format(detail=error_detail),
-                    reply_markup=safe_inline(wallet_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_generate_wallet", lang).format(detail=error_detail), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
                 return
             wallet_data = wallet_res.json()
             address = wallet_data.get("address")
@@ -1185,26 +1140,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if max_amount > 0:
                 min_max_text += t("wallet_deposit_max_line", lang).format(amount=max_amount)
 
-            await q.message.edit_text(
-                t("wallet_deposit_address_body", lang).format(
+            await send_or_edit(q.message, t("wallet_deposit_address_body", lang).format(
                     currency=currency, network=pair["network"], address=address,
                     min_max_text=min_max_text, confirmations=confirmations,
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
+                ), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_back", lang), callback_data="wallet_back")]
-                ])
-            )
+                ]), edit=True)
 
             # Start watching for deposit
             asyncio.create_task(watch_deposit(user_id, token))
 
         except Exception as e:
             logger.error(f"Error getting deposit address: {e}")
-            await q.message.edit_text(
-                t("wallet_generic_error", lang).format(error=str(e)),
-                reply_markup=safe_inline(wallet_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_generic_error", lang).format(error=str(e)), reply_markup=safe_inline(wallet_inline(lang), lang), edit=True)
             return
 
     if q.data.startswith("extwallet_currency_"):
@@ -1214,20 +1162,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not exchange_state.get(user_id, {}).get("pairs"):
             data, error = await _load_wallet_pairs(user_id, token)
             if error:
-                await q.message.edit_text(
-                    f"❌ {error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
             _wallet_state(user_id)["currencies"] = data.get("currencies", [])
 
         if "external_wallets" not in exchange_state.get(user_id, {}):
             wallets, wallet_error = await _load_external_wallets(user_id, token)
             if wallet_error:
-                await q.message.edit_text(
-                    f"❌ {wallet_error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {wallet_error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
             _wallet_state(user_id)["external_wallets"] = wallets
 
@@ -1250,19 +1192,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pair = _find_wallet_pair(user_id, currency, network_id)
 
         if not pair:
-            await q.message.edit_text(
-                t("wallet_err_invalid_selection", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_invalid_selection", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
         if "external_wallets" not in exchange_state.get(user_id, {}):
             wallets, wallet_error = await _load_external_wallets(user_id, token)
             if wallet_error:
-                await q.message.edit_text(
-                    f"❌ {wallet_error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {wallet_error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
             _wallet_state(user_id)["external_wallets"] = wallets
 
@@ -1272,10 +1208,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.data == "extwallet_set":
         pair = exchange_state.get(user_id, {}).get("selected_external_pair")
         if not pair:
-            await q.message.edit_text(
-                t("ext_wallet_session_expired_reselect", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("ext_wallet_session_expired_reselect", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
         await _prompt_external_wallet_input(q.message, user_id, pair)
@@ -1285,22 +1218,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = user_state.get(user_id, {})
         pair = state.get("pair")
         if not pair:
-            await q.message.edit_text(
-                t("ext_wallet_session_expired_reselect", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("ext_wallet_session_expired_reselect", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
         state["step"] = "external_wallet_input"
         state.pop("pending_address", None)
         user_state[user_id] = state
-        await q.message.edit_text(
-            t("ext_wallet_reenter_title", lang).format(
+        await send_or_edit(q.message, t("ext_wallet_reenter_title", lang).format(
                 currency=state.get("currency"), network=state.get("network"), chain=state.get("chain"),
                 warning=t(EXTERNAL_WALLET_WARNING_KEY, lang),
-            ),
-            reply_markup=_back_cancel_kb(lang)
-        )
+            ), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     if q.data == "extwallet_cancel":
@@ -1308,12 +1235,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return_to = state.get("return_to")
         user_state[user_id] = {}
         back_callback = "wallet_withdraw" if return_to == "withdraw" else "wallet_external"
-        await q.message.edit_text(
-            t("ext_wallet_update_cancelled", lang),
-            reply_markup=InlineKeyboardMarkup([
+        await send_or_edit(q.message, t("ext_wallet_update_cancelled", lang), reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_back", lang), callback_data=back_callback)]
-            ])
-        )
+            ]), edit=True)
         return
 
     if q.data == "extwallet_confirm":
@@ -1323,13 +1247,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not pair or not wallet_address:
             user_state[user_id] = {}
-            await q.message.edit_text(
-                t("wallet_err_session_expired_try_again", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_session_expired_try_again", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
-        await q.message.edit_text(t("ext_wallet_saving", lang))
+        await send_or_edit(q.message, t("ext_wallet_saving", lang), edit=True)
         try:
             res = await api_post(
                 f"{API_URL}/wallet/external-wallet",
@@ -1347,13 +1268,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if res.status_code != 200:
                 detail = data.get("detail", res.text)
-                await q.message.edit_text(
-                    t("ext_wallet_save_failed", lang).format(detail=detail),
-                    reply_markup=InlineKeyboardMarkup([
+                await send_or_edit(q.message, t("ext_wallet_save_failed", lang).format(detail=detail), reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton(t("btn_re_enter", lang), callback_data="extwallet_reenter")],
                         [InlineKeyboardButton(t("btn_cancel", lang), callback_data="extwallet_cancel")],
-                    ])
-                )
+                    ]), edit=True)
                 return
 
             wallets, wallet_error = await _load_external_wallets(user_id, token)
@@ -1367,33 +1285,24 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _prompt_withdraw_amount(q.message, user_id, pair, data.get("address", wallet_address))
                 return
 
-            await q.message.edit_text(
-                t("ext_wallet_saved_success", lang).format(
+            await send_or_edit(q.message, t("ext_wallet_saved_success", lang).format(
                     currency=data.get("currency", pair["currency"]),
                     network=data.get("network", pair["network"]),
                     address=data.get("address", wallet_address),
-                ),
-                reply_markup=InlineKeyboardMarkup([
+                ), reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_edit_again", lang), callback_data="extwallet_set")],
                     [InlineKeyboardButton(t("btn_back", lang), callback_data=f"extwallet_network_{pair['currency']}_{pair['network_id']}")],
-                ])
-            )
+                ]), edit=True)
         except Exception as e:
-            await q.message.edit_text(
-                t("wallet_generic_error", lang).format(error=str(e)),
-                reply_markup=InlineKeyboardMarkup([
+            await send_or_edit(q.message, t("wallet_generic_error", lang).format(error=str(e)), reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_re_enter", lang), callback_data="extwallet_reenter")],
                     [InlineKeyboardButton(t("btn_cancel", lang), callback_data="extwallet_cancel")],
-                ])
-            )
+                ]), edit=True)
         return
 
     if q.data == "wallet_back":
         await q.message.delete()
-        await q.message.reply_text(
-            wrap(t("wallet_dashboard_title", lang), t("wallet_choose_option", lang), lang=lang),
-            reply_markup=wallet_inline(lang)
-        )
+        await send_or_edit(q.message, wrap(t("wallet_dashboard_title", lang), t("wallet_choose_option", lang), lang=lang), reply_markup=wallet_inline(lang), edit=False)
         return
 
     if q.data == "wallet_withdraw":
@@ -1401,18 +1310,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = {}
             data, error = await _load_wallet_pairs(user_id, token)
             if error:
-                await q.message.edit_text(
-                    f"❌ {error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
 
             currencies = data.get("currencies", [])
             if not currencies:
-                await q.message.edit_text(
-                    t("wallet_err_no_withdraw_currencies", lang),
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, t("wallet_err_no_withdraw_currencies", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
 
             await _show_wallet_currency_menu(
@@ -1426,10 +1329,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Error loading withdraw currencies: {e}")
-            await q.message.edit_text(
-                t("wallet_generic_error", lang).format(error=str(e)),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_generic_error", lang).format(error=str(e)), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
         return
 
     if q.data.startswith("withdraw_currency_"):
@@ -1439,10 +1339,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not exchange_state.get(user_id, {}).get("pairs"):
             data, error = await _load_wallet_pairs(user_id, token)
             if error:
-                await q.message.edit_text(
-                    f"❌ {error}",
-                    reply_markup=safe_inline(balance_inline(lang), lang)
-                )
+                await send_or_edit(q.message, f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
                 return
             _wallet_state(user_id)["currencies"] = data.get("currencies", [])
 
@@ -1464,18 +1361,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pair = _find_wallet_pair(user_id, currency, network_id)
 
         if not pair:
-            await q.message.edit_text(
-                t("wallet_err_invalid_withdraw_selection", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_invalid_withdraw_selection", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
         wallets, wallet_error = await _load_external_wallets(user_id, token)
         if wallet_error:
-            await q.message.edit_text(
-                f"❌ {wallet_error}",
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, f"❌ {wallet_error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
         _wallet_state(user_id)["external_wallets"] = wallets
 
@@ -1483,15 +1374,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address = g(wallet, "address")
 
         if not wallet_address:
-            await q.message.edit_text(
-                t("wallet_no_external_wallet_saved", lang).format(
+            await send_or_edit(q.message, t("wallet_no_external_wallet_saved", lang).format(
                     currency=pair["currency"], network=pair["network"], warning=t(EXTERNAL_WALLET_WARNING_KEY, lang)
-                ),
-                reply_markup=InlineKeyboardMarkup([
+                ), reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_set_external_wallet", lang), callback_data="withdraw_change_wallet")],
                     [InlineKeyboardButton(t("btn_back", lang), callback_data=f"withdraw_currency_{currency}")],
-                ])
-            )
+                ]), edit=True)
             user_state[user_id] = {
                 "step": "withdraw_needs_wallet",
                 "pair": pair,
@@ -1510,10 +1398,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = user_state.get(user_id, {})
         pair = state.get("pair") or exchange_state.get(user_id, {}).get("selected_external_pair")
         if not pair:
-            await q.message.edit_text(
-                t("wallet_err_session_expired_reselect", lang),
-                reply_markup=safe_inline(balance_inline(lang), lang)
-            )
+            await send_or_edit(q.message, t("wallet_err_session_expired_reselect", lang), reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
 
         await _prompt_external_wallet_input(q.message, user_id, pair, return_to="withdraw")
@@ -1521,7 +1406,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if q.data == "withdraw_cancel":
         user_state[user_id] = {}
-        await q.message.edit_text(t("wallet_withdrawal_cancelled", lang))
+        await send_or_edit(q.message, t("wallet_withdrawal_cancelled", lang), edit=True)
         return
 
     if q.data == "withdraw_confirm":
@@ -1534,11 +1419,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not amount or not wallet or not currency or not network:
             user_state[user_id] = {}
-            await q.message.edit_text(t("wallet_err_session_expired_try_again", lang))
+            await send_or_edit(q.message, t("wallet_err_session_expired_try_again", lang), edit=True)
             return
 
         user_state[user_id] = {}
-        await q.message.edit_text(t("wallet_processing_withdrawal", lang))
+        await send_or_edit(q.message, t("wallet_processing_withdrawal", lang), edit=True)
 
         try:
             res = await api_post(
@@ -1557,14 +1442,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data = {}
 
             if res.status_code == 200:
-                await q.message.edit_text(
-                    t("wallet_withdraw_success", lang).format(amount=amount, currency=currency, network=network, chain=chain, wallet=wallet),
-                )
+                await send_or_edit(q.message, t("wallet_withdraw_success", lang).format(amount=amount, currency=currency, network=network, chain=chain, wallet=wallet), edit=True)
             else:
                 detail = data.get("detail", res.text)
-                await q.message.edit_text(t("wallet_withdraw_failed", lang).format(detail=detail))
+                await send_or_edit(q.message, t("wallet_withdraw_failed", lang).format(detail=detail), edit=True)
         except Exception as e:
-            await q.message.edit_text(t("wallet_generic_error", lang).format(error=str(e)))
+            await send_or_edit(q.message, t("wallet_generic_error", lang).format(error=str(e)), edit=True)
         return
 
     if q.data == "wallet_transactions":
@@ -1575,7 +1458,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += t("wallet_transactions_row", lang).format(type=g(tx, "type"), amount=g(tx, "amount"), currency=g(tx, "currency", ""))
         if not data:
             text += t("wallet_transactions_none", lang)
-        await q.message.edit_text(text, parse_mode="Markdown")
+        await send_or_edit(q.message, text, parse_mode="Markdown", edit=True)
         return
 
     if q.data == "myorders_root":
@@ -1615,7 +1498,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             product_map.append(key)
 
         exchange_state[user_id] = {"cid": cid, "product_map": product_map}
-        await q.message.edit_text(t("products_select_service", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+        await send_or_edit(q.message, t("products_select_service", lang), reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
         return
 
     if q.data.startswith("service_"):
@@ -1626,7 +1509,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product_map   = state.get("product_map", [])
 
         if service_index >= len(product_map):
-            await q.message.edit_text(t("products_invalid_selection", lang))
+            await send_or_edit(q.message, t("products_invalid_selection", lang), edit=True)
             return
 
         service_key = product_map[service_index]
@@ -1634,7 +1517,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         matched = [p for p in products if normalize_name(g(p, "name")) == service_key]
 
         if not matched:
-            await q.message.edit_text(t("products_none_found", lang))
+            await send_or_edit(q.message, t("products_none_found", lang), edit=True)
             return
 
         display_name = matched[0]["name"]
@@ -1659,7 +1542,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"product_{cid}_{service_index}_{pid}")])
 
         keyboard.append([InlineKeyboardButton(t("btn_back_arrow", lang), callback_data=f"cat_{cid}")])
-        await q.message.edit_text(t("products_select_plan", lang).format(name=display_name), reply_markup=InlineKeyboardMarkup(keyboard))
+        await send_or_edit(q.message, t("products_select_plan", lang).format(name=display_name), reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
         return
 
 
@@ -1730,7 +1613,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(t("btn_buy_now", lang),   callback_data=f"buy_{pid}")],
             [InlineKeyboardButton(t("btn_back_arrow", lang),      callback_data=f"service_{cid}_{service_index}")],
         ]
-        await q.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await send_or_edit(q.message, text, reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
         return
 
 #----------------CONFIRM Product Required inputs ---------------------------
@@ -1786,7 +1669,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
 
         except Exception as e:
-            await update.message.reply_text(t("order_failed", lang).format(error=str(e)))
+            await send_or_edit(update.message, t("order_failed", lang).format(error=str(e)), edit=False)
             user_state[user_id] = {}
             return
 
@@ -1794,24 +1677,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = {}
             currency = data.get("currency")
             missing_amount = data.get("missing_amount")
-            await q.message.edit_text(
-                t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
+            await send_or_edit(q.message, t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
                     currency=currency, current_balance=data.get("current_balance"),
                     required_amount=data.get("required_amount"), missing_amount=missing_amount,
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
+                ), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_deposit_amount_currency", lang).format(amount=missing_amount, currency=currency), callback_data="wallet_deposit")],
                     [InlineKeyboardButton(t("btn_cancel", lang), callback_data="back_main")],
-                ]),
-            )
+                ]), edit=True)
             return
 
         # -------------------------
         # RESPONSE HANDLING
         # -------------------------
         if not data.get("success"):
-            await q.message.edit_text(t("order_generic_error_data", lang).format(data=data))
+            await send_or_edit(q.message, t("order_generic_error_data", lang).format(data=data), edit=True)
             return
 
         msg = t("order_created_title", lang) + t("order_created_body", lang).format(
@@ -1832,7 +1711,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             msg += t("order_after_login_note", lang)
 
-        await q.message.edit_text(msg)
+        await send_or_edit(q.message, msg, edit=True)
         return
 
 
@@ -1850,7 +1729,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         if not field_queue:
-            await q.message.edit_text(t("product_no_required_fields", lang))
+            await send_or_edit(q.message, t("product_no_required_fields", lang), edit=True)
             return
 
         first_key = field_queue[0]
@@ -1863,9 +1742,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         first_field = fields[first_key]
 
-        await q.message.edit_text(
-            t("product_reenter_title", lang).format(field=first_field.get("label", first_key))
-        )
+        await send_or_edit(q.message, t("product_reenter_title", lang).format(field=first_field.get("label", first_key)), edit=True)
         return
 
 #---------------------- Product Buy Button -------------------------
@@ -1876,7 +1753,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # fetch product
         res = await api_get(f"{API_URL}/products/{pid}", token)
         if res.status_code != 200:
-            await q.message.edit_text(t("product_err_load_failed", lang))
+            await send_or_edit(q.message, t("product_err_load_failed", lang), edit=True)
             return
 
         product = res.json()
@@ -1908,29 +1785,23 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if data.get("error") == "INSUFFICIENT_BALANCE":
                     currency = data.get("currency")
                     missing_amount = data.get("missing_amount")
-                    await q.message.edit_text(
-                        t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
+                    await send_or_edit(q.message, t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
                             currency=currency, current_balance=data.get("current_balance"),
                             required_amount=data.get("required_amount"), missing_amount=missing_amount,
-                        ),
-                        parse_mode="Markdown",
-                        reply_markup=InlineKeyboardMarkup([
+                        ), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
                             [InlineKeyboardButton(t("btn_deposit_amount_currency", lang).format(amount=missing_amount, currency=currency), callback_data="wallet_deposit")],
                             [InlineKeyboardButton(t("btn_cancel", lang), callback_data="back_main")],
-                        ]),
-                    )
+                        ]), edit=True)
                     return
-                await q.message.edit_text(t("order_generic_error_data", lang).format(data=data.get("detail", data)))
+                await send_or_edit(q.message, t("order_generic_error_data", lang).format(data=data.get("detail", data)), edit=True)
                 return
 
             order_id    = data.get("order_id", "N/A")
-            await q.message.edit_text(
-                t("order_receipt_title", lang) + t("order_receipt_body", lang).format(
+            await send_or_edit(q.message, t("order_receipt_title", lang) + t("order_receipt_body", lang).format(
                     order_id=order_id, name=product.get("name"), plan=product.get("plan"),
                     price=fmt_num(product.get("price")), currency=product.get("currency"),
                     product_type=product.get("product_type"),
-                )
-            )
+                ), edit=True)
             return
 
         # -------------------------
@@ -1948,10 +1819,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_key = field_queue[0]
         first_field = required[first_key]
 
-        await q.message.edit_text(
-            t("product_enter_field", lang).format(product=product.get("name"), field=first_field.get("label", first_key)),
-            reply_markup=_back_cancel_kb(lang)
-        )
+        await send_or_edit(q.message, t("product_enter_field", lang).format(product=product.get("name"), field=first_field.get("label", first_key)), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
   # ── SHOW ORDERS ──────────────────────────────────────────────────
@@ -1964,14 +1832,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += t("orders_list_row", lang).format(order_id=g(o, "order_id"), product_name=g(o, "product_name"), status=g(o, "status"))
         if not orders:
             text += t("orders_list_none", lang)
-        await q.message.reply_text(text, parse_mode="Markdown")
+        await send_or_edit(q.message, text, parse_mode="Markdown", edit=False)
         return
 
     # ── EXCHANGE ──────────────────────────────────────────────────
     if q.data.startswith("ex_pair_"):
         parts = q.data.split("_")
         if len(parts) < 4:
-            await q.message.edit_text(t("exchange_invalid_pair", lang))
+            await send_or_edit(q.message, t("exchange_invalid_pair", lang), edit=True)
             return
         from_currency = parts[2]
         to_currency   = parts[3]
@@ -1981,16 +1849,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "to_currency":   to_currency,
             "back_to":       "exchange_pairs",
         }
-        await q.message.edit_text(
-            t("exchange_pair_amount_prompt", lang).format(from_currency=from_currency, to_currency=to_currency),
-            reply_markup=_back_cancel_kb(lang)
-        )
+        await send_or_edit(q.message, t("exchange_pair_amount_prompt", lang).format(from_currency=from_currency, to_currency=to_currency), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     if q.data == "exchange_confirm":
         state = user_state.get(user_id)
         if not state:
-            await q.message.edit_text(t("exchange_session_expired", lang))
+            await send_or_edit(q.message, t("exchange_session_expired", lang), edit=True)
             return
 
         res = await api_post(
@@ -2007,7 +1872,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 err = res.json().get("detail", "Exchange failed")
             except Exception:
                 err = "Exchange failed"
-            await q.message.edit_text(t("exchange_failed", lang).format(error=err))
+            await send_or_edit(q.message, t("exchange_failed", lang).format(error=err), edit=True)
             return
 
         data = res.json()
@@ -2015,27 +1880,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data.get("success") is False and data.get("error") == "INSUFFICIENT_BALANCE":
             currency        = data.get("currency")
             missing_amount  = data.get("missing_amount")
-            await q.message.edit_text(
-                t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
+            await send_or_edit(q.message, t("exchange_insufficient_balance_title", lang) + t("exchange_insufficient_balance_body", lang).format(
                     currency=currency, current_balance=data.get("current_balance"),
                     required_amount=data.get("required_amount"), missing_amount=missing_amount,
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
+                ), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(t("btn_deposit_amount_currency", lang).format(amount=missing_amount, currency=currency), callback_data="wallet_deposit")],
-                ]),
-            )
+                ]), edit=True)
             return
 
         user_state[user_id] = {}
-        await q.message.edit_text(
-            t("exchange_completed_title", lang) + t("exchange_completed_body", lang).format(
+        await send_or_edit(q.message, t("exchange_completed_title", lang) + t("exchange_completed_body", lang).format(
                 from_currency=data["from_currency"], to_currency=data["to_currency"],
                 from_amount=data["from_amount"], rate=fmt_num(data["rate"]),
                 fee_amount=fmt_num(data["fee_amount"]), received_amount=fmt_num(data["received_amount"]),
-            ),
-            parse_mode="Markdown",
-        )
+            ), parse_mode="Markdown", edit=True)
 
         try:
             bal_res = await api_get(f"{API_URL}/wallet/balance", token)
@@ -2053,14 +1911,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                 else:
                     bal_text += t("wallet_balance_none", lang)
-                await q.message.reply_text(wrap(t("wallet_balance_title", lang), bal_text, lang=lang), parse_mode="Markdown")
+                await send_or_edit(q.message, wrap(t("wallet_balance_title", lang), bal_text, lang=lang), parse_mode="Markdown", edit=False)
         except Exception:
             pass
         return
 
     if q.data == "exchange_cancel":
         user_state[user_id] = {}
-        await q.message.edit_text(t("exchange_cancelled", lang))
+        await send_or_edit(q.message, t("exchange_cancelled", lang), edit=True)
         return
 
     # ── MY ACCOUNT EDIT FLOW ─────────────────────────────────────
@@ -2068,32 +1926,32 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         field = state.get("account_edit_field")
         if not field:
             user_state[user_id] = {}
-            await update.message.reply_text(t("wallet_err_session_expired_try_again", lang))
+            await send_or_edit(update.message, t("wallet_err_session_expired_try_again", lang), edit=False)
             return
         payload = {field: text.strip()}
         res = await api_put(f"{API_URL}/account/me", token=token, json=payload)
         if res.status_code != 200:
-            await update.message.reply_text(t("account_profile_update_failed", lang))
+            await send_or_edit(update.message, t("account_profile_update_failed", lang), edit=False)
             user_state[user_id] = {}
             return
         user_state[user_id] = {}
-        await update.message.reply_text(t("account_profile_updated", lang))
+        await send_or_edit(update.message, t("account_profile_updated", lang), edit=False)
         return
 
     if state.get("step") == "account_edit_bank_info":
         field = state.get("account_edit_bank_field")
         if not field:
             user_state[user_id] = {}
-            await update.message.reply_text(t("wallet_err_session_expired_try_again", lang))
+            await send_or_edit(update.message, t("wallet_err_session_expired_try_again", lang), edit=False)
             return
         payload = {field: text.strip()}
         res = await api_put(f"{API_URL}/account/bank-info", token=token, json=payload)
         if res.status_code != 200:
-            await update.message.reply_text(t("account_bank_update_failed", lang))
+            await send_or_edit(update.message, t("account_bank_update_failed", lang), edit=False)
             user_state[user_id] = {}
             return
         user_state[user_id] = {}
-        await update.message.reply_text(t("account_bank_updated", lang))
+        await send_or_edit(update.message, t("account_bank_updated", lang), edit=False)
         return
 
     # ── WIRE TRANSFER ─────────────────────────────────────────────
@@ -2111,7 +1969,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pairs   = state.get("wire_pairs", [])
         pair    = next((p for p in pairs if p["id"] == pair_id), None)
         if not pair:
-            await q.message.edit_text(t("wire_pair_not_found", lang))
+            await send_or_edit(q.message, t("wire_pair_not_found", lang), edit=True)
             return
 
         from_symbol   = str(g(g(pair, "from_currency", {}), "symbol", "")).upper()
@@ -2132,10 +1990,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # to pair-level sender_fields for IRT-source pairs.
             if not methods:
                 user_state[user_id] = {}
-                await q.message.edit_text(
-                    t("wire_no_payment_method", lang),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]])
-                )
+                await send_or_edit(q.message, t("wire_no_payment_method", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
                 return
             base_state["step"] = "wire_select_method"
             user_state[user_id] = base_state
@@ -2158,10 +2013,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = base_state
             first_field = required[field_queue[0]]
             req_label = "" if first_field.get("required") else t("wire_field_optional_suffix", lang)
-            await q.message.edit_text(
-                t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label),
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(q.message, t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label), reply_markup=_back_cancel_kb(lang), edit=True)
             return
 
         # No pair-level fields configured → go straight to method selection
@@ -2183,16 +2035,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pair          = state.get("wire_pair")
         is_irt_source = state.get("wire_is_irt_source", False)
         if not pair or not methods:
-            await q.message.edit_text(t("wire_session_expired_reselect", lang))
+            await send_or_edit(q.message, t("wire_session_expired_reselect", lang), edit=True)
             return
 
         try:
             idx = int(q.data.split("_")[2])
         except (TypeError, ValueError, IndexError):
-            await q.message.edit_text(t("wire_invalid_method", lang))
+            await send_or_edit(q.message, t("wire_invalid_method", lang), edit=True)
             return
         if idx < 0 or idx >= len(methods):
-            await q.message.edit_text(t("wire_invalid_method", lang))
+            await send_or_edit(q.message, t("wire_invalid_method", lang), edit=True)
             return
 
         selected_method = methods[idx]
@@ -2229,20 +2081,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_state[user_id] = state
                 first_field = sender_fields[field_queue[0]]
                 req_label = "" if first_field.get("required") else t("wire_field_optional_suffix", lang)
-                await q.message.edit_text(
-                    f"{instruction_text}\n" + t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label),
-                    reply_markup=_back_cancel_kb(lang)
-                )
+                await send_or_edit(q.message, f"{instruction_text}\n" + t("wire_field_prompt", lang).format(label=first_field.get("label", field_queue[0]), required=req_label), reply_markup=_back_cancel_kb(lang), edit=True)
                 return
 
             # no method-level sender fields configured → straight to amount
             state["step"] = "wire_amount"
             state["back_to"] = "wire_method_select"
             user_state[user_id] = state
-            await q.message.edit_text(
-                f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}",
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(q.message, f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}", reply_markup=_back_cancel_kb(lang), edit=True)
             return
 
         # Case B: the destination (IRT account) was already captured in step 1
@@ -2250,16 +2096,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["step"] = "wire_amount"
         state["back_to"] = "wire_method_select"
         user_state[user_id] = state
-        await q.message.edit_text(
-            f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}",
-            reply_markup=_back_cancel_kb(lang)
-        )
+        await send_or_edit(q.message, f"{instruction_text}\n{_wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang)}", reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     if q.data == "wire_confirm":
         state = user_state.get(user_id, {})
         if not state or state.get("step") != "wire_confirm":
-            await q.message.edit_text(t("wire_session_expired_restart", lang))
+            await send_or_edit(q.message, t("wire_session_expired_restart", lang), edit=True)
             return
 
         pair             = state["wire_pair"]
@@ -2287,7 +2130,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 err = res.json().get("detail", "Order placement failed")
             except Exception:
                 err = "Order placement failed"
-            await q.message.edit_text(t("wire_order_placement_failed", lang).format(error=err))
+            await send_or_edit(q.message, t("wire_order_placement_failed", lang).format(error=err), edit=True)
             return
 
         user_state[user_id] = {}
@@ -2318,15 +2161,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
         else:
             message_text += t("wire_placed_footer", lang)
-            await q.message.edit_text(
-                message_text,
-                reply_markup=InlineKeyboardMarkup(buttons),
-            )
+            await send_or_edit(q.message, message_text, reply_markup=InlineKeyboardMarkup(buttons), edit=True)
         return
 
     if q.data == "wire_cancel":
         user_state[user_id] = {}
-        await q.message.edit_text(t("wire_cancelled", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]))
+        await send_or_edit(q.message, t("wire_cancelled", lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")]]), edit=True)
         return
 
     if q.data.startswith("wire_order_cancel_"):
@@ -2341,12 +2181,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 err = res.json().get("detail", "Cancel failed")
             except Exception:
                 err = "Cancel failed"
-            await q.message.edit_text(t("wire_cancel_failed", lang).format(error=err))
+            await send_or_edit(q.message, t("wire_cancel_failed", lang).format(error=err), edit=True)
             return
-        await q.message.edit_text(
-            t("wire_order_cancelled", lang).format(order_id=order_id),
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="myorders_wire")]])
-        )
+        await send_or_edit(q.message, t("wire_order_cancelled", lang).format(order_id=order_id), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_back", lang), callback_data="myorders_wire")]]), edit=True)
         return
 
     
@@ -2359,10 +2196,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state[user_id] = {}
         token = user_tokens.get(user_id)
         if not token:
-            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            await send_or_edit(q.message, t("welcome_login_prompt", lang), reply_markup=auth_inline(lang), edit=True)
             return
-        await q.message.edit_text(t("main_menu_choose", lang))
-        await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
+        await send_or_edit(q.message, t("main_menu_choose", lang), edit=True)
+        await show_main_menu(
+            q.message, 
+            t("main_menu_title", lang), 
+            user_id=user_id,
+            show_services=False,)
         return
 
 #-----------------------------------------------------------
@@ -2388,24 +2229,29 @@ async def _render_back_target(q, state, lang, user_id):
         idx = LOGIN_STEPS.index(step)
         if idx == 0:
             user_state[user_id] = {}
-            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            await send_or_edit(q.message, t("welcome_login_prompt", lang), reply_markup=auth_inline(lang), edit=True)
             return
         prev = LOGIN_STEPS[idx - 1]
         state["step"] = prev
+        state.pop("username", None)
         user_state[user_id] = state
-        await q.message.edit_text(t(LOGIN_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(q.message, t(LOGIN_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     if step in SIGNUP_STEPS:
         idx = SIGNUP_STEPS.index(step)
         if idx == 0:
             user_state[user_id] = {}
-            await q.message.edit_text(t("welcome_login_prompt", lang), reply_markup=auth_inline(lang))
+            await send_or_edit(q.message, t("welcome_login_prompt", lang), reply_markup=auth_inline(lang), edit=True)
             return
         prev = SIGNUP_STEPS[idx - 1]
         state["step"] = prev
+        if prev == "signup_username":
+            state.pop("username", None)
+        elif prev == "signup_password":
+            state.pop("password", None)
         user_state[user_id] = state
-        await q.message.edit_text(t(SIGNUP_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang))
+        await send_or_edit(q.message, t(SIGNUP_PROMPTS[prev], lang), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     # ── ACCOUNT EDIT QUEUE: rewind to previous field ──
@@ -2419,6 +2265,62 @@ async def _render_back_target(q, state, lang, user_id):
             return
         user_state[user_id] = {}
         await _show_my_account_menu(q.message, user_tokens.get(user_id), user_id)
+        return
+
+    # ── ACCOUNT EDIT PREVIEW: rewind to the last field of the queue ──
+    if step == "account_edit_preview":
+        fields = state.get("account_edit_fields", [])
+        if fields:
+            last_index = len(fields) - 1
+            state["step"] = "account_edit_collect"
+            state["account_edit_index"] = last_index
+            state.get("account_edit_values", {}).pop(fields[last_index], None)
+            user_state[user_id] = state
+            await _prompt_account_edit_field(q.message, state, user_id)
+            return
+        user_state[user_id] = {}
+        await _show_my_account_menu(q.message, user_tokens.get(user_id), user_id)
+        return
+
+    # ── EXCHANGE CONFIRM (preview): rewind to amount, reset stored amount ──
+    if step == "exchange_confirm":
+        state["step"] = "exchange_amount"
+        state.pop("amount", None)
+        state.pop("preview", None)
+        user_state[user_id] = state
+        await send_or_edit(q.message, t("exchange_pair_amount_prompt", lang).format(
+                from_currency=state.get("from_currency"), to_currency=state.get("to_currency")
+            ), reply_markup=_back_cancel_kb(lang), edit=True)
+        return
+
+    # ── WIRE CONFIRM (preview): rewind to amount, reset stored amount ──
+    if step == "wire_confirm":
+        pair = state.get("wire_pair")
+        selected_method = state.get("wire_selected_method")
+        if not pair:
+            user_state[user_id] = {}
+            await send_or_edit(q.message, t("wire_session_expired_restart", lang), edit=True)
+            return
+        state["step"] = "wire_amount"
+        state.pop("wire_amount", None)
+        state.pop("wire_fee", None)
+        state.pop("wire_to_amount", None)
+        user_state[user_id] = state
+        await send_or_edit(q.message, _wire_amount_prompt_text(pair, selected_method=selected_method, lang=lang), reply_markup=_back_cancel_kb(lang), edit=True)
+        return
+
+    # ── WITHDRAW CONFIRM (preview): rewind to amount, reset stored amount ──
+    if step == "withdraw_confirm":
+        pair = state.get("pair")
+        wallet_address = state.get("wallet_address")
+        if not pair or not wallet_address:
+            user_state[user_id] = {}
+            await send_or_edit(q.message, t("wallet_err_session_expired_try_again", lang), edit=True)
+            return
+        state["step"] = "withdraw_amount"
+        state.pop("amount", None)
+        user_state[user_id] = state
+        await _prompt_withdraw_amount(q.message, user_id, pair, wallet_address)
         return
 
     # ── WIRE FIELD QUEUE: rewind to previous field in this batch ──
@@ -2436,10 +2338,7 @@ async def _render_back_target(q, state, lang, user_id):
             user_state[user_id] = state
             field_def = fields[last_key]
             req_label = "" if field_def.get("required") else t("wire_field_optional_suffix", lang)
-            await q.message.edit_text(
-                t("wire_field_prompt", lang).format(label=field_def.get("label", last_key), required=req_label),
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(q.message, t("wire_field_prompt", lang).format(label=field_def.get("label", last_key), required=req_label), reply_markup=_back_cancel_kb(lang), edit=True)
             return
         # nothing asked yet in this batch → exit to whatever preceded it
         purpose = state.get("wire_collect_purpose", "method_fields")
@@ -2470,10 +2369,7 @@ async def _render_back_target(q, state, lang, user_id):
             state["input_data"] = input_data
             user_state[user_id] = state
             field_def = fields[last_key]
-            await q.message.edit_text(
-                t("product_next_field", lang).format(field=field_def.get("label", last_key)),
-                reply_markup=_back_cancel_kb(lang)
-            )
+            await send_or_edit(q.message, t("product_next_field", lang).format(field=field_def.get("label", last_key)), reply_markup=_back_cancel_kb(lang), edit=True)
             return
         cid = state.get("cid")
         user_state[user_id] = {}
@@ -2486,7 +2382,7 @@ async def _render_back_target(q, state, lang, user_id):
                 keyboard.append([InlineKeyboardButton(pdata["display_name"], callback_data=f"service_{cid}_{len(product_map)}")])
                 product_map.append(key)
             exchange_state[user_id] = {"cid": cid, "product_map": product_map}
-            await q.message.edit_text(t("products_select_service", lang), reply_markup=InlineKeyboardMarkup(keyboard))
+            await send_or_edit(q.message, t("products_select_service", lang), reply_markup=InlineKeyboardMarkup(keyboard), edit=True)
             return
         await _show_categories(q.message, user_tokens.get(user_id), user_id=user_id)
         return
@@ -2496,10 +2392,20 @@ async def _render_back_target(q, state, lang, user_id):
 
     if tag == "wallet_menu":
         user_state[user_id] = {}
-        await q.message.edit_text(
-            wrap(t("wallet_dashboard_title", lang), t("wallet_choose_option", lang), lang=lang),
-            reply_markup=wallet_inline(lang)
-        )
+        await send_or_edit(q.message, wrap(t("wallet_dashboard_title", lang), t("wallet_choose_option", lang), lang=lang), reply_markup=wallet_inline(lang), edit=True)
+        return
+
+    if tag == "withdraw_amount":
+        pair = state.get("pair")
+        wallet_address = state.get("wallet_address")
+        if not pair or not wallet_address:
+            user_state[user_id] = {}
+            await send_or_edit(q.message, t("wallet_err_session_expired_reselect", lang), edit=True)
+            return
+        state.pop("amount", None)
+        state["step"] = "withdraw_amount"
+        user_state[user_id] = state
+        await _prompt_withdraw_amount(q.message, user_id, pair, wallet_address)
         return
 
     if tag == "withdraw_network":
@@ -2507,7 +2413,7 @@ async def _render_back_target(q, state, lang, user_id):
         currency = state.get("currency") or (pair or {}).get("currency")
         if not currency:
             user_state[user_id] = {}
-            await q.message.edit_text(t("wallet_err_session_expired_reselect", lang))
+            await send_or_edit(q.message, t("wallet_err_session_expired_reselect", lang), edit=True)
             return
         user_state[user_id] = {}
         await _show_wallet_network_menu(
@@ -2521,7 +2427,7 @@ async def _render_back_target(q, state, lang, user_id):
         user_state[user_id] = {}
         data, error = await _load_wallet_pairs(user_id, user_tokens.get(user_id))
         if error:
-            await q.message.edit_text(f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang))
+            await send_or_edit(q.message, f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang), edit=True)
             return
         await _show_wallet_currency_menu(
             q.message, data.get("currencies", []), "extwallet_currency_",
@@ -2535,7 +2441,7 @@ async def _render_back_target(q, state, lang, user_id):
         currency = state.get("currency") or (pair or {}).get("currency")
         if not currency:
             user_state[user_id] = {}
-            await q.message.edit_text(t("ext_wallet_session_expired_reselect", lang))
+            await send_or_edit(q.message, t("ext_wallet_session_expired_reselect", lang), edit=True)
             return
         user_state[user_id] = {}
         await _show_wallet_network_menu(
@@ -2543,6 +2449,16 @@ async def _render_back_target(q, state, lang, user_id):
             t("wallet_select_network_title", lang).format(currency=currency).replace("\n\n", ""),
             t("wallet_select_currency_external_subtitle", lang), "wallet_external"
         )
+        return
+
+    if tag == "exchange_amount":
+        state["step"] = "exchange_amount"
+        state.pop("amount", None)
+        state.pop("preview", None)
+        user_state[user_id] = state
+        await send_or_edit(q.message, t("exchange_pair_amount_prompt", lang).format(
+                from_currency=state.get("from_currency"), to_currency=state.get("to_currency")
+            ), reply_markup=_back_cancel_kb(lang), edit=True)
         return
 
     if tag == "exchange_pairs":
@@ -2560,17 +2476,25 @@ async def _render_back_target(q, state, lang, user_id):
         methods = state.get("wire_receiver_methods", [])
         if not pair:
             user_state[user_id] = {}
-            await q.message.edit_text(t("wire_session_expired_reselect", lang))
+            await send_or_edit(q.message, t("wire_session_expired_reselect", lang), edit=True)
             return
         state["step"] = "wire_select_method"
+        state.pop("wire_amount", None)
+        state.pop("wire_fee", None)
+        state.pop("wire_to_amount", None)
         user_state[user_id] = state
         await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
         return
 
     # default fallback
     user_state[user_id] = {}
-    await q.message.edit_text(t("main_menu_choose", lang))
-    await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
+    await send_or_edit(q.message, t("main_menu_choose", lang), edit=True)
+    await show_main_menu(
+        q.message, 
+        t("main_menu_title", lang), 
+        user_id=user_id,
+        show_services=True
+        )
 
 # =====================================================
 # WIRE TRANSFER HELPERS (branch-aware: IRT-source vs foreign-source)
@@ -2719,71 +2643,6 @@ async def error_handler(update, context):
     except Exception:
         pass
 
-async def _render_back_target(q, state, lang, user_id):
-    tag = state.get("back_to")
-
-    if tag == "withdraw_network":
-        pair = state.get("pair")
-        currency = state.get("currency") or (pair or {}).get("currency")
-        if not currency:
-            user_state[user_id] = {}
-            await q.message.edit_text(t("wallet_err_session_expired_reselect", lang))
-            return
-        user_state[user_id] = {}
-        await _show_wallet_network_menu(
-            q.message, user_id, currency, "withdraw_network_",
-            t("wallet_select_network_title", lang).format(currency=currency).replace("\n\n", ""),
-            t("wallet_select_withdraw_network_subtitle", lang), "wallet_withdraw"
-        )
-        return
-
-    if tag == "external_wallet_currency":
-        user_state[user_id] = {}
-        data, error = await _load_wallet_pairs(user_id, user_tokens.get(user_id))
-        if error:
-            await q.message.edit_text(f"❌ {error}", reply_markup=safe_inline(balance_inline(lang), lang))
-            return
-        await _show_wallet_currency_menu(
-            q.message, data.get("currencies", []), "extwallet_currency_",
-            t("wallet_select_currency_external_title", lang), t("wallet_select_currency_external_subtitle", lang),
-            "wallet_balance", lang=lang,
-        )
-        return
-
-    if tag == "exchange_pairs":
-        user_state[user_id] = {}
-        await _show_exchange_pairs(q.message, user_tokens.get(user_id), user_id=user_id)
-        return
-
-    if tag == "wire_pairs":
-        user_state[user_id] = {}
-        await _show_wire_pairs(q.message, user_tokens.get(user_id))
-        return
-
-    if tag == "wire_method_select":
-        pair = state.get("wire_pair")
-        methods = state.get("wire_receiver_methods", [])
-        if not pair:
-            user_state[user_id] = {}
-            await q.message.edit_text(t("wire_session_expired_reselect", lang))
-            return
-        state["step"] = "wire_select_method"
-        user_state[user_id] = state
-        await _send_wire_method_selection(q.message.edit_text, pair, methods, lang)
-        return
-
-    if tag == "product_category":
-        cid = state.get("cid")
-        user_state[user_id] = {}
-        if cid:
-            await q.message.edit_text(t("products_select_service", lang))  # will be replaced by service list below
-        await _show_categories(q.message, user_tokens.get(user_id), user_id=user_id)
-        return
-
-    # default fallback
-    user_state[user_id] = {}
-    await q.message.edit_text(t("main_menu_choose", lang))
-    await show_main_menu(q.message, t("main_menu_title", lang), user_id=user_id)
 # =====================================================
 # MAIN
 # =====================================================

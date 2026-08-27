@@ -1,4 +1,4 @@
-import { RefreshCw, Power, AlertTriangle } from "lucide-react";
+import { RefreshCw, Power, AlertTriangle, Settings } from "lucide-react";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -12,6 +12,7 @@ function StatusDot({ running, configured }) {
 
 export default function BotCard({
   username,
+  displayName,
   botUsername,
   role,
   isActive,
@@ -21,24 +22,28 @@ export default function BotCard({
   lastCrashError,
   onRestart,
   onDeactivate,
+  onEdit,
   showActions = false,
+  showEdit = false,
   actionLoading = false,
+  selected = false,
 }) {
   return (
     <div style={{
       background: "#0b1424",
-      border: "1px solid #313d58bc",
+      border: selected ? "1px solid rgba(59,130,246,.5)" : "1px solid #313d58bc",
       borderRadius: 16,
       padding: 16,
       display: "flex",
       flexDirection: "column",
       gap: 10,
+      boxShadow: selected ? "0 0 0 1px rgba(59,130,246,.2)" : "none",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <StatusDot running={running} configured={tokenSet} />
-            <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{username}</span>
+            <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{displayName || username}</span>
             {role && (
               <span style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.25)", borderRadius: 999, padding: "1px 7px" }}>
                 {role.toUpperCase()}
@@ -46,16 +51,33 @@ export default function BotCard({
             )}
           </div>
           <div style={{ color: "#64748b", fontSize: 12, marginTop: 3 }}>
+            {displayName && username && displayName !== username ? `@${username} · ` : ""}
             {botUsername ? `@${botUsername}` : tokenSet ? "Token set, not validated" : "No bot connected"}
           </div>
         </div>
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
-          background: running ? "rgba(34,197,94,.1)" : tokenSet ? "rgba(245,158,11,.1)" : "rgba(100,116,139,.1)",
-          color: running ? "#4ade80" : tokenSet ? "#facc15" : "#94a3b8",
-        }}>
-          {running ? "RUNNING" : tokenSet ? (isActive ? "CONFIGURED" : "INACTIVE") : "NOT CONNECTED"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {showEdit && (
+            <button
+              onClick={onEdit}
+              title="Edit bot & payments"
+              style={{
+                width: 28, height: 28, borderRadius: 8, border: "1px solid rgba(255,255,255,.1)",
+                background: "rgba(255,255,255,.04)", color: "#94a3b8", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Settings size={13} />
+            </button>
+          )}
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+            background: running ? "rgba(34,197,94,.1)" : tokenSet ? "rgba(245,158,11,.1)" : "rgba(100,116,139,.1)",
+            color: running ? "#4ade80" : tokenSet ? "#facc15" : "#94a3b8",
+            whiteSpace: "nowrap",
+          }}>
+            {running ? "RUNNING" : tokenSet ? (isActive ? "CONFIGURED" : "INACTIVE") : "NOT CONNECTED"}
+          </span>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, color: "#64748b" }}>
@@ -82,7 +104,7 @@ export default function BotCard({
               fontWeight: 600, fontSize: 11, opacity: (!tokenSet) ? 0.5 : 1,
             }}
           >
-            <RefreshCw size={12} /> Restart
+            <RefreshCw size={12} /> {running ? "Restart" : "Start"}
           </button>
           <button
             onClick={onDeactivate}

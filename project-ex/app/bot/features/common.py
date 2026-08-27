@@ -37,7 +37,8 @@ MENU_BUTTON_KEYS = [
     "btn_wire", "btn_my_account", "btn_language", "btn_support", "btn_logout",
 ]
 
-_access_points_cache = {"data": None, "role": None, "ts": 0.0}
+_access_points_cache = {"data": None, "role": None, "enabled_services": None, "ts": 0.0}
+
 ACCESS_POINTS_TTL = 30  # seconds — fresh-fetched per interaction window, not cached at process start
 
 
@@ -74,22 +75,21 @@ def _bot_context_headers():
 
 async def get_bot_admin_access_points():
     if IS_GLOBAL_BOT:
-        # No single owning admin — visibility here is per-item via
-        # telegram_global_bot_access (RLS), not one admin's access_points.
-        return "*", "global"
+        return "*", "global", None
 
     now = time.time()
     if _access_points_cache["data"] is not None and now - _access_points_cache["ts"] < ACCESS_POINTS_TTL:
-        return _access_points_cache["data"], _access_points_cache["role"]
+        return _access_points_cache["data"], _access_points_cache["role"], _access_points_cache["enabled_services"]
     try:
         res = await api_bot_context_get("/bot-context/access-points")
-        data = res.json() if res.status_code == 200 else {"access_points": [], "role": None}
+        data = res.json() if res.status_code == 200 else {"access_points": [], "role": None, "enabled_services": None}
     except Exception:
-        data = {"access_points": [], "role": None}
+        data = {"access_points": [], "role": None, "enabled_services": None}
     _access_points_cache["data"] = data.get("access_points", [])
     _access_points_cache["role"] = data.get("role")
+    _access_points_cache["enabled_services"] = data.get("enabled_services")
     _access_points_cache["ts"] = now
-    return _access_points_cache["data"], _access_points_cache["role"]
+    return _access_points_cache["data"], _access_points_cache["role"], _access_points_cache["enabled_services"]
 
 def get_lang(user_id):
     return user_languages.get(user_id, DEFAULT_LANGUAGE)
@@ -291,3 +291,29 @@ def _back_cancel_kb(lang, extra_rows=None):
         InlineKeyboardButton(t("btn_cancel", lang), callback_data="flow_cancel"),
     ])
     return InlineKeyboardMarkup(rows)
+
+
+async def send_or_edit(message, text, photo_url=None, reply_markup=None, parse_mode=None, edit=False):
+    """
+    Unified sender: sends/edits a text message, or sends a photo with the
+    text as caption if photo_url is given. Telegram can't turn an existing
+    text message into a photo message via edit, so when photo_url is set
+    and edit=True, we delete the old message and send a fresh photo.
+    """
+    if photo_url:
+        if edit:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+        return await message.get_bot().send_photo(
+            chat_id=message.chat.id,
+            photo=photo_url,
+            caption=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+
+    if edit:
+        return await message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    return await message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)

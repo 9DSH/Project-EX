@@ -42,12 +42,12 @@ CONTENT = {
 
     "wrap_footer_tip": {"en": "💡 Tip: Use the menu below to continue.", "fa": "💡 راهنمایی: برای ادامه از منوی پایین استفاده کنید."},
     "main_menu_title": {"en": "🏠 Main Menu", "fa": "🏠 منوی اصلی"},
-    "main_menu_choose": {"en": "🏠 Main Menu\nChoose an option below:", "fa": "🏠 منوی اصلی\nیک گزینه را از پایین انتخاب کنید:"},
+    "main_menu_choose": {"en": "🏠 Main Menu\n", "fa": "🏠 منوی اصلی\n"},
     "welcome_back_choose": {"en": "👋 Welcome back! Choose an option:", "fa": "👋 خوش برگشتید! یک گزینه را انتخاب کنید:"},
     "welcome_login_prompt": {"en": "👋 Welcome!\n\nPlease log in or sign up to continue.", "fa": "👋 خوش آمدید!\n\nبرای ادامه وارد شوید یا ثبت‌نام کنید."},
     "please_login_first": {"en": "❌ Please log in first.", "fa": "❌ لطفاً ابتدا وارد شوید."},
     "incomplete_profile_notice": {"en": "\n\n⚠️ Please complete your personal information for a better experience.", "fa": "\n\n⚠️ لطفاً برای تجربه بهتر، اطلاعات شخصی خود را تکمیل کنید."},
-
+    "main_menu_use_buttons": {"en": "Use the buttons below to continue.", "fa": "برای ادامه از دکمه‌های پایین استفاده کنید."},
     # =====================================================
     # AUTH
     # =====================================================
@@ -70,8 +70,8 @@ CONTENT = {
     "auth_login_no_token": {"en": "❌ Login failed — no token received.\n\nUse /start to try again.", "fa": "❌ ورود ناموفق بود — توکنی دریافت نشد.\n\nبرای تلاش دوباره از /start استفاده کنید."},
     "auth_welcome_back_title": {"en": "Welcome Back", "fa": "خوش برگشتید"},
     "auth_welcome_back_body": {
-        "en": "👋 Hello {username}\n\nYou now have full access to your premium dashboard.\n\n🚀 Wallet • Exchange • Orders • Products\n⚡ Real-time system active",
-        "fa": "👋 سلام {username}\n\nاکنون به داشبورد ویژه خود دسترسی کامل دارید.\n\n🚀 کیف پول • تبدیل ارز • سفارش‌ها • محصولات\n⚡ سیستم برای شما فعال است",
+        "en": "👋 Hello {username}\n\nYou now have full access to your premium dashboard.\n\n⚡ Real-time system active",
+        "fa": "👋 سلام {username}\n\nاکنون به داشبورد ویژه خود دسترسی کامل دارید.\n\n⚡ سیستم برای شما فعال است",
     },
     "auth_signup_server_error": {"en": "❌ Server error\nStatus: {status}\nRaw: {raw}", "fa": "❌ خطای سرور\nوضعیت: {status}\nخام: {raw}"},
     "auth_signup_failed": {"en": "❌ Sign up failed: {error}", "fa": "❌ ثبت‌نام ناموفق بود: {error}"},

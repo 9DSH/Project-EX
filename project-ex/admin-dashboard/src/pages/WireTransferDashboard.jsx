@@ -819,7 +819,7 @@ function WireSidebar({ order, onAction, onClose, showOwner }) {
 
   const inputData = order.input_data || {};
 
-  return (
+  return createPortal(
     <>
       {showFail && (
         <FailModal onClose={() => setShowFail(false)} onConfirm={reason => { setShowFail(false); onAction(order.id, "fail", { reason }); }} />
@@ -929,7 +929,8 @@ function WireSidebar({ order, onAction, onClose, showOwner }) {
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

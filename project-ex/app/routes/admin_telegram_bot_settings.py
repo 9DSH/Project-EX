@@ -20,6 +20,7 @@ class TelegramBotSettingsUpdate(BaseModel):
     default_language: str | None = None
     main_bot_token: str | None = None
     is_active: bool | None = None
+    enabled_services: list[str] | None = None
 
     @field_validator("default_language")
     @classmethod
@@ -81,6 +82,7 @@ def _serialize(settings: TelegramBotSettings):
         "is_running": settings.is_running,
         "last_restart_at": settings.last_restart_at,
         "last_crash_error": settings.last_crash_error,
+        "enabled_services": settings.enabled_services,
     }
 
 
@@ -100,6 +102,9 @@ async def _apply_update(settings: TelegramBotSettings, payload: TelegramBotSetti
         settings.bot_username = result.bot_username
         settings.last_validated_at = datetime.utcnow()
         settings.last_validation_error = None
+
+    if payload.enabled_services is not None:
+        settings.enabled_services = payload.enabled_services
 
     db.commit()
     db.refresh(settings)

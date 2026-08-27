@@ -111,6 +111,7 @@ class TelegramBotSettings(Base):
     is_active = Column(Boolean, default=False, server_default="false")
     bot_username = Column(String, nullable=True)          # @handle, read-only (from getMe)
     display_name = Column(String, nullable=True)           # settable via setMyName
+    enabled_services = Column(JSON, nullable=True)  # list of access-point keys the admin has toggled ON in their bot; None = all permitted services are on
     last_validated_at = Column(DateTime, nullable=True)
     last_validation_error = Column(Text, nullable=True)
 
