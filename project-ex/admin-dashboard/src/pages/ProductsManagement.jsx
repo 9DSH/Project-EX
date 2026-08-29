@@ -1339,7 +1339,13 @@ export default function ProductsManagement() {
   };
   
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#060b16", overflow: "hidden", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ 
+      display: "flex", 
+      height: "100vh", 
+      background: "#060b16", 
+      overflow: "hidden", 
+      padding:"5px ",
+      fontFamily: "'Inter', sans-serif" }}>
        
 
       {/* ── LEFT SIDEBAR PANEL ── */}
@@ -1421,11 +1427,11 @@ export default function ProductsManagement() {
 
         {/* Top bar */}
         <div style={S.topBar}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div>
-              <div style={{ color: "white", fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", marginRight: 20 }}>Products Management</div>
-              <div style={{ color: "#64748b", fontSize: 13, margin: "2px 0 0" }}>Manage your catalog, products and categories</div>
-            </div>
+          <div style={S.header}>
+                    <div>
+            <div style={S.title}>Products Management</div>
+            <div style={S.subtitle}>Manage your catalog, products and categories</div>
+          </div>
             <StatPill icon={Package} label="Active Products" value={`${activeCount} / ${allProducts.length}`} accent="#10b981" loading={loading} />
             <StatPill icon={Tag} label="Categories" value={categories.length} accent="#dab822ff" loading={loading} />
             <StatPill icon={Layers} label="Total Stock" value={totalStock} accent="#e56611ff" loading={loading} />
@@ -1603,7 +1609,7 @@ export default function ProductsManagement() {
 const S = {
   topBar: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "0 28px", borderBottom: "1px solid #0a1120",
+     borderBottom: "1px solid #0a1120",
     background: "#060b16", flexShrink: 0, flexWrap: "wrap", gap: 12,
   },
   refreshBtn: {
@@ -1707,5 +1713,12 @@ const S = {
     border: "1px solid #0f172a", overflow: "auto",
     scrollbarWidth: "thin", scrollbarColor: "#1e293b #080e1a",
     display: "flex", flexDirection: "column",
+  },
+  
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
+  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14, marginLeft: 20, padding :"10px 0 20px 20px",  flexWrap: "wrap"
   },
 };

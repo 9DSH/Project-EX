@@ -10,3 +10,4 @@ from app.models.system_wallet import SystemWallet
 from app.models.network import Network
 from app.models.currency_network import CurrencyNetwork
 from app.models.external_wallet import ExternalWallet
+from app.models.platform_wallet_config import PlatformWalletConfig

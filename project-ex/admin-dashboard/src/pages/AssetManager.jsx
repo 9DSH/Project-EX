@@ -517,6 +517,7 @@ export default function AssetManager() {
               {/* ── HEADER ── */}
       <div style={S.header}>
         <div style={S.headerLeft}>
+
           <div>
             <div style={S.title}>Asset Management</div>
             <div style={S.subtitle}>Manage currencies, networks and pairs</div>
@@ -617,7 +618,7 @@ export default function AssetManager() {
 // ── Styles ────────────────────────────────────────────────────
 const S = {
    page: {
-    padding: "0 0 0 20px",
+    padding: "5px",
     background: "#020617",
     height: "100vh",
     display: "flex",
@@ -626,28 +627,20 @@ const S = {
     color: "white",
     boxSizing: "border-box",
   },
-    header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 24,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
 
   headerLeft: {
     display: "flex",
     alignItems: "center",
     gap: 15,
     flexWrap: "wrap",
-    
-    marginLeft:20
   },
 
-  title: { margin: 0, fontSize: 26, fontWeight: 700, marginRight: 20,  },
-
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
   subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
-
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
+  },
   refreshBtn: {
     display: "flex",
     alignItems: "center",

@@ -268,7 +268,13 @@ export default function Users() {
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
       `}</style>
 
-      <div style={{ display: "flex", height: "100vh", background: "#060b16", overflow: "hidden", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+      <div style={{ 
+        display: "flex", 
+        height: "100vh", 
+        background: "#060b16", 
+        overflow: "hidden", 
+        padding:"5px",
+        fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
 
         {/* ══ LEFT PANEL — Add User (mirrors Products sidebar) ══ */}
@@ -429,92 +435,120 @@ export default function Users() {
               </div>
 
 
-              {/* ══ PERMISSION TABS SYSTEM ══ */}
-              {hasPermission(currentUser, "users.create") && newRole === "admin" && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                    padding: 14,
-                    minHeight: "280px",
-                    borderRadius: 12,
-                    background: "#0b1220",
-                    border: "1px solid #1a2540",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      fontSize: 12,
-                      color: "#64748b",
-                      fontWeight: 600,
-                      letterSpacing:1,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Admin Permissions
-                  </div>
+{/* ══ PERMISSION TABS SYSTEM (fitted to 360px sidebar) ══ */}
+{hasPermission(currentUser, "users.create") && newRole === "admin" && (
+  <div
+    style={{
+      background: "linear-gradient(180deg,#111827 0%, #0a1226 100%)",
+      border: "1px solid #1e293b",
+      borderRadius: 16,
+      padding: 14,
+      width: "100%",
+      boxSizing: "border-box",
+    }}
+  >
+    {/* Header */}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 14,
+      }}
+    >
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: "rgba(99,102,241,0.12)",
+          color: "#818cf8",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+        </svg>
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>
+          Admin permissions
+        </div>
+        <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>
+          Choose what this admin can access
+        </div>
+      </div>
+    </div>
 
-                  {/* Tabs ONE ROW */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 5,
-                      justifyContent: "center",
-                      alignItems: "center",
-                      overflowX: "auto",
-                      width: "100%",
-                      paddingBottom: 4,
-                    }}
-                  >
-                    {Object.keys(ACCESS_GROUPS).map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => setPermissionTab(key)}
-                        style={{
-                          flex: "0 0 auto",
-                          padding: "6px 6px",
-                          borderRadius: "8px 8px 2px 2px",
-                          fontSize: 12,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderBottom: "1px solid",
-                          background:
-                            permissionTab === key
-                              ? "rgba(59,130,246,0.2)"
-                              : "transparent",
-                          borderColor:
-                            permissionTab === key ? "#3b82f6" : "#26324a",
-                          color:
-                            permissionTab === key ? "#60a5fa" : "#64748b",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {key.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
+    {/* Tabs — wrap instead of horizontal-scroll to fit narrow width */}
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 5,
+        marginBottom: 12,
+        width: "100%",
+      }}
+    >
+      {Object.keys(ACCESS_GROUPS).map((key) => (
+        <button
+          key={key}
+          onClick={() => setPermissionTab(key)}
+          style={{
+            padding: "5px 6px",
+            borderRadius: 10,
+            fontSize: 11,
+            fontWeight: 500,
+            background:
+              permissionTab === key ? "rgba(99,102,241,0.15)" : "transparent",
+            border: `1px solid ${permissionTab === key ? "#6366f1" : "#26324a"}`,
+            color: permissionTab === key ? "#a5b4fc" : "#64748b",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()}
+        </button>
+      ))}
+    </div>
 
-                  {/* Permissions */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {ACCESS_GROUPS[permissionTab].map((item) => (
-                      <Toggle
-                        key={item.key}
-                        checked={accessPoints.includes(item.key)}
-                        onChange={() => toggleAccess(item.key)}
-                        label={item.label}
-                        color="#3b82f6"
-                      />
-                    ))}
-                  </div>
-
-                </div>
-              )}
+    {/* Permissions — single column, full width, fixed min-height so tabs don't jump */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        minHeight: 180,
+        alignContent: "flex-start",
+        width: "100%",
+      }}
+    >
+      {ACCESS_GROUPS[permissionTab].map((item) => (
+        <div
+          key={item.key}
+          style={{
+            background: "#0b1220",
+            border: "1px solid #1c2333",
+            borderRadius: 10,
+            padding: "10px 12px",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <Toggle
+            checked={accessPoints.includes(item.key)}
+            onChange={() => toggleAccess(item.key)}
+            label={item.label}
+            color="#6366f1"
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
               {/* Error */}
               {addError && (
@@ -562,12 +596,12 @@ export default function Users() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", color: "white" }}>
 
           {/* Top bar */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 28px", borderBottom: "1px solid #0a1120", background: "#060b16", flexShrink: 0, flexWrap: "wrap", gap: 12 ,marginBottom:20}}>
+          <div style={S.header}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-              <div>
-                <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: "-0.03em" }}>Users</h2>
-                <p style={{ color: "#64748b", fontSize: 13, margin: "2px 0 0" }}>Manage users, balances, messages &amp; orders</p>
-              </div>
+                           <div>
+            <div style={S.title}>Users</div>
+            <div style={S.subtitle}>Manage users, balances, messages &amp; orders</div>
+          </div>
               <StatPill icon={UsersIcon} label="Active Users" value={`${allUsers.filter((u) => u.status === "active").length} / ${allUsers.length}`} accent="#3b82f6" loading={loading} />
             {hasPermission(currentUser, "admins.view") && (
               <StatPill
@@ -911,4 +945,10 @@ const S = {
     cursor: "pointer", fontWeight: 600, fontSize: 13,
   },
   sortable: { cursor: "pointer", userSelect: "none" },
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
+  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
+  },
 };

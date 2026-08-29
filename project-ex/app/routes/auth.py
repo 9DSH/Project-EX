@@ -19,11 +19,17 @@ from app.services.invitation_service import (
 
 
 from typing import Optional
-from app.services.auth_service import login_user
+from app.services.auth_service import login_user, login_by_telegram_id, logout_by_telegram_id
+
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+class SessionRequest(BaseModel):
+    telegram_id: str
+
+class LogoutRequest(BaseModel):
+    telegram_id: str
 
 # -------------------------
 # REQUEST BODY MODEL
@@ -54,6 +60,24 @@ class SignupRequest(BaseModel):
 
 
 
+@router.post("/session")
+def session(data: SessionRequest):
+    try:
+        result = login_by_telegram_id(data.telegram_id)
+
+        if not result:
+            raise HTTPException(status_code=400, detail="Invalid session")
+
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("SESSION CRASH:", str(e))
+        raise HTTPException(status_code=500, detail="Internal server error during session lookup")
+    
 # -------------------------
 # LOGIN ROUTE
 # -------------------------
@@ -168,3 +192,8 @@ def signup(data: SignupRequest, db: Session = Depends(get_db_master)):
         "invited_by": new_user.invited_by,
         "wallets": created_wallets,
     }
+
+
+@router.post("/logout")
+def logout(data: LogoutRequest):
+    return logout_by_telegram_id(data.telegram_id)

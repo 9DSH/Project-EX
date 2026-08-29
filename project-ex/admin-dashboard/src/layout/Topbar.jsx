@@ -550,27 +550,45 @@ export default function TopBar({ pinned, onToggleMenu }) {
           boxSizing: "border-box",
         }}
       >
-        {/* MENU TOGGLE — far left corner */}
-        <button
-          onClick={onToggleMenu}
-          title={pinned ? "Collapse menu" : "Expand menu"}
-          style={{
+        {/* LEFT SIDE: menu toggle + logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginRight: "auto", flexShrink: 0 }}>
+          <button
+            onClick={onToggleMenu}
+            title={pinned ? "Collapse menu" : "Expand menu"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              background: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.08)",
+              color: "#94a3b8",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {pinned ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+          </button>
+
+          {/* LOGO — full natural width, no deformation */}
+          <div style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            width: 34,
-            height: 34,
-            borderRadius: 9,
-            background: "rgba(255,255,255,.04)",
-            border: "1px solid rgba(255,255,255,.08)",
-            color: "#94a3b8",
-            cursor: "pointer",
-            flexShrink: 0,
-            marginRight: "auto",
-          }}
-        >
-          {pinned ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-        </button>
+            height: 34,          // keeps it vertically centered with the button
+          }}>
+            <img
+              src="./WIRES-txt-LOGO.png"
+              alt="Logo"
+              style={{
+                height: 28,       // fits nicely inside the 34px topbar height
+                width: "auto",    // keeps original aspect ratio → no deformation
+                display: "block",
+              }}
+            />
+          </div>
+        </div>
 
         {/* INDICATORS */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

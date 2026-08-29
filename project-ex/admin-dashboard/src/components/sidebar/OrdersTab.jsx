@@ -68,8 +68,8 @@ export default function OrdersTab({
   fetchLiveRate,
   setExchangeAmount,
   formatRate,
-  setCustomRate
-  // etc.
+  setCustomRate,
+  providerName
 }) {
 
   // =====================
@@ -280,11 +280,12 @@ export default function OrdersTab({
 
       const statusMatch =
         !exchangeStatusFilter || o.status === exchangeStatusFilter;
-
+       
       return inDateRange && statusMatch;
     });
   }, [exchangeOrders, exchangeStartDate, exchangeEndDate, exchangeStatusFilter]);
-
+  
+  {console.log(filteredExchangeOrders)}
   // Exchange orders filtered further by the selected "from" currency — used
   // only for the "Total Exchanged" stat.
   const currencyFilteredExchangeOrders = useMemo(() => {
@@ -861,7 +862,7 @@ const BigNumber = ({ value, style = {} }) => {
 
                         {o.product_admin_id != null && (
                           <div style={styles.providerMeta}>
-                            Provider admin #{o.product_admin_id}
+                            Provider #{o.product_admin_id} {providerName}
                           </div>
                         )}
                       </div>
@@ -1307,7 +1308,7 @@ const BigNumber = ({ value, style = {} }) => {
                                           }</span>
                                 <span style={{ ...styles.networkBadge, marginLeft: 10 }}>FEE {Number(o.fee_amount).toLocaleString()}</span>
                               </div>
-                              <div style={styles.orderMeta}>#{o.id} • User #{o.user_id}</div>
+                              <div style={styles.orderMeta}>#{o.id} • Exchange #{o.admin_id} {providerName}</div>
                             </div>
                             <div style={{
                               ...styles.orderStatus,

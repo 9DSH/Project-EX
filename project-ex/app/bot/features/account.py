@@ -37,6 +37,7 @@ async def _show_my_account_menu(message, token, user_id=None):
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(t("btn_edit_profile", lang), callback_data="myaccount_edit_profile")],
             [InlineKeyboardButton(t("btn_edit_bank_info", lang), callback_data="myaccount_edit_bank")],
+            [InlineKeyboardButton(t("btn_account_logout", lang), callback_data="myaccount_logout")],
             [InlineKeyboardButton(t("btn_back", lang), callback_data="back_main")],
         ])
     )

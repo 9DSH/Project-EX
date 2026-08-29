@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
-import { Bot, Globe, Users, Save, RefreshCw, Search, X, CreditCard, Activity, Radio } from "lucide-react";
+import { Bot, Globe, Users, Save, RefreshCw, Search, X, CreditCard, Activity, Radio, CheckCircle2, ChevronDown, ChevronUp, Settings as SettingsIcon, Trash2, Plus, Filter } from "lucide-react";
 import BotCard from "../components/BotCard";
 import { hasPermission } from "../utils/permissions";
 
@@ -38,7 +38,25 @@ const S = {
     border: "1px solid #313d58ff", borderRadius: 10, padding: "8px 14px", color: "#6c798dff",
     cursor: "pointer", fontWeight: 600, fontSize: 13,
   },
+  statPill: {
+    display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,.04)",
+    border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: "10px 14px", minWidth: 130,
+  },
 };
+
+function StatPill({ icon: Icon, label, value, accent }) {
+  return (
+    <div style={S.statPill}>
+      <div style={{ width: 34, height: 34, borderRadius: 9, background: accent + "18", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon size={15} />
+      </div>
+      <div>
+        <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: accent, marginTop: 2 }}>{value}</div>
+      </div>
+    </div>
+  );
+}
 
 function TabButton({ active, onClick, icon, label }) {
   return (
@@ -53,16 +71,165 @@ function TabButton({ active, onClick, icon, label }) {
   );
 }
 
-/* ── PAYMENTS CARD (inline editable, scoped to one admin_id) ───────── */
+/* ── SHARED: editable services toggle block ─────────────────────── */
+function ServiceToggleBlock({ accessPoints, isFullAccess, enabledServices, editable, onToggleService }) {
+  const permitted = isFullAccess
+    ? SERVICE_CATALOG
+    : SERVICE_CATALOG.filter(s => (accessPoints || []).includes(s.key));
+
+  const isOn = (key) => enabledServices == null ? true : enabledServices.includes(key);
+
+  if (permitted.length === 0) {
+    return <div style={{ fontSize: 12, color: "#64748b" }}>No services enabled for this account.</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {permitted.map(s => {
+        const on = isOn(s.key);
+        return (
+          <div key={s.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: on ? "#e2e8f0" : "#64748b" }}>{s.label}</span>
+            {editable ? (
+              <div
+                onClick={() => onToggleService?.(s.key)}
+                style={{
+                  position: "relative", width: 38, height: 21, borderRadius: 11, cursor: "pointer",
+                  background: on ? "#22c55e" : "#1e293b", border: `1px solid ${on ? "#22c55e" : "#334155"}`,
+                  transition: "all .2s", flexShrink: 0,
+                }}
+              >
+                <div style={{ position: "absolute", top: 1, left: on ? 18 : 1, width: 17, height: 17, borderRadius: "50%", background: on ? "white" : "#475569", transition: "left .2s" }} />
+              </div>
+            ) : (
+              <span style={{ fontSize: 10, fontWeight: 700, color: on ? "#86efac" : "#64748b", background: on ? "rgba(34,197,94,.12)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? "rgba(34,197,94,.22)" : "rgba(255,255,255,.08)"}`, borderRadius: 999, padding: "3px 9px" }}>
+                {on ? "ON" : "OFF"}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── PAYMENT ACCOUNT CARD — collapsed row -> expand -> activate only ── */
+function PaymentAccountCard({ account, canActivate, onActivate }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.03)", overflow: "hidden" }}>
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "white", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {account.bank_name || "Unnamed account"}
+          </div>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {account.bank_holder_name || "—"}
+          </div>
+        </div>
+        {account.is_active
+          ? <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(34,197,94,.14)", color: "#86efac", flexShrink: 0 }}>Active</span>
+          : <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(255,255,255,.05)", color: "#94a3b8", flexShrink: 0 }}>Inactive</span>}
+        {open ? <ChevronUp size={14} color="#64748b" /> : <ChevronDown size={14} color="#64748b" />}
+      </div>
+
+      {open && (
+        <div style={{ padding: "0 12px 12px", borderTop: "1px solid rgba(255,255,255,.06)" }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.7, marginTop: 10 }}>
+            <div><strong>Holder:</strong> {account.bank_holder_name || "—"}</div>
+            <div><strong>Card:</strong> {account.bank_card_number || "—"}</div>
+            <div><strong>Sheba:</strong> {account.bank_sheba || "—"}</div>
+            {account.has_transactions && <div style={{ color: "#fbbf24", marginTop: 4 }}>Immutable — has transaction history.</div>}
+          </div>
+          {canActivate && !account.is_active && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onActivate?.(account); }}
+              style={{ marginTop: 10, background: "rgba(34,197,94,.16)", border: "1px solid rgba(34,197,94,.24)", color: "#86efac", padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 700 }}
+            >
+              Set Active
+            </button>
+          )}
+          {canActivate && account.is_active && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onActivate?.({ ...account, __deactivate: true }); }}
+              style={{ marginTop: 10, background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.22)", color: "#fda4af", padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 700 }}
+            >
+              Deactivate
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── PAYMENTS CARD (view + activate-only list) ──────────────────── */
 function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, description }) {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, { headers: { Authorization: `Bearer ${token}` } });
+      const all = res.data || [];
+      setAccounts(adminId != null ? all.filter(a => a.admin_id === adminId) : all);
+    } catch (e) {
+      setError(e?.response?.data?.detail || "Failed to load bank accounts.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, adminId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleActivate = async (account) => {
+    try {
+      await axios.put(`${API}/admin/platform-bank-accounts/${account.id}`, { is_active: !account.__deactivate }, { headers: { Authorization: `Bearer ${token}` } });
+      await load();
+    } catch (e) {
+      setError(e?.response?.data?.detail || "Failed to update account.");
+    }
+  };
+
+  return (
+    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <CreditCard size={15} color="#93c5fd" />
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
+      </div>
+      {description && <div style={{ color: "#64748b", fontSize: 12, marginTop: -6 }}>{description}</div>}
+      {error && <div style={{ color: "#fda4af", fontSize: 12 }}>{error}</div>}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
+        {loading ? (
+          <div style={{ color: "#64748b", fontSize: 12 }}>Loading…</div>
+        ) : accounts.length === 0 ? (
+          <div style={{ color: "#64748b", fontSize: 12 }}>No bank accounts yet.</div>
+        ) : accounts.map((a) => (
+          <PaymentAccountCard key={a.id} account={a} canActivate={canEdit} onActivate={handleActivate} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── PAYMENT SETTINGS TAB (full CRUD, lives inside ConfigModal) ──── */
+function PaymentSettingsTab({ token, adminId }) {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyBankForm());
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,14 +250,12 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError(""); setSuccess("");
+    setError("");
     try {
       if (editingId) {
         await axios.put(`${API}/admin/platform-bank-accounts/${editingId}`, form, { headers: { Authorization: `Bearer ${token}` } });
-        setSuccess("Bank account updated.");
       } else {
         await axios.post(`${API}/admin/platform-bank-accounts/`, form, { headers: { Authorization: `Bearer ${token}` } });
-        setSuccess("Bank account created.");
       }
       setForm(emptyBankForm());
       setEditingId(null);
@@ -110,13 +275,14 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
       bank_card_number: a.bank_card_number || "", bank_sheba: a.bank_sheba || "", is_active: a.is_active || false,
     });
     setShowForm(true);
+    setExpandedId(null);
   };
 
-  const activate = async (a) => {
+  const toggleActive = async (a) => {
     try {
-      await axios.put(`${API}/admin/platform-bank-accounts/${a.id}`, { is_active: true }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.put(`${API}/admin/platform-bank-accounts/${a.id}`, { is_active: !a.is_active }, { headers: { Authorization: `Bearer ${token}` } });
       await load();
-    } catch (e) { setError(e?.response?.data?.detail || "Failed to activate."); }
+    } catch (e) { setError(e?.response?.data?.detail || "Failed to update."); }
   };
 
   const remove = async (a) => {
@@ -128,30 +294,20 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
   };
 
   return (
-    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <CreditCard size={15} color="#93c5fd" />
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => { setShowForm(v => !v); setEditingId(null); setForm(emptyBankForm()); }}
-            style={{ ...S.primaryBtn, padding: "6px 10px", fontSize: 12 }}
-          >
-            {showForm ? "Close" : "+ Add"}
-          </button>
-        )}
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Bank Accounts</div>
+        <button
+          onClick={() => { setShowForm(v => !v); setEditingId(null); setForm(emptyBankForm()); }}
+          style={{ ...S.primaryBtn, padding: "6px 10px", fontSize: 12 }}
+        >
+          <Plus size={13} /> {showForm ? "Close" : "Add"}
+        </button>
       </div>
 
-      {description && (
-        <div style={{ color: "#64748b", fontSize: 12, marginTop: -6 }}>{description}</div>
-      )}
-
       {error && <div style={{ color: "#fda4af", fontSize: 12 }}>{error}</div>}
-      {success && <div style={{ color: "#86efac", fontSize: 12 }}>{success}</div>}
 
-      {showForm && canEdit && (
+      {showForm && (
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 8, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 12 }}>
           <input style={S.input} placeholder="Bank name" value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} required />
           <input style={S.input} placeholder="Account holder" value={form.bank_holder_name} onChange={(e) => setForm({ ...form, bank_holder_name: e.target.value })} required />
@@ -167,50 +323,54 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
         </form>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
         {loading ? (
           <div style={{ color: "#64748b", fontSize: 12 }}>Loading…</div>
         ) : accounts.length === 0 ? (
           <div style={{ color: "#64748b", fontSize: 12 }}>No bank accounts yet.</div>
-        ) : accounts.map((a) => (
-          <div key={a.id} style={{ border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,.03)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{a.bank_name || "Unnamed account"}</div>
-              {a.is_active
-                ? <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(34,197,94,.14)", color: "#86efac" }}>Active</span>
-                : <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(255,255,255,.05)", color: "#94a3b8" }}>Inactive</span>}
-            </div>
-            <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.6 }}>
-              <div><strong>Holder:</strong> {a.bank_holder_name || "—"}</div>
-              <div><strong>Card:</strong> {a.bank_card_number || "—"}</div>
-              <div><strong>Sheba:</strong> {a.bank_sheba || "—"}</div>
-              {a.has_transactions && <div style={{ color: "#fbbf24", marginTop: 4 }}>Immutable — has transaction history.</div>}
-            </div>
-            {canEdit && (
-              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                <button onClick={() => edit(a)} style={{ background: "rgba(59,130,246,.16)", border: "1px solid rgba(59,130,246,.25)", color: "#93c5fd", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Edit</button>
-                {!a.is_active && <button onClick={() => activate(a)} style={{ background: "rgba(34,197,94,.16)", border: "1px solid rgba(34,197,94,.24)", color: "#86efac", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Set Active</button>}
-                {!a.has_transactions && <button onClick={() => remove(a)} style={{ background: "rgba(248,113,113,.14)", border: "1px solid rgba(248,113,113,.22)", color: "#fda4af", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Delete</button>}
+        ) : accounts.map((a) => {
+          const open = expandedId === a.id;
+          return (
+            <div key={a.id} style={{ border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.03)", overflow: "hidden" }}>
+              <div onClick={() => setExpandedId(open ? null : a.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.bank_name || "Unnamed account"}</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{a.bank_holder_name || "—"}</div>
+                </div>
+                {a.is_active
+                  ? <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(34,197,94,.14)", color: "#86efac" }}>Active</span>
+                  : <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(255,255,255,.05)", color: "#94a3b8" }}>Inactive</span>}
+                {open ? <ChevronUp size={14} color="#64748b" /> : <ChevronDown size={14} color="#64748b" />}
               </div>
-            )}
-          </div>
-        ))}
+              {open && (
+                <div style={{ padding: "0 12px 12px", borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.7, marginTop: 10 }}>
+                    <div><strong>Card:</strong> {a.bank_card_number || "—"}</div>
+                    <div><strong>Sheba:</strong> {a.bank_sheba || "—"}</div>
+                    {a.has_transactions && <div style={{ color: "#fbbf24", marginTop: 4 }}>Immutable — has transaction history.</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                    <button onClick={() => edit(a)} style={{ background: "rgba(59,130,246,.16)", border: "1px solid rgba(59,130,246,.25)", color: "#93c5fd", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Edit</button>
+                    <button onClick={() => toggleActive(a)} style={{ background: a.is_active ? "rgba(239,68,68,.12)" : "rgba(34,197,94,.16)", border: `1px solid ${a.is_active ? "rgba(239,68,68,.22)" : "rgba(34,197,94,.24)"}`, color: a.is_active ? "#fda4af" : "#86efac", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+                      {a.is_active ? "Deactivate" : "Set Active"}
+                    </button>
+                    {!a.has_transactions && <button onClick={() => remove(a)} style={{ background: "rgba(248,113,113,.14)", border: "1px solid rgba(248,113,113,.22)", color: "#fda4af", padding: "5px 9px", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: 700 }}><Trash2 size={11} /></button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/* ── LIVE STATUS CARD — what the bot actually shows users ──────────── */
+/* ── LIVE STATUS CARD — editable everywhere via onToggleService ────── */
 function LiveStatusCard({
   botUsername, displayName, username, accessPoints, isFullAccess,
   defaultLanguage, isActive, editable = false, enabledServices, onToggleService,
 }) {
-  const permitted = isFullAccess
-    ? SERVICE_CATALOG
-    : SERVICE_CATALOG.filter(s => (accessPoints || []).includes(s.key));
-
-  const isOn = (key) => enabledServices == null ? true : enabledServices.includes(key);
-
   return (
     <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 14, height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -227,46 +387,23 @@ function LiveStatusCard({
       <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Provider Name Shown to Users</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{displayName || username || "—"}</div>
-        <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Shown next to products/orders instead of the raw username. Edit it in Bot Configuration.</div>
+        <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Shown next to products/orders instead of the raw username.</div>
       </div>
 
       <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
           Services Visible in Bot
         </div>
-        {permitted.length === 0 ? (
-          <div style={{ fontSize: 12, color: "#64748b" }}>No services enabled for this account.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {permitted.map(s => {
-              const on = isOn(s.key);
-              return (
-                <div key={s.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: on ? "#e2e8f0" : "#64748b" }}>{s.label}</span>
-                  {editable ? (
-                    <div
-                      onClick={() => onToggleService?.(s.key)}
-                      style={{
-                        position: "relative", width: 38, height: 21, borderRadius: 11, cursor: "pointer",
-                        background: on ? "#22c55e" : "#1e293b", border: `1px solid ${on ? "#22c55e" : "#334155"}`,
-                        transition: "all .2s", flexShrink: 0,
-                      }}
-                    >
-                      <div style={{ position: "absolute", top: 1, left: on ? 18 : 1, width: 17, height: 17, borderRadius: "50%", background: on ? "white" : "#475569", transition: "left .2s" }} />
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: on ? "#86efac" : "#64748b", background: on ? "rgba(34,197,94,.12)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? "rgba(34,197,94,.22)" : "rgba(255,255,255,.08)"}`, borderRadius: 999, padding: "3px 9px" }}>
-                      {on ? "ON" : "OFF"}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <ServiceToggleBlock
+          accessPoints={accessPoints}
+          isFullAccess={isFullAccess}
+          enabledServices={enabledServices}
+          editable={editable}
+          onToggleService={onToggleService}
+        />
         {editable && (
           <div style={{ fontSize: 10, color: "#64748b", marginTop: 10 }}>
-            Turning a service off hides it from your bot's menu even though you still have access to it — turn it back on anytime.
+            Turning a service off hides it from the bot's menu — turn it back on anytime.
           </div>
         )}
       </div>
@@ -285,7 +422,7 @@ function LiveStatusCard({
   );
 }
 
-/* ── CONFIG (+ optional Payments) MODAL — used by Master to edit any bot ─ */
+/* ── CONFIG (+ Payments) MODAL — tabbed, with save confirmation ─────── */
 function ConfigModal({ token, target, onClose, onSaved }) {
   // target: { scope: 'admin' | 'global', kind: 'admin'|'global_main'|'support', adminId, label }
   const [tab, setTab] = useState("config");
@@ -295,15 +432,30 @@ function ConfigModal({ token, target, onClose, onSaved }) {
   const [displayNameInput, setDisplayNameInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [saved, setSaved] = useState(false);
 
-  const getUrl = () => target.scope === "global"
-    ? `${API}/admin/telegram-bot-settings/global/${target.kind}`
-    : `${API}/admin/telegram-bot-settings/${target.adminId}`;
+  // scope: "self" = the logged-in admin's own bot (bare endpoint, no id
+  // needed — GET/PUT only exist without an id for the caller's own record).
+  // scope: "admin" = master editing a specific admin's bot by id (requires
+  // the id-suffixed endpoints, GET included).
+  // scope: "global" = master editing global_main/support.
+  const getUrl = () => {
+    if (target.scope === "global") return `${API}/admin/telegram-bot-settings/global/${target.kind}`;
+    if (target.scope === "self") return `${API}/admin/telegram-bot-settings/`;
+    return `${API}/admin/telegram-bot-settings/${target.adminId}`;
+  };
 
-  const setDisplayNameUrl = () => target.scope === "global"
-    ? `${API}/admin/telegram-bot-settings/global/${target.kind}/set-display-name`
-    : `${API}/admin/telegram-bot-settings/${target.adminId}/set-display-name`;
+  const putUrl = () => {
+    if (target.scope === "global") return `${API}/admin/telegram-bot-settings/global/${target.kind}`;
+    if (target.scope === "self") return `${API}/admin/telegram-bot-settings/`;
+    return `${API}/admin/telegram-bot-settings/${target.adminId}`;
+  };
+
+  const setDisplayNameUrl = () => {
+    if (target.scope === "global") return `${API}/admin/telegram-bot-settings/global/${target.kind}/set-display-name`;
+    if (target.scope === "self") return `${API}/admin/telegram-bot-settings/set-display-name`;
+    return `${API}/admin/telegram-bot-settings/${target.adminId}/set-display-name`;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -323,7 +475,7 @@ function ConfigModal({ token, target, onClose, onSaved }) {
 
   const save = async () => {
     setSaving(true);
-    setError(""); setSuccess("");
+    setError(""); setSaved(false);
     try {
       const payload = { default_language: settings.default_language, is_active: settings.is_active };
       if (tokenInput.trim()) payload.main_bot_token = tokenInput.trim();
@@ -335,12 +487,28 @@ function ConfigModal({ token, target, onClose, onSaved }) {
       }
       setSettings(updated);
       setTokenInput("");
-      setSuccess("Saved.");
+      setSaved(true);
       onSaved?.();
+      setTimeout(() => {
+        onClose?.();
+      }, 1200);
     } catch (e) {
       setError(e?.response?.data?.detail || "Failed to save.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleService = async (key) => {
+    const permittedKeys = SERVICE_CATALOG.map(s => s.key);
+    const current = settings?.enabled_services ?? permittedKeys;
+    const next = current.includes(key) ? current.filter(k => k !== key) : [...current, key];
+    try {
+      const res = await axios.put(getUrl(), { enabled_services: next }, { headers: { Authorization: `Bearer ${token}` } });
+      setSettings(res.data);
+      onSaved?.();
+    } catch (e) {
+      setError(e?.response?.data?.detail || "Failed to update services.");
     }
   };
 
@@ -366,18 +534,28 @@ function ConfigModal({ token, target, onClose, onSaved }) {
     } catch (e) { setError(e?.response?.data?.detail || "Stop failed."); }
   };
 
+  const paymentAdminId = target.scope === "global" ? target.masterAdminId : target.adminId;
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ width: "92%", maxWidth: 560, maxHeight: "88vh", overflowY: "auto", background: "#0d1424", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 22 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ width: "92%", maxWidth: 600, maxHeight: "88vh", overflowY: "auto", background: "#0d1424", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 22 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 16, fontWeight: 800 }}>{target.label}</div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.09)", color: "#94a3b8", width: 30, height: 30, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
         </div>
 
+        {/* TABS */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <TabButton active={tab === "config"} onClick={() => setTab("config")} icon={<SettingsIcon size={13} />} label="Bot Config" />
+          <TabButton active={tab === "payments"} onClick={() => setTab("payments")} icon={<CreditCard size={13} />} label="Payment Settings" />
+        </div>
 
-
+        {saved && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(34,197,94,.12)", border: "1px solid rgba(34,197,94,.28)", color: "#86efac", borderRadius: 10, padding: "9px 12px", marginBottom: 12, fontSize: 13, fontWeight: 700 }}>
+            <CheckCircle2 size={15} /> Saved
+          </div>
+        )}
         {error && <div style={{ color: "#fda4af", fontSize: 12, marginBottom: 10 }}>{error}</div>}
-        {success && <div style={{ color: "#86efac", fontSize: 12, marginBottom: 10 }}>{success}</div>}
 
         {tab === "config" && (
           loading || !settings ? (
@@ -428,6 +606,17 @@ function ConfigModal({ token, target, onClose, onSaved }) {
                 Bot active
               </label>
 
+              <div>
+                <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8, fontWeight: 700 }}>Services Visible in Bot</div>
+                <ServiceToggleBlock
+                  accessPoints="*"
+                  isFullAccess
+                  enabledServices={settings.enabled_services}
+                  editable
+                  onToggleService={toggleService}
+                />
+              </div>
+
               <button onClick={save} disabled={saving} style={{ ...S.primaryBtn, justifyContent: "center", opacity: saving ? 0.7 : 1 }}>
                 <Save size={14} /> {saving ? "Saving…" : "Save Settings"}
               </button>
@@ -435,17 +624,22 @@ function ConfigModal({ token, target, onClose, onSaved }) {
           )
         )}
 
+        {tab === "payments" && (
+          <PaymentSettingsTab token={token} adminId={paymentAdminId} />
+        )}
       </div>
     </div>
   );
 }
 
-/* ── ALL ADMIN BOTS TAB (master) ────────────────────────────────────── */
+/* ── ALL ADMIN BOTS TAB (master) ─────────────────────────────────── */
 function AllAdminBotsTab({ token }) {
   const [bots, setBots] = useState([]);
   const [statusMap, setStatusMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [logs, setLogs] = useState(null);
@@ -481,16 +675,25 @@ function AllAdminBotsTab({ token }) {
     if (selectedId != null) loadLogs(selectedId);
   }, [selectedId, loadLogs]);
 
+  const isRunning = (b) => statusMap[String(b.admin_id)]?.running ?? b.is_running;
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return bots;
-    return bots.filter(b =>
-      (b.username || "").toLowerCase().includes(q) ||
-      (b.display_name || "").toLowerCase().includes(q) ||
-      (b.bot_username || "").toLowerCase().includes(q) ||
-      String(b.admin_id).includes(q)
-    );
-  }, [bots, search]);
+    return bots.filter(b => {
+      if (roleFilter !== "all" && b.role !== roleFilter) return false;
+      if (statusFilter === "running" && !isRunning(b)) return false;
+      if (statusFilter === "stopped" && isRunning(b)) return false;
+      if (statusFilter === "no_token" && b.main_bot_token_set) return false;
+      if (!q) return true;
+      return (
+        (b.username || "").toLowerCase().includes(q) ||
+        (b.display_name || "").toLowerCase().includes(q) ||
+        (b.bot_username || "").toLowerCase().includes(q) ||
+        String(b.admin_id).includes(q)
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bots, search, roleFilter, statusFilter, statusMap]);
 
   const selected = bots.find(b => b.admin_id === selectedId) || null;
   const liveStatus = selected ? statusMap[String(selected.admin_id)] : null;
@@ -508,17 +711,62 @@ function AllAdminBotsTab({ token }) {
     } catch (e) { console.error(e); }
   };
 
+  const toggleService = async (key) => {
+    if (!selected) return;
+    const permittedKeys = SERVICE_CATALOG.map(s => s.key);
+    const current = selected.enabled_services ?? permittedKeys;
+    const next = current.includes(key) ? current.filter(k => k !== key) : [...current, key];
+    try {
+      await axios.put(`${API}/admin/telegram-bot-settings/${selected.admin_id}`, { enabled_services: next }, { headers: { Authorization: `Bearer ${token}` } });
+      await load();
+    } catch (e) { console.error(e); }
+  };
+
+  // ── Stat pills ──
+  const stats = useMemo(() => {
+    const total = bots.length;
+    const running = bots.filter(isRunning).length;
+    const configuredStopped = bots.filter(b => b.main_bot_token_set && !isRunning(b)).length;
+    const noToken = bots.filter(b => !b.main_bot_token_set).length;
+    const crashed = bots.filter(b => statusMap[String(b.admin_id)]?.status === "crashed").length;
+    return { total, running, configuredStopped, noToken, crashed };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bots, statusMap]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
-          <input
-            placeholder="Search by admin, display name or bot username…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ ...S.input, paddingLeft: 34 }}
-          />
+      {/* STAT PILLS */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <StatPill icon={Bot} label="Total Bots" value={stats.total} accent="#60a5fa" />
+        <StatPill icon={Radio} label="Running" value={stats.running} accent="#4ade80" />
+        <StatPill icon={Activity} label="Configured / Stopped" value={stats.configuredStopped} accent="#facc15" />
+        <StatPill icon={SettingsIcon} label="No Token" value={stats.noToken} accent="#94a3b8" />
+        <StatPill icon={X} label="Crashed" value={stats.crashed} accent="#f87171" />
+      </div>
+
+      {/* FILTERS */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 360 }}>
+            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
+            <input
+              placeholder="Search by admin, display name or bot username…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...S.input, paddingLeft: 34 }}
+            />
+          </div>
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ ...S.input, width: "auto" }}>
+            <option value="all">All Roles</option>
+            <option value="admin">Admin</option>
+            <option value="master">Master</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...S.input, width: "auto" }}>
+            <option value="all">All Status</option>
+            <option value="running">Running</option>
+            <option value="stopped">Stopped</option>
+            <option value="no_token">No Token</option>
+          </select>
         </div>
         <button onClick={load} style={S.refreshBtn} disabled={loading}>
           <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
@@ -526,7 +774,7 @@ function AllAdminBotsTab({ token }) {
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 14, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, flex: 1, minHeight: 0 }}>
         {/* LEFT: list */}
         <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }}>
           {loading ? (
@@ -562,267 +810,80 @@ function AllAdminBotsTab({ token }) {
             </div>
           ) : (
             <>
-          <div
-            style={{
-              ...S.card,
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1.5fr) minmax(360px, 1fr)",
-              gap: 20,
-              alignItems: "start",
-            }}
-          >
-            {/* LEFT — Bot Details */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>
-                    {selected.display_name || selected.username}
+              <div style={{ ...S.card, display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
+                {/* LEFT — bot detail + all fields */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 17, fontWeight: 800 }}>{selected.display_name || selected.username}</div>
+                      <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
+                        Admin #{selected.admin_id} · @{selected.username} · {selected.role}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => restart(selected.admin_id)} style={{ ...S.primaryBtn, padding: "7px 10px", fontSize: 11 }}>
+                        <RefreshCw size={12} /> {liveStatus?.running ? "Restart" : "Start"}
+                      </button>
+                      <button onClick={() => stop(selected.admin_id)} style={{ ...S.primaryBtn, background: "rgba(239,68,68,.14)", color: "#f87171", padding: "7px 10px", fontSize: 11 }}>
+                        Stop
+                      </button>
+                      <button
+                        onClick={() => setModalTarget({ scope: "admin", kind: "admin", adminId: selected.admin_id, label: `${selected.display_name || selected.username}'s Bot` })}
+                        style={{ ...S.primaryBtn, padding: "7px 10px", fontSize: 11 }}
+                      >
+                        <SettingsIcon size={12} /> Edit
+                      </button>
+                    </div>
                   </div>
 
-                  <div
-                    style={{
-                      color: "#64748b",
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    Admin #{selected.admin_id} · @{selected.username} · {selected.role}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[
+                      ["Status", liveStatus?.status || (selected.is_running ? "running" : "stopped"), liveStatus?.running ? "#4ade80" : "#f87171"],
+                      ["Last Restart", (liveStatus?.last_restart_at ?? selected.last_restart_at) ? new Date(liveStatus?.last_restart_at ?? selected.last_restart_at).toLocaleString() : "—", "white"],
+                      ["Token Configured", selected.main_bot_token_set ? "Yes" : "No", selected.main_bot_token_set ? "#4ade80" : "#f87171"],
+                      ["Default Language", selected.default_language === "fa" ? "Persian" : "English", "white"],
+                      ["Bot Active Flag", selected.is_active ? "Active" : "Inactive", selected.is_active ? "#4ade80" : "#f87171"],
+                      ["Bot Username", selected.bot_username ? `@${selected.bot_username}` : "—", "white"],
+                      ["Last Validated", selected.last_validated_at ? new Date(selected.last_validated_at).toLocaleString() : "—", "white"],
+                      ["Enabled Services", selected.enabled_services == null ? "All permitted" : `${selected.enabled_services.length} enabled`, "white"],
+                    ].map(([label, val, color]) => (
+                      <div key={label} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>{label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color, marginTop: 3, wordBreak: "break-word" }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(selected.last_validation_error || selected.last_crash_error) && (
+                    <div style={{ background: "rgba(239,68,68,.06)", border: "1px solid rgba(239,68,68,.14)", borderRadius: 10, padding: 10, fontSize: 11, color: "#fda4af" }}>
+                      {selected.last_validation_error || selected.last_crash_error}
+                    </div>
+                  )}
+
+                  <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Services Visible in Bot</div>
+                    <ServiceToggleBlock
+                      accessPoints="*"
+                      isFullAccess
+                      enabledServices={selected.enabled_services}
+                      editable
+                      onToggleService={toggleService}
+                    />
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => restart(selected.admin_id)}
-                    style={{
-                      ...S.primaryBtn,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                    }}
-                  >
-                    <RefreshCw size={13} />
-                    {liveStatus?.running ? "Restart" : "Start"}
-                  </button>
-
-                  <button
-                    onClick={() => stop(selected.admin_id)}
-                    style={{
-                      ...S.primaryBtn,
-                      background: "rgba(239,68,68,.14)",
-                      color: "#f87171",
-                      padding: "8px 12px",
-                      fontSize: 12,
-                    }}
-                  >
-                    Stop
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      setModalTarget({
-                        scope: "admin",
-                        kind: "admin",
-                        adminId: selected.admin_id,
-                        label: `${selected.display_name || selected.username}'s Bot`,
-                      })
-                    }
-                    style={{
-                      ...S.primaryBtn,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                    }}
-                  >
-                    Edit Config
-                  </button>
+                {/* RIGHT — Payments */}
+                <div style={{ minWidth: 0 }}>
+                  <PaymentsCard
+                    key={`pay-${selected.admin_id}`}
+                    token={token}
+                    adminId={selected.admin_id}
+                    title="Payments"
+                    canEdit
+                    description="Activate/deactivate accounts here. Add or edit them via Edit → Payment Settings."
+                  />
                 </div>
               </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
-                <div
-                  style={{
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.07)",
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Status
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: liveStatus?.running ? "#4ade80" : "#f87171",
-                      marginTop: 4,
-                    }}
-                  >
-                    {liveStatus?.status ||
-                      (selected.is_running ? "running" : "stopped")}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.07)",
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Last Restart
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "white",
-                      marginTop: 4,
-                    }}
-                  >
-                    {(liveStatus?.last_restart_at ?? selected.last_restart_at)
-                      ? new Date(
-                          liveStatus?.last_restart_at ?? selected.last_restart_at
-                        ).toLocaleString()
-                      : "—"}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.07)",
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Token Configured
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: selected.main_bot_token_set
-                        ? "#4ade80"
-                        : "#f87171",
-                      marginTop: 4,
-                    }}
-                  >
-                    {selected.main_bot_token_set ? "Yes" : "No"}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.07)",
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Default Language
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "white",
-                      marginTop: 4,
-                    }}
-                  >
-                    {selected.default_language === "fa"
-                      ? "Persian"
-                      : "English"}
-                  </div>
-                </div>
-              </div>
-
-              {selected.last_validation_error && (
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#64748b",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Last Token Validation Error
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(239,68,68,.06)",
-                      border: "1px solid rgba(239,68,68,.14)",
-                      borderRadius: 12,
-                      padding: 12,
-                      fontSize: 12,
-                      color: "#fda4af",
-                    }}
-                  >
-                    {selected.last_validation_error}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* RIGHT — Payments */}
-            <div style={{ minWidth: 0 }}>
-              <PaymentsCard
-                key={`pay-${selected.admin_id}`}
-                token={token}
-                adminId={selected.admin_id}
-                title="Payments"
-                canEdit
-                description="This bank account is connected to this admin's bot — their users see whichever one is marked Active."
-              />
-            </div>
-          </div>
-
-
 
               {/* Raw logs, last 24h */}
               <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -863,6 +924,7 @@ export default function TelegramManagement() {
   const token = useMemo(() => localStorage.getItem("token"), []);
   const role = localStorage.getItem("role");
   const username = localStorage.getItem("username") || "user";
+  const ownAdminId = Number(localStorage.getItem("user_id")) || null;
 
   const currentUser = {
     role,
@@ -876,7 +938,6 @@ export default function TelegramManagement() {
     !isMaster && canManage && { key: "my_bot", label: "My Bot", icon: <Bot size={14} /> },
     isMaster && { key: "global_bots", label: "Global Bots", icon: <Globe size={14} /> },
     isMaster && { key: "all_bots", label: "All Admin Bots", icon: <Users size={14} /> },
-   
   ].filter(Boolean);
 
   const [tab, setTab] = useState(availableTabs[0]?.key);
@@ -885,48 +946,22 @@ export default function TelegramManagement() {
   const [myBotSettings, setMyBotSettings] = useState(null);
   const [myBotLoading, setMyBotLoading] = useState(true);
   const [myBotStatus, setMyBotStatus] = useState(null);
-  const [myTokenInput, setMyTokenInput] = useState("");
-  const [myDisplayNameInput, setMyDisplayNameInput] = useState("");
-  const [myBotSaving, setMyBotSaving] = useState(false);
-  const [myBotError, setMyBotError] = useState("");
-  const [myBotSuccess, setMyBotSuccess] = useState("");
   const [myBotActionLoading, setMyBotActionLoading] = useState(false);
+  const [myBotModalOpen, setMyBotModalOpen] = useState(false);
 
   const loadMyBot = async () => {
     setMyBotLoading(true);
-    setMyBotError("");
     try {
       const [settingsRes, statusRes] = await Promise.all([
         axios.get(`${API}/admin/telegram-bot-settings/`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/bot-control/status`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       setMyBotSettings(settingsRes.data);
-      setMyDisplayNameInput(settingsRes.data.display_name || "");
       setMyBotStatus(statusRes.data);
     } catch (e) {
-      setMyBotError(e?.response?.data?.detail || "Failed to load bot settings.");
+      console.error(e);
     } finally {
       setMyBotLoading(false);
-    }
-  };
-
-  const saveMyBot = async () => {
-    setMyBotSaving(true);
-    setMyBotError(""); setMyBotSuccess("");
-    try {
-      const payload = { default_language: myBotSettings.default_language, is_active: myBotSettings.is_active };
-      if (myTokenInput.trim()) payload.main_bot_token = myTokenInput.trim();
-      let res = await axios.put(`${API}/admin/telegram-bot-settings/`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      if (myDisplayNameInput.trim() && myDisplayNameInput.trim() !== (myBotSettings.display_name || "")) {
-        res = await axios.post(`${API}/admin/telegram-bot-settings/set-display-name`, { display_name: myDisplayNameInput.trim() }, { headers: { Authorization: `Bearer ${token}` } });
-      }
-      setMyBotSettings(res.data);
-      setMyTokenInput("");
-      setMyBotSuccess("Settings saved.");
-    } catch (e) {
-      setMyBotError(e?.response?.data?.detail || "Failed to save.");
-    } finally {
-      setMyBotSaving(false);
     }
   };
 
@@ -940,7 +975,7 @@ export default function TelegramManagement() {
       const res = await axios.put(`${API}/admin/telegram-bot-settings/`, { enabled_services: next }, { headers: { Authorization: `Bearer ${token}` } });
       setMyBotSettings(res.data);
     } catch (e) {
-      setMyBotError(e?.response?.data?.detail || "Failed to update services.");
+      console.error(e);
     }
   };
 
@@ -950,7 +985,7 @@ export default function TelegramManagement() {
       await axios.post(`${API}/admin/bot-control/restart`, {}, { headers: { Authorization: `Bearer ${token}` } });
       await loadMyBot();
     } catch (e) {
-      setMyBotError(e?.response?.data?.detail || "Restart failed.");
+      console.error(e);
     } finally {
       setMyBotActionLoading(false);
     }
@@ -962,7 +997,7 @@ export default function TelegramManagement() {
       await axios.post(`${API}/admin/bot-control/stop`, {}, { headers: { Authorization: `Bearer ${token}` } });
       await loadMyBot();
     } catch (e) {
-      setMyBotError(e?.response?.data?.detail || "Stop failed.");
+      console.error(e);
     } finally {
       setMyBotActionLoading(false);
     }
@@ -1006,6 +1041,18 @@ export default function TelegramManagement() {
     } catch (e) { console.error(e); }
   };
 
+  const toggleGlobalService = async (kind) => async (key) => {
+    const settings = kind === "global_main" ? globalMain : globalSupport;
+    const permittedKeys = SERVICE_CATALOG.map(s => s.key);
+    const current = settings?.enabled_services ?? permittedKeys;
+    const next = current.includes(key) ? current.filter(k => k !== key) : [...current, key];
+    try {
+      const res = await axios.put(`${API}/admin/telegram-bot-settings/global/${kind}`, { enabled_services: next }, { headers: { Authorization: `Bearer ${token}` } });
+      if (kind === "global_main") setGlobalMain(res.data);
+      else setGlobalSupport(res.data);
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     if (tab === "my_bot") loadMyBot();
     if (tab === "global_bots") loadGlobal();
@@ -1036,11 +1083,8 @@ export default function TelegramManagement() {
             <div style={{ color: "#64748b" }}>Loading…</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, height: "100%" }}>
-              {/* Column 1: Bot Card + config */}
+              {/* Column 1: Bot Card + quick actions */}
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {myBotError && <div style={{ color: "#fda4af", fontSize: 12 }}>{myBotError}</div>}
-                {myBotSuccess && <div style={{ color: "#86efac", fontSize: 12 }}>{myBotSuccess}</div>}
-
                 <BotCard
                   username={username}
                   displayName={myBotSettings?.display_name}
@@ -1057,49 +1101,24 @@ export default function TelegramManagement() {
                 />
 
                 <div style={S.card}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Bot Configuration</div>
-
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>Display Name (shown to users)</div>
-                  <input style={{ ...S.input, marginBottom: 12 }} placeholder="e.g. Premium Store" value={myDisplayNameInput} onChange={(e) => setMyDisplayNameInput(e.target.value)} />
-
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>Default Language</div>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    {LANGUAGE_OPTIONS.map((opt) => {
-                      const selected = myBotSettings?.default_language === opt.value;
-                      return (
-                        <button key={opt.value} onClick={() => setMyBotSettings({ ...myBotSettings, default_language: opt.value })}
-                          style={{ flex: 1, padding: "10px 10px", borderRadius: 10, border: selected ? "1px solid rgba(34,197,94,.4)" : "1px solid rgba(255,255,255,.1)", background: selected ? "rgba(34,197,94,.14)" : "#0b1220", color: selected ? "#86efac" : "#e2e8f0", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Bot & Payments</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 14, lineHeight: 1.6 }}>
+                    Edit your bot's token, display name, language, service visibility, and payment accounts.
                   </div>
-
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>Bot Token</div>
-                  <input style={{ ...S.input, marginBottom: 8 }} type="password" placeholder={myBotSettings?.main_bot_token_masked || "Paste bot token"} value={myTokenInput} onChange={(e) => setMyTokenInput(e.target.value)} />
-                  {myBotSettings?.last_validation_error && (
-                    <div style={{ fontSize: 11, color: "#fda4af", marginBottom: 8 }}>Last error: {myBotSettings.last_validation_error}</div>
-                  )}
-
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#94a3b8", fontSize: 13, marginBottom: 12 }}>
-                    <input type="checkbox" checked={!!myBotSettings?.is_active} onChange={(e) => setMyBotSettings({ ...myBotSettings, is_active: e.target.checked })} />
-                    Bot active
-                  </label>
-
-                  <button onClick={saveMyBot} disabled={myBotSaving} style={{ ...S.primaryBtn, width: "100%", justifyContent: "center", opacity: myBotSaving ? 0.7 : 1 }}>
-                    <Save size={14} /> {myBotSaving ? "Saving…" : "Save Settings"}
+                  <button onClick={() => setMyBotModalOpen(true)} style={{ ...S.primaryBtn, width: "100%", justifyContent: "center" }}>
+                    <SettingsIcon size={14} /> Manage Bot &amp; Payments
                   </button>
                 </div>
               </div>
 
-              {/* Column 2: Payments */}
-              <PaymentsCard 
-              token={token} 
-              adminId={masterUserId /* not used for non-master; adminId omitted below */} 
-              title="Payments" 
-              canEdit   
-              description="This bank account is connected to your bot — your users see whichever one is marked Active."
-/>
+              {/* Column 2: Payments (activate-only view) */}
+              <PaymentsCard
+                token={token}
+                adminId={ownAdminId}
+                title="Payments"
+                canEdit
+                description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via Manage Bot & Payments."
+              />
 
               {/* Column 3: Live status */}
               <LiveStatusCard
@@ -1139,7 +1158,7 @@ export default function TelegramManagement() {
                   showEdit
                   onRestart={() => restartGlobal("global_main")}
                   onDeactivate={() => stopGlobal("global_main")}
-                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "global_main", label: "Global Main Bot" })}
+                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "global_main", masterAdminId: masterUserId, label: "Global Main Bot" })}
                 />
                 <BotCard
                   username="Support Bot"
@@ -1154,28 +1173,31 @@ export default function TelegramManagement() {
                   showEdit
                   onRestart={() => restartGlobal("support")}
                   onDeactivate={() => stopGlobal("support")}
-                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "support", label: "Support Bot" })}
+                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "support", masterAdminId: masterUserId, label: "Support Bot" })}
                 />
               </div>
 
               {/* Column 2: Payments (master's own accounts) */}
-              <PaymentsCard 
-              token={token} 
-              adminId={masterUserId} 
-              title="Payments" 
-              canEdit 
-              description="This bank account is connected to your bot — your users see whichever one is marked Active."
+              <PaymentsCard
+                token={token}
+                adminId={masterUserId}
+                title="Payments"
+                canEdit
+                description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via each bot's Edit button."
               />
 
-              {/* Column 3: Live status (main bot = what users see) */}
+              {/* Column 3: Live status (main bot = what users see) — now editable */}
               <LiveStatusCard
                 botUsername={globalMain?.bot_username}
                 displayName={globalMain?.display_name}
                 username={username}
-                accessPoints={currentUser.access_points}
+                accessPoints="*"
                 isFullAccess
                 defaultLanguage={globalMain?.default_language}
                 isActive={globalMain?.is_active}
+                editable
+                enabledServices={globalMain?.enabled_services}
+                onToggleService={toggleGlobalService("global_main")}
               />
             </div>
           )
@@ -1183,92 +1205,22 @@ export default function TelegramManagement() {
 
         {/* ═══════════════ ALL ADMIN BOTS (master) ═══════════════ */}
         {tab === "all_bots" && <AllAdminBotsTab token={token} />}
-
-
       </div>
 
       {globalModalTarget && (
         <ConfigModal token={token} target={globalModalTarget} onClose={() => setGlobalModalTarget(null)} onSaved={loadGlobal} />
       )}
 
+      {myBotModalOpen && (
+        <ConfigModal
+          token={token}
+          target={{ scope: "admin", kind: "admin", adminId: ownAdminId, label: "My Bot" }}
+          onClose={() => setMyBotModalOpen(false)}
+          onSaved={loadMyBot}
+        />
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
-/* ── MASTER PAYMENTS TAB (all admins, grouped) ──────────────────────── */
-function MasterPaymentsTab({ token }) {
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, { headers: { Authorization: `Bearer ${token}` } });
-      setAccounts(res.data || []);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, [token]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const grouped = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    const filtered = q ? accounts.filter(a => String(a.admin_id).includes(q) || (a.bank_name || "").toLowerCase().includes(q)) : accounts;
-    const map = {};
-    for (const a of filtered) {
-      const key = a.admin_id ?? "unknown";
-      if (!map[key]) map[key] = [];
-      map[key].push(a);
-    }
-    return map;
-  }, [accounts, search]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
-          <input placeholder="Search by admin ID or bank name…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...S.input, paddingLeft: 34 }} />
-        </div>
-        <button onClick={load} style={S.refreshBtn} disabled={loading}>
-          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          {loading ? "Loading…" : "Refresh"}
-        </button>
-      </div>
-
-      <div style={{ ...S.card, overflowY: "auto", flex: 1 }}>
-        {loading ? (
-          <div style={{ color: "#64748b" }}>Loading…</div>
-        ) : Object.keys(grouped).length === 0 ? (
-          <div style={{ color: "#64748b" }}>No bank accounts found.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {Object.entries(grouped).map(([adminId, list]) => (
-              <div key={adminId}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", marginBottom: 8 }}>Admin #{adminId}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-                  {list.map((a) => (
-                    <div key={a.id} style={{ border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,.03)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>{a.bank_name || "Unnamed account"}</div>
-                        {a.is_active
-                          ? <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(34,197,94,.14)", color: "#86efac" }}>Active</span>
-                          : <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 10, background: "rgba(255,255,255,.05)", color: "#94a3b8" }}>Inactive</span>}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.6 }}>
-                        <div><strong>Holder:</strong> {a.bank_holder_name || "—"}</div>
-                        <div><strong>Card:</strong> {a.bank_card_number || "—"}</div>
-                        <div><strong>Sheba:</strong> {a.bank_sheba || "—"}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

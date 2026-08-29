@@ -1248,6 +1248,7 @@ const S = {
     flexDirection: "column",
     overflow: "hidden",
     color: "white",
+    padding: "5px",
     boxSizing: "border-box",
   },
   closeIconBtn: {
@@ -1297,17 +1298,11 @@ const S = {
     display:"flex", alignItems:"center", justifyContent:"center", gap:5,
     border:"1px solid", borderRadius:8, padding:"8px 0", cursor:"pointer", fontWeight:600, fontSize:11,
   },
-  title: { margin: 0, fontSize: 26, fontWeight: 700, marginRight: 20 },
-
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
   subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
-   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 24,
-    marginLeft:20,
-    marginBottom: 20,
-    flexWrap: "wrap",
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
   },
 
   headerLeft: {

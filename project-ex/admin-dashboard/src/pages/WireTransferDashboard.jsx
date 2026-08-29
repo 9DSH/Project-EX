@@ -180,13 +180,13 @@ const S = {
     width: 25, background: "#0f172a", color: "#94a3b8", fontSize: 12, fontWeight: 700,
     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s ease",
   },
-  title: { margin: 0, fontSize: 26, fontWeight: 700, marginRight: 20 },
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
   subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: 24, marginLeft: 20, marginTop: 16, marginBottom: 16, flexWrap: "wrap",
+    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
   },
-  headerLeft: { display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap" },
+  headerLeft: { display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap"},
 };
 
 const Field = ({ label, children }) => (
@@ -1361,7 +1361,15 @@ export default function WireTransferDashboard() {
   
   // ── layout ─────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#060d18", color: "white", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
+    <div style={{ 
+      display: "flex", 
+      flexDirection: "column", 
+      height: "100vh", 
+      background: "#060d18", 
+      padding: "5px",
+      color: "white", 
+      fontFamily: "'Inter', sans-serif", 
+      overflow: "hidden" }}>
       {/* edit modal only — Add now slides in from the sidebar */}
       {editPair && (
         <PairEditModal
@@ -1375,7 +1383,7 @@ export default function WireTransferDashboard() {
       {/* ── HEADER ── */}
       <div style={S.header}>
         <div style={S.headerLeft}>
-          <div>
+           <div>
             <div style={S.title}>Transfer Management</div>
             <div style={S.subtitle}>Manage wire transfer pairs, rates and orders</div>
           </div>

@@ -85,7 +85,8 @@ CONTENT = {
         "fa": "⚠️ حساب ایجاد شد اما ورود خودکار ناموفق بود.\nبرای ورود دستی از /start استفاده کنید.",
     },
     "auth_logged_out": {"en": "🚪 Logged out successfully.\n\nUse /start to log in again.", "fa": "🚪 با موفقیت خارج شدید.\n\nبرای ورود مجدد از /start استفاده کنید."},
-
+    "account_inactive": {"en": "❌ Your account is not active. Please contact support.", "fa": "❌ حساب شما فعال نیست. لطفاً با پشتیبانی تماس بگیرید."},
+    "btn_account_logout": {"en": "🚪 Logout", "fa": "🚪 خروج"},
     # =====================================================
     # LANGUAGE
     # =====================================================

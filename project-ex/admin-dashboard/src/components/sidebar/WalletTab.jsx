@@ -1,7 +1,17 @@
 ﻿import { useEffect, useState } from "react";
 import { API_URL } from "../../config";
 import PermissionGate from "../../components/PermissionGate";
-import { Trash2 } from "lucide-react";
+import {
+  Trash2,
+  ChevronDown,
+  Wallet,
+  Link2,
+  Landmark,
+  User,
+  CreditCard,
+  Building2,
+  Hash,
+} from "lucide-react";
 
 export default function WalletTab({
   user,   currencies,  networks,  pairs,  selectedCurrency,  setSelectedCurrency,
@@ -238,20 +248,38 @@ export default function WalletTab({
       const isLoadingWallet = walletPairLoading[walletKey];
       const savingField = walletPairSaving[walletKey];
       const walletMessage = walletPairMessages[walletKey];
-      const rowTitle = `${b.currency}  ${b.network_chain || b.network || "No Network"}`;
       const canDeleteBalance = Number(b.available || 0) === 0 && Number(b.frozen || 0) === 0;
+      const coinLabel = (b.currency || "?").slice(0, 3).toUpperCase();
 
       return (
-        <div key={`${walletKey}-${idx}`} style={styles.walletRowCard}>
+        <div
+          key={`${walletKey}-${idx}`}
+          style={{ ...styles.walletRowCard, borderColor: isOpen ? "#2c3a56" : "#1e293b" }}
+        >
           <button
             type="button"
+            tabIndex={-1}
             style={styles.walletRowButton}
             onClick={() => toggleWalletRow(b)}
           >
             <div style={styles.walletRowMain}>
-              <div>
-                <div style={styles.walletRowTitle}>{rowTitle}</div>
-                <div style={styles.walletRowMeta}>{b.network || "Wallet Pair"}</div>
+              <div style={styles.walletRowLeft}>
+                <div style={{ ...styles.walletCoinBadge, ...(isIrt ? styles.walletCoinBadgeIrt : styles.walletCoinBadgeCrypto) }}>
+                  {isIrt ? <Landmark size={18} /> : coinLabel.slice(0, 2)}
+                </div>
+                <div style={styles.walletRowLabels}>
+                  <div style={styles.walletRowTitleRow}>
+                    <span style={styles.walletRowTitle}>{b.currency}</span>
+                    {!isIrt && (
+                      <span style={styles.walletNetworkChip}>
+                        {b.network_chain || b.network || "No network"}
+                      </span>
+                    )}
+                  </div>
+                  <div style={styles.walletRowMeta}>
+                    {isIrt ? "Internal toman balance" : b.network || "Wallet pair"}
+                  </div>
+                </div>
               </div>
 
               <div style={styles.walletAmounts}>
@@ -259,11 +287,19 @@ export default function WalletTab({
                   <span style={styles.balanceLabel}>Available</span>
                   <span style={styles.availableValue}>{formatBalance(b.available)}</span>
                 </div>
+                <div style={styles.walletAmountDivider} />
                 <div style={styles.walletAmountItem}>
                   <span style={styles.balanceLabel}>Frozen</span>
                   <span style={styles.frozenValue}>{formatBalance(b.frozen)}</span>
                 </div>
-                <span style={styles.walletExpandIcon}>{isOpen ? "v" : ">"}</span>
+                <span
+                  style={{
+                    ...styles.walletExpandIcon,
+                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                >
+                  <ChevronDown size={16} />
+                </span>
               </div>
             </div>
           </button>
@@ -271,8 +307,18 @@ export default function WalletTab({
           {isOpen && (
             <div style={styles.walletDetailsPanel}>
               {isIrt ? (
-                /* ---- IRT card content moved here ---- */
-                <>
+                /* ---- IRT bank details ---- */
+                <div style={styles.irtPanel}>
+                  <div style={styles.irtPanelHeader}>
+                    <div style={styles.irtPanelHeaderIcon}>
+                      <Landmark size={16} />
+                    </div>
+                    <div>
+                      <div style={styles.irtPanelTitle}>Bank account details</div>
+                      <div style={styles.irtPanelSub}>Used to verify IRT deposits and withdrawals</div>
+                    </div>
+                  </div>
+
                   {irtBankMessage && (
                     <div
                       style={
@@ -284,23 +330,27 @@ export default function WalletTab({
                       {irtBankMessage.text}
                     </div>
                   )}
+
                   <div style={styles.irtGrid}>
                     {[
-                      ["bank_holder_name", "Bank Holder Name"],
-                      ["bank_card_number", "Bank Card Number"],
-                      ["bank_name", "Bank Name"],
-                      ["bank_sheba", "Bank Sheba"],
-                    ].map(([field, label]) => (
-                      <div key={field} style={styles.walletDetailBlock}>
-                        <label style={styles.label}>{label}</label>
+                      ["bank_holder_name", "Bank holder name", User],
+                      ["bank_card_number", "Bank card number", CreditCard],
+                      ["bank_name", "Bank name", Building2],
+                      ["bank_sheba", "Bank Sheba (IBAN)", Hash],
+                    ].map(([field, fieldLabel, FieldIcon]) => (
+                      <div key={field} style={styles.irtFieldCard}>
+                        <label style={styles.irtFieldLabel}>
+                          <FieldIcon size={13} />
+                          {fieldLabel}
+                        </label>
                         {canManageFinance ? (
                           <input
                             value={irtBankDraft[field]}
                             onChange={(e) =>
                               setIrtBankDraft((prev) => ({ ...prev, [field]: e.target.value }))
                             }
-                            style={styles.input}
-                            placeholder={`Enter ${label.toLowerCase()}`}
+                            style={styles.irtFieldInput}
+                            placeholder={`Enter ${fieldLabel.toLowerCase()}`}
                           />
                         ) : (
                           <div style={styles.walletReadOnlyValue}>
@@ -310,6 +360,7 @@ export default function WalletTab({
                       </div>
                     ))}
                   </div>
+
                   <div style={styles.walletDetailActions}>
                     <span style={styles.walletDetailsHint}>
                       Editable by admin for user corrections or support.
@@ -322,13 +373,16 @@ export default function WalletTab({
                         onClick={saveIrtBankInfo}
                         disabled={irtBankSaving}
                       >
-                        {irtBankSaving ? "Saving" : "Save IRT Info"}
+                        {irtBankSaving ? "Saving…" : "Save bank info"}
                       </button>
                     )}
                   </div>
-                </>
+                </div>
               ) : isLoadingWallet ? (
-                <div style={styles.walletDetailsHint}>Loading wallet details</div>
+                <div style={styles.walletLoadingState}>
+                  <span style={styles.walletSpinnerDot} />
+                  Loading wallet details…
+                </div>
               ) : (
                 <>
                   {walletMessage && (
@@ -345,22 +399,25 @@ export default function WalletTab({
 
                   {canManageFinance ? (
                     <PermissionGate allowed={canManageFinance}>
-                      <div style={styles.walletDetailsContent}>
-                        <div style={styles.walletDetailBlock}>
-                          <label style={styles.label}>Deposit Wallet Address</label>
+                      <div style={styles.walletPairGrid}>
+                        <div style={styles.walletAddressCard}>
+                          <div style={styles.walletAddressHeader}>
+                            <span style={styles.walletAddressIcon}>
+                              <Wallet size={14} />
+                            </span>
+                            <span style={styles.walletAddressTitle}>Deposit wallet</span>
+                          </div>
                           <input
                             value={walletDraft.deposit_address}
                             onChange={(e) =>
                               handleWalletDraftChange(walletKey, "deposit_address", e.target.value)
                             }
-                            style={styles.input}
+                            style={styles.walletAddressInput}
                             placeholder={walletDetails?.deposit_address ? "" : "Not set yet"}
                           />
                           <div style={styles.walletDetailActions}>
                             <span style={styles.walletDetailsHint}>
-                              {walletDetails?.min_deposit != null || walletDetails?.max_deposit != null
-                                ? `Min ${walletDetails?.min_deposit ?? ""}  Max ${walletDetails?.max_deposit ?? ""}`
-                                : "Deposit address for this currency/network."}
+                              { "Deposit address for this currency/network."}
                             </span>
                             <button
                               type="button"
@@ -369,19 +426,24 @@ export default function WalletTab({
                               onClick={() => saveWalletField(b, "deposit_address")}
                               disabled={savingField === "deposit_address"}
                             >
-                              {savingField === "deposit_address" ? "Saving" : "Save"}
+                              {savingField === "deposit_address" ? "Saving…" : "Save"}
                             </button>
                           </div>
                         </div>
 
-                        <div style={styles.walletDetailBlock}>
-                          <label style={styles.label}>External Wallet Address</label>
+                        <div style={styles.walletAddressCard}>
+                          <div style={styles.walletAddressHeader}>
+                            <span style={styles.walletAddressIcon}>
+                              <Link2 size={14} />
+                            </span>
+                            <span style={styles.walletAddressTitle}>External wallet</span>
+                          </div>
                           <input
                             value={walletDraft.external_wallet_address}
                             onChange={(e) =>
                               handleWalletDraftChange(walletKey, "external_wallet_address", e.target.value)
                             }
-                            style={styles.input}
+                            style={styles.walletAddressInput}
                             placeholder={walletDetails?.external_wallet_address ? "" : "Not set yet"}
                           />
                           <div style={styles.walletDetailActions}>
@@ -395,45 +457,55 @@ export default function WalletTab({
                               onClick={() => saveWalletField(b, "external_wallet_address")}
                               disabled={savingField === "external_wallet_address"}
                             >
-                              {savingField === "external_wallet_address" ? "Saving" : "Save"}
+                              {savingField === "external_wallet_address" ? "Saving…" : "Save"}
                             </button>
                           </div>
                         </div>
+                      </div>
 
-                        <div style={styles.walletDangerBlock}>
-                          <div>
-                            <div style={styles.walletDangerTitle}>Delete Balance Row</div>
-                            <div style={styles.walletDangerHint}>
-                              Removes this pair from the user sidebar only if available and frozen balances are both zero and the pair has no transaction history.
-                            </div>
+                      <div style={styles.walletDangerBlock}>
+                        <div>
+                          <div style={styles.walletDangerTitle}>Delete balance row</div>
+                          <div style={styles.walletDangerHint}>
+                            Removes this pair from the user sidebar only if available and frozen balances are both zero and the pair has no transaction history.
                           </div>
-                          <button
-                            type="button"
-                            style={{
-                              ...styles.walletDeleteBtn,
-                              opacity: canDeleteBalance ? 1 : 0.45,
-                              cursor: canDeleteBalance ? "pointer" : "not-allowed",
-                            }}
-                            disabled={!canDeleteBalance}
-                            onClick={() => deleteBalancePair?.(b)}
-                            title={canDeleteBalance ? "Delete zero unused balance" : "Only zero balances can be deleted"}
-                          >
-                            <Trash2 size={14} />
-                            Delete
-                          </button>
                         </div>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.walletDeleteBtn,
+                            opacity: canDeleteBalance ? 1 : 0.45,
+                            cursor: canDeleteBalance ? "pointer" : "not-allowed",
+                          }}
+                          disabled={!canDeleteBalance}
+                          onClick={() => deleteBalancePair?.(b)}
+                          title={canDeleteBalance ? "Delete zero unused balance" : "Only zero balances can be deleted"}
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
                       </div>
                     </PermissionGate>
                   ) : (
-                    <div style={styles.walletDetailsContent}>
-                      <div style={styles.walletDetailBlock}>
-                        <div style={styles.walletReadOnlyLabel}>Deposit Wallet Address</div>
+                    <div style={styles.walletPairGrid}>
+                      <div style={styles.walletAddressCard}>
+                        <div style={styles.walletAddressHeader}>
+                          <span style={styles.walletAddressIcon}>
+                            <Wallet size={14} />
+                          </span>
+                          <span style={styles.walletAddressTitle}>Deposit wallet</span>
+                        </div>
                         <div style={styles.walletReadOnlyValue}>
                           {walletDetails?.deposit_address || "Not set yet"}
                         </div>
                       </div>
-                      <div style={styles.walletDetailBlock}>
-                        <div style={styles.walletReadOnlyLabel}>External Wallet Address</div>
+                      <div style={styles.walletAddressCard}>
+                        <div style={styles.walletAddressHeader}>
+                          <span style={styles.walletAddressIcon}>
+                            <Link2 size={14} />
+                          </span>
+                          <span style={styles.walletAddressTitle}>External wallet</span>
+                        </div>
                         <div style={styles.walletReadOnlyValue}>
                           {walletDetails?.external_wallet_address || "Not set yet"}
                         </div>
@@ -979,13 +1051,16 @@ const styles = {
     overflow: "hidden",
  },
 
-  walletList: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 15 },
+  walletList: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 15 },
 
   walletRowCard: {
     background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #1e293b",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "#1e293b",
     borderRadius: 18,
     overflow: "hidden",
+    transition: "border-color 0.15s",
   },
 
   walletRowButton: {
@@ -994,8 +1069,12 @@ const styles = {
     background: "transparent",
     color: "inherit",
     padding: 0,
+    margin: 0,
     cursor: "pointer",
     textAlign: "left",
+    outline: "none",
+    display: "block",
+    borderRadius: "inherit",
   },
 
   walletRowMain: {
@@ -1004,9 +1083,61 @@ const styles = {
     alignItems: "center",
     gap: 16,
     padding: "14px 16px",
+    flexWrap: "wrap",
+  },
+
+  walletRowLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  walletCoinBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  walletCoinBadgeCrypto: {
+    background: "linear-gradient(135deg, rgba(37,99,235,0.25), rgba(37,99,235,0.08))",
+    border: "1px solid rgba(59,130,246,0.35)",
+    color: "#93c5fd",
+  },
+
+  walletCoinBadgeIrt: {
+    background: "linear-gradient(135deg, rgba(34,197,94,0.25), rgba(34,197,94,0.08))",
+    border: "1px solid rgba(34,197,94,0.35)",
+    color: "#86efac",
+  },
+
+  walletRowLabels: { minWidth: 0 },
+
+  walletRowTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
   },
 
   walletRowTitle: { fontSize: 16, fontWeight: 700, color: "white" },
+
+  walletNetworkChip: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: "#93c5fd",
+    background: "rgba(37,99,235,0.12)",
+    border: "1px solid rgba(37,99,235,0.25)",
+    borderRadius: 999,
+    padding: "3px 8px",
+  },
+
   walletRowMeta: { fontSize: 11, color: "#64748b", marginTop: 4 },
 
   walletAmounts: {
@@ -1019,35 +1150,34 @@ const styles = {
 
   walletAmountItem: {
     display: "flex",
-    alignItems: "center",
-    gap: 6,
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 2,
     fontSize: 12,
   },
 
+  walletAmountDivider: {
+    width: 1,
+    height: 26,
+    background: "#1e293b",
+  },
+
   walletExpandIcon: {
-    fontSize: 11,
-    color: "#94a3b8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#64748b",
     minWidth: 18,
-    textAlign: "right",
+    transition: "transform 0.2s",
   },
 
   walletDetailsPanel: {
     borderTop: "1px solid #1e293b",
     background: "#0b1220",
-    padding: 14,
-  },
-
-  walletDetailsContent: {
+    padding: 16,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-  },
-
-  walletDetailBlock: {
-    background: "rgba(15,23,42,0.75)",
-    border: "1px solid #1e293b",
-    borderRadius: 14,
-    padding: 12,
+    gap: 14,
   },
 
   walletDetailActions: {
@@ -1069,6 +1199,75 @@ const styles = {
     opacity: 1,
   },
 
+  walletLoadingState: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    color: "#94a3b8",
+    padding: "6px 2px",
+  },
+
+  walletSpinnerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#3b82f6",
+    opacity: 0.8,
+  },
+
+  /* Crypto wallet pair (deposit / external) */
+  walletPairGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 12,
+  },
+
+  walletAddressCard: {
+    background: "rgba(15,23,42,0.75)",
+    border: "1px solid #1e293b",
+    borderRadius: 14,
+    padding: 14,
+  },
+
+  walletAddressHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+
+  walletAddressIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    background: "rgba(59,130,246,0.12)",
+    color: "#93c5fd",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  walletAddressTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#e2e8f0",
+  },
+
+  walletAddressInput: {
+    width: "100%",
+    background: "#0b1220",
+    border: "1px solid #1e293b",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "white",
+    outline: "none",
+    fontSize: 13,
+    fontFamily: "monospace",
+    boxSizing: "border-box",
+  },
+
   walletDangerBlock: {
     background: "rgba(127,29,29,0.18)",
     border: "1px solid rgba(239,68,68,0.22)",
@@ -1077,6 +1276,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    marginTop: 10,
     gap: 12,
     flexWrap: "wrap",
   },
@@ -1128,20 +1328,15 @@ const styles = {
     fontWeight: 600,
   },
 
-  walletReadOnlyLabel: {
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 6,
-  },
-
   walletReadOnlyValue: {
     color: "#e2e8f0",
     fontSize: 13,
     lineHeight: 1.5,
     wordBreak: "break-all",
+    fontFamily: "monospace",
   },
 
-  balanceLabel: { fontSize: 12, color: "#94a3b8" },
+  balanceLabel: { fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.4 },
   availableValue: { color: "#22c55e", fontWeight: 700, fontSize: 15 },
   frozenValue: { color: "#f59e0b", fontWeight: 700, fontSize: 15 },
 
@@ -1153,6 +1348,63 @@ const styles = {
     border: "1px dashed #334155",
     background: "#0b1220",
     color: "#64748b",
+  },
+
+  /* IRT bank panel */
+  irtPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  },
+
+  irtPanelHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  irtPanelHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    background: "rgba(34,197,94,0.12)",
+    color: "#86efac",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  irtPanelTitle: { fontSize: 14, fontWeight: 700, color: "#e2e8f0" },
+  irtPanelSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
+
+  irtFieldCard: {
+    background: "rgba(15,23,42,0.75)",
+    border: "1px solid #1e293b",
+    borderRadius: 14,
+    padding: 12,
+  },
+
+  irtFieldLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#94a3b8",
+  },
+
+  irtFieldInput: {
+    width: "100%",
+    background: "#0b1220",
+    border: "1px solid #1e293b",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "white",
+    outline: "none",
+    fontSize: 13,
+    boxSizing: "border-box",
   },
 
   //  INTERNAL TRANSFER 
@@ -1503,4 +1755,8 @@ styles.irtCardBadge = {
   border: "1px solid rgba(59,130,246,.25)",
   background: "rgba(59,130,246,.1)",
 };
-styles.irtGrid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
+styles.irtGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 10,
+};

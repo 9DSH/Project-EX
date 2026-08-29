@@ -320,6 +320,47 @@ def _migrate_exchange_rate_history_changed_by(conn) -> None:
             conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_{fk_name}"))
             print(f"[ensure_schema] skip FK {fk_name}: {e}")
 
+def _migrate_conversations_kind(conn) -> None:
+    """
+    Adds Conversation.kind (default 'support') and swaps the old
+    single-column UNIQUE(user_id) for UNIQUE(user_id, kind), so a user can
+    have both a Telegram support conversation and an internal admin<->master
+    conversation without colliding.
+    """
+    if not _table_exists(conn, "conversations"):
+        print("[ensure_schema] skip conversations.kind: table does not exist")
+        return
+
+    if not _column_exists(conn, "conversations", "kind"):
+        conn.execute(
+            text(
+                "ALTER TABLE conversations ADD COLUMN kind VARCHAR(20) "
+                "NOT NULL DEFAULT 'support'"
+            )
+        )
+
+    # Drop the old single-column unique constraint if present. Postgres
+    # names auto-generated unique constraints like "<table>_<column>_key".
+    old_uq_candidates = ["conversations_user_id_key"]
+    for name in old_uq_candidates:
+        if _constraint_exists(conn, name):
+            conn.execute(text(f"ALTER TABLE conversations DROP CONSTRAINT {name}"))
+
+    new_uq = "uq_conversation_user_kind"
+    if not _constraint_exists(conn, new_uq):
+        conn.execute(text(f"SAVEPOINT sp_{new_uq}"))
+        try:
+            conn.execute(
+                text(
+                    f"ALTER TABLE conversations ADD CONSTRAINT {new_uq} "
+                    f"UNIQUE (user_id, kind)"
+                )
+            )
+            conn.execute(text(f"RELEASE SAVEPOINT sp_{new_uq}"))
+        except Exception as e:
+            conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_{new_uq}"))
+            print(f"[ensure_schema] skip {new_uq}: {e}")
+
 
 def set_session_master(db):
     """
@@ -512,6 +553,7 @@ def ensure_schema():
         _recompute_wire_order_admin_from_pair(conn)
 
         _migrate_exchange_rate_history_changed_by(conn)
+        _migrate_conversations_kind(conn)
 
 def _rls_enabled(conn, table_name: str) -> bool:
     return bool(

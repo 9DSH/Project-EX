@@ -365,17 +365,11 @@ export default function Transactions() {
 
       {/* HEADER */}
       <div style={styles.header}>
-
-        <div>
-          <h1 style={styles.title}>
-            Transactions Management
-          </h1>
-
-          <p style={styles.subtitle}>
-            Monitor deposits, withdrawals,
-            purchases and blockchain activity
-          </p>
-        </div>
+          <div>
+            <div style={styles.title}>Transactions Management</div>
+            <div style={styles.subtitle}>            Monitor deposits, withdrawals,
+            purchases and blockchain activity</div>
+          </div>
 
         <button
           onClick={loadTransactions}
@@ -800,7 +794,7 @@ const tdStyle = {
 
 const styles = {
   page: {
-    padding: "0 0 0 20px",
+    padding: "5px",
     background: "#020617",
     height: "100vh",
     display: "flex",
@@ -810,14 +804,7 @@ const styles = {
     boxSizing: "border-box",
   },
 
-header: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 24,
-  marginBottom: 28,
-  flexWrap: "wrap",
-},
+
 
 tableScroll: {
   overflowY: "auto",
@@ -825,17 +812,11 @@ tableScroll: {
   minHeight: 0,
 },
 
-  title: {
-    margin: 0,
-    fontSize: 26,
-    fontWeight: 700,
-    marginRight: 20
-  },
-
-  subtitle: {
-    color: "#64748b",
-    fontSize: 13,
-    margin: "2px 0 0",
+    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
+  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14, padding :"10px 0 20px 20px",  flexWrap: "wrap"
   },
 
   refreshBtn: {
@@ -885,6 +866,8 @@ tableScroll: {
     flexDirection: "column",
     flex: 1,
     minHeight: 0,
+    
+    marginLeft: 10
   },
 
   table: {

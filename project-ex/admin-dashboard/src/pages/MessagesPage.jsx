@@ -559,6 +559,7 @@ export default function MessagesPage() {
                     flexDirection: "column",
                     background: "transparent",
                     overflow: "hidden",
+                    padding: "5px"
                 }}
             >
 
@@ -567,34 +568,25 @@ export default function MessagesPage() {
             <div style={{
                 flexShrink: 0,
                 background: "transparent",
-                padding: "16px 24px 0",
+                padding: "0 14px 0",
                 
             }}>
                 {/* Top row: title + stat pills */}
-                <div style={{ 
-                    display: "flex", 
-                    alignItems: "flex-start", 
-                    justifyContent: "left", 
-                    marginBottom: 24, 
-                    flexWrap: "wrap", 
-                    gap: 12 }}>
-                    <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-
+                <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
+                    }}>
+                        
+                    {/* Stat pills */}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginLeft:20 }}>
                             <div>
-                                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", color: "white" }}>
+                                <h1 style={{ color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",}}>
                                     Messages
                                 </h1>
-                                <div style={{ color: "#626e7eff", fontSize: 12, marginTop: 1 }}>
+                                <div style={{ color: "#64748b", fontSize: 13, margin: "2px 0 0" }}>
                                     Direct conversations &amp; broadcasts
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Stat pills */}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginLeft:20 }}>
-                        
                         <StatPill
                             icon={Users}
                             label="Active Users"
@@ -693,6 +685,7 @@ export default function MessagesPage() {
                 alignItems: "center",
                 padding: "20px 0",
                 overflow: "hidden",
+                marginLeft: "5px"
                 
             }}
             >
@@ -859,7 +852,8 @@ export default function MessagesPage() {
                     flex: 1, 
                     display: "flex", 
                     flexDirection: "column", 
-                    background: "#060d1a",  
+                    background: "#060d1a", 
+                    marginRight: "5px", 
   
                  border: "1px solid #34343dbe",
                     borderRadius: 15,

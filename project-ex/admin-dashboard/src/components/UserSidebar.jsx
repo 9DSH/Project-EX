@@ -1354,6 +1354,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
                         fromNetworkRequired={fromNetworkRequired}
                         setCreateOrderOpen={setCreateOrderOpen}
                         formatRate={formatRate}
+                        providerName = {adminUsername ?? "—"}
                       />
                     )}
        

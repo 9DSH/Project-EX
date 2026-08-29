@@ -47,10 +47,16 @@ from app.routes.admin_bot_control import router as admin_bot_control_router
 from app.routes.bot_context import router as bot_context_router    
 from app.routes.exchange import router as exchange_router
 from app.routes.admin_invitations import router as admin_invitations_router
+from app.routes.admin_account import router as admin_account_router
+from app.routes.admin_platform_wallet import router as admin_platform_wallet_router
+from app.routes.admin_master_messages import router as admin_master_messages_router
+
+
 
 app = FastAPI(title="Project EX API", version="1.0.0")
 os.makedirs("uploads/products", exist_ok=True)
 os.makedirs("uploads/telegram", exist_ok=True)
+os.makedirs("uploads/internal", exist_ok=True)
 
 app.mount(
     "/uploads",
@@ -147,7 +153,9 @@ app.include_router(admin_telegram_bot_settings_router)
 app.include_router(admin_platform_bank_router)
 app.include_router(admin_bot_control_router)
 app.include_router(bot_context_router)
-
+app.include_router(admin_account_router)
+app.include_router(admin_platform_wallet_router)
+app.include_router(admin_master_messages_router)
 
 # =========================
 # ROOT

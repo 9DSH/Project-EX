@@ -31,7 +31,7 @@ export default function AdminLayout({ children }) {
           zIndex: 1,
         }}
       >
-        <div style={{ flex: 1, padding: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, padding: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
           {children}
         </div>
       </div>

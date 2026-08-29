@@ -46,7 +46,7 @@ async def _show_wire_pairs(message, token):
 
         if IS_GLOBAL_BOT:
             admin_id = g(pair, "admin_id")
-            admin_label = g(pair, "admin_username") or (f"Admin #{admin_id}" if admin_id else "")
+            admin_label = g(pair, "admin_username") or (f"Exchange #{admin_id}" if admin_id else "")
             if admin_label:
                 label += f" · {admin_label}"
 

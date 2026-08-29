@@ -12,7 +12,7 @@ def _admin_username_map(db: Session, admin_ids: set[int]):
 
     display_rows = db.query(TelegramBotSettings).filter(
         TelegramBotSettings.admin_id.in_(admin_ids),
-        TelegramBotSettings.bot_kind == "admin",
+        TelegramBotSettings.bot_kind.in_(["admin", "global_main"]),
         TelegramBotSettings.display_name.isnot(None),
         TelegramBotSettings.display_name != "",
     ).all()

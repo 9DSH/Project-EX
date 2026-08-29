@@ -52,6 +52,7 @@ def get_exchange_pairs(db: Session = Depends(get_db_rls_bot_context)):
 def get_wire_pairs(db: Session = Depends(get_db_rls_bot_context)):
     pairs = db.query(WireTransferPair).filter(WireTransferPair.is_active == True).all()
     admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    print(admins_map)
     return [{
         "id": p.id,
         "from_currency": {"symbol": p.from_currency.symbol},

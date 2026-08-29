@@ -33,8 +33,8 @@ const ACCESS_OPTIONS = [
 
 
   // ───────────────── WIRE TRANSFER
-  { key: "wire_transfer.view",   label: "View Wire Transfers",   group: "wire_transfer" },
-  { key: "wire_transfer.manage", label: "Manage Wire Transfers", group: "wire_transfer" },
+  { key: "wire_transfer.view",   label: "View Wire Transfers",   group: "transfer" },
+  { key: "wire_transfer.manage", label: "Manage Wire Transfers", group: "transfer" },
 
   // ───────────────── PRODUCTS
   { key: "products.view", label: "View Products", group: "products" },
@@ -55,5 +55,5 @@ export const ACCESS_GROUPS = {
   finance: ACCESS_OPTIONS.filter((a) => a.group === "finance"),
   products: ACCESS_OPTIONS.filter((a) => a.group === "products"),
   exchange: ACCESS_OPTIONS.filter((a) => a.group === "exchange"),
-  wire_transfer: ACCESS_OPTIONS.filter((a) => a.group === "wire_transfer"),
+  transfer: ACCESS_OPTIONS.filter((a) => a.group === "transfer"),
 };

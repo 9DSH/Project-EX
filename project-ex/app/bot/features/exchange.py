@@ -27,7 +27,7 @@ async def _show_exchange_pairs(message, token, user_id=None):
         label = t("exchange_pair_button", lang).format(from_symbol=from_symbol, to_symbol=to_symbol, rate=rate)
         admin_id = g(p, "admin_id")
         if IS_GLOBAL_BOT:
-            admin_label = g(p, "admin_username") or (f"Admin #{admin_id}" if admin_id else "")
+            admin_label = g(p, "admin_username") or (f"Exchange #{admin_id}" if admin_id else "")
             if admin_label:
                 label += f" · {admin_label}"
         callback_data = f"ex_pair_{from_symbol}_{to_symbol}" + (f"_{admin_id}" if IS_GLOBAL_BOT else "")

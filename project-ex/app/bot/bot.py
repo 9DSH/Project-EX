@@ -236,20 +236,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _sync_lang_from_profile(user_id, token)
         lang = get_lang(user_id)
         await show_main_menu(
-            update.message, 
-            t("welcome_back_choose", lang), 
+            update.message,
+            t("welcome_back_choose", lang),
             user_id=user_id,
-        show_services=True,
-            )
+            show_services=True,
+        )
         return
 
-    # New/unauthenticated users start on the bot-admin's configured default
-    # language (see admin_default_language below) until they explicitly
-    # change it with the "🌐 Language" button.
+    # No token in memory (fresh process, or previous restart wiped it) —
+    # try silent re-entry via telegram_id before asking to log in again.
     lang = get_lang(user_id)
+    try:
+        res = await api_post(f"{API_URL}/auth/session", json={"telegram_id": str(user_id)})
+        data = res.json() if res.status_code == 200 else (res.json() if res.status_code == 400 else {})
+    except Exception:
+        data = {}
+        res = None
+
+    if res is not None and res.status_code == 200:
+        auto_token = data.get("access_token")
+        if auto_token:
+            user_tokens[user_id] = auto_token
+            if data.get("language") in SUPPORTED_LANGUAGES:
+                set_lang(user_id, data.get("language"))
+            lang = get_lang(user_id)
+            await show_main_menu(
+                update.message,
+                t("welcome_back_choose", lang),
+                user_id=user_id,
+                show_services=True,
+            )
+            return
+    elif res is not None and res.status_code == 400:
+        detail = (data or {}).get("detail", "")
+        if "not active" in detail.lower():
+            user_state[user_id] = {}
+            await send_or_edit(update.message, t("account_inactive", lang), reply_markup=None, edit=False)
+            return
+        # "No linked account" → fresh user, fall through to normal login prompt
+
     user_state[user_id] = {}
     await send_or_edit(update.message, t("welcome_login_prompt", lang), reply_markup=auth_inline(lang), edit=False)
-
 
 async def set_admin_default_language(default_language):
     """Called once at bot startup (see main()) to seed the language new,
@@ -284,7 +311,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ==============================================================
     # MAIN MENU BUTTON TAPS
     # ==============================================================
-
+    
     # ── 💰 WALLET ─────────────────────────────────────────────────
     if action == "btn_wallet":
         await send_or_edit(update.message, wrap(t("wallet_dashboard_title", lang), t("wallet_dashboard_body", lang), lang=lang), reply_markup=safe_inline(wallet_inline(lang), lang), edit=False)
@@ -330,6 +357,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── 🚪 LOGOUT ─────────────────────────────────────────────────
     if action == "btn_logout":
+        try:
+            await api_post(f"{API_URL}/auth/logout", json={"telegram_id": str(user_id)})
+        except Exception:
+            pass
         user_tokens.pop(user_id, None)
         user_state.pop(user_id, None)
         user_last_balance.pop(user_id, None)
@@ -898,6 +929,18 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.data == "myaccount_edit_bank":
         user_state[user_id] = {}
         await _start_account_edit_flow(q.message, token, "bank", user_id)
+        return
+
+    if q.data == "myaccount_logout":
+        try:
+            await api_post(f"{API_URL}/auth/logout", json={"telegram_id": str(user_id)})
+        except Exception:
+            pass
+        user_tokens.pop(user_id, None)
+        user_state.pop(user_id, None)
+        user_last_balance.pop(user_id, None)
+        exchange_state.pop(user_id, None)
+        await send_or_edit(q.message, t("auth_logged_out", lang), reply_markup=None, edit=True)
         return
 
     if q.data.startswith("myaccount_confirm_"):
