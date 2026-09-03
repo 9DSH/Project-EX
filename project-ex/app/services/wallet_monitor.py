@@ -136,12 +136,18 @@ def _get_configured_asset_balances(address: str):
             seen.add(key)
 
             tatum_symbol = to_tatum_symbol(symbol, chain)
-            balance = get_token_balance(address, tatum_symbol)
+            try:
+                balance = get_token_balance(address, tatum_symbol)
+                balance_error = None
+            except Exception as exc:
+                balance = 0
+                balance_error = str(exc)
             results.append({
                 "currency": symbol,
                 "network": chain,
                 "tatum_symbol": tatum_symbol,
                 "balance": balance,
+                "error": balance_error,
             })
 
             native_symbol = get_native_tatum_symbol(chain)
@@ -150,12 +156,18 @@ def _get_configured_asset_balances(address: str):
                 continue
             seen.add(native_key)
 
-            gas_balance = get_token_balance(address, native_symbol)
+            try:
+                gas_balance = get_token_balance(address, native_symbol)
+                gas_error = None
+            except Exception as exc:
+                gas_balance = 0
+                gas_error = str(exc)
             results.append({
                 "currency": native_symbol,
                 "network": chain,
                 "tatum_symbol": native_symbol,
                 "balance": gas_balance,
+                "error": gas_error,
             })
 
         return results

@@ -27,6 +27,7 @@ from app.models.wire_transfer_order import WireTransferOrder
 from app.services.auth_service import reset_user_password 
 from app.services.wallet_derivation_service import get_or_create_wallet_for_pair, create_default_wallets_for_user
 from app.routes.admin_orders import  build_order_response
+from app.routes.utilts.shared_functions import get_admin_username
 
 router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 
@@ -87,7 +88,21 @@ def has_access(user, permission: str):
 # SHARED USER SERIALIZER
 # -------------------------
 def serialize_user(u, db):
-    balances = db.query(UserBalance).filter(UserBalance.user_id == u.user_id).all()
+    balance_rows = (
+        db.query(
+            UserBalance.currency_id,
+            UserBalance.network_id,
+            UserBalance.available_balance,
+            UserBalance.frozen_balance,
+            Currency.symbol.label("currency_symbol"),
+            Network.name.label("network_name"),
+            Network.chain.label("network_chain"),
+        )
+        .join(Currency, Currency.id == UserBalance.currency_id)
+        .outerjoin(Network, Network.id == UserBalance.network_id)
+        .filter(UserBalance.user_id == u.user_id)
+        .all()
+    )
     bank_info = db.query(UserBankInfo).filter(UserBankInfo.user_id == u.user_id).first()
 
     unread_messages = db.query(func.count(Message.id))\
@@ -119,6 +134,10 @@ def serialize_user(u, db):
         Transaction.status == "pending"
     ).scalar()
 
+        # Batch-resolve admin usernames to avoid N+1 queries
+    admin_username = get_admin_username(db, u.admin_id )
+
+
     return {
         "user_id": u.user_id,
         "username": u.username,
@@ -131,7 +150,8 @@ def serialize_user(u, db):
         "telegram_id": u.telegram_id,
         "status": u.status,
         "role": u.role,
-        "admin_id": u.admin_id,          
+        "admin_id": u.admin_id,  
+        "admin_username": admin_username,         
         "created_date": u.created_date, 
         "access_points": u.access_points,
         "bank_info": {
@@ -148,14 +168,14 @@ def serialize_user(u, db):
         "balances": [
             {
                 "currency_id": b.currency_id,
-                "currency": b.currency.symbol if b.currency else None,
+                "currency": b.currency_symbol,
                 "network_id": b.network_id,
-                "network": b.network.name if b.network else None,
-                "network_chain": b.network.chain if b.network else None,
+                "network": b.network_name,
+                "network_chain": b.network_chain,
                 "available": b.available_balance,
                 "frozen": b.frozen_balance,
             }
-            for b in balances
+            for b in balance_rows
         ],
     }
 

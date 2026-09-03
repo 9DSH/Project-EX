@@ -513,7 +513,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
       );
       
       const data = await res.json();
-      console.log(data)
+
       if (!res.ok) {
         alert(data.detail || "Failed to create order");
         return;
@@ -1123,6 +1123,8 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
   // UI GUARD
   // =====================================================
   if (!user) return null;
+
+  console.log("user", user)
 
   // =====================================================
   // DERIVED — transfer currency symbol for display

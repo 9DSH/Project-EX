@@ -26,7 +26,6 @@ from app.routes.admin_orders import router as admin_orders_router
 from app.routes.admin_users import router as admin_users_router
 from app.routes.admin_wallet import router as admin_wallet_router
 from app.routes.admin_categories import router as admin_categories_router
-from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.admin_realtime import router as admin_realtime_router
 from app.routes.admin_messages import router as admin_messages_router
 from app.routes.webhook import router as webhook_router
@@ -128,7 +127,6 @@ app.include_router(wallet_router)
 app.include_router(user_invitations_router)
 
 # Admin Routes
-app.include_router(admin_dashboard_router)
 app.include_router(admin_users_router)
 app.include_router(admin_products_router)
 app.include_router(admin_orders_router)

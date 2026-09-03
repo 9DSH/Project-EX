@@ -2,8 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import API from "../api/client";
 import {
   BarChart3, X, Package, DollarSign, LayoutGrid,
-  Search, ChevronDown, User, Trophy, TrendingUp
+  Search, ChevronDown, User, Trophy, TrendingUp, Calendar
 } from "lucide-react";
+import "react-datepicker/dist/react-datepicker.css";
+import DatePicker from "react-datepicker";
 
 // ── Skeleton ────────────────────────────────────────────────────
 function Sk({ w = "100%", h = 16, r = 6 }) {
@@ -336,20 +338,44 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState("products");
-  console.log(data)
+  const [dateRange, setDateRange] = useState([null, null]);
+  const [startDate, endDate] = dateRange;
+
   useEffect(() => {
     if (!visible) return;
     loadAnalytics();
-  }, [visible]);
+  }, [visible, startDate, endDate]);
 
   const loadAnalytics = async () => {
     setLoading(true);
     try {
-      const res = await API.get("/admin/orders/analytics/products");
+      const params = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0, 0, 0, 0);
+        params.start_date = s.toISOString();
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
+        params.end_date = e.toISOString();
+      }
+      const res = await API.get("/admin/orders/analytics/products", { params });
       const rows = res.data || [];
       setData(rows);
-      const adminSet = new Set(rows.filter(r => r.is_admin_product && r.admin_id != null).map(r => r.admin_id));
-      setAdmins([...adminSet].sort((a, b) => a - b));
+      // Unique admins with id + username for dropdown / labels
+      const byId = {};
+      rows.filter((r) => r.is_admin_product && r.admin_id != null).forEach((r) => {
+        if (!byId[r.admin_id]) {
+          byId[r.admin_id] = {
+            id: r.admin_id,
+            username: r.admin_username || null,
+          };
+        } else if (r.admin_username && !byId[r.admin_id].username) {
+          byId[r.admin_id].username = r.admin_username;
+        }
+      });
+      setAdmins(Object.values(byId).sort((a, b) => a.id - b.id));
     } catch (err) {
       console.error("Failed to load analytics", err);
     } finally {
@@ -369,7 +395,8 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
       d.product_name?.toLowerCase().includes(q) ||
       d.plan?.toLowerCase().includes(q) ||
       d.category_name?.toLowerCase().includes(q) ||
-      String(d.admin_id || "").includes(q)
+      String(d.admin_id || "").includes(q) ||
+      d.admin_username?.toLowerCase().includes(q)
     );
   }
 
@@ -402,16 +429,38 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
   // All data unfiltered by admin/category/search for cross-admin comparisons
   const allData = data;
 
+  const adminLabel = (id, username) => {
+    if (id == null) return null;
+    return username ? `${username} (#${id})` : `Admin #${id}`;
+  };
+
   // ── Compute per-admin totals from ALL data ──
   const adminTotals = (() => {
     const map = {};
     allData.filter(d => d.is_admin_product && d.admin_id != null).forEach(d => {
-      if (!map[d.admin_id]) map[d.admin_id] = { id: d.admin_id, name: `Admin #${d.admin_id}`, sold: 0, income: 0 };
+      if (!map[d.admin_id]) {
+        map[d.admin_id] = {
+          id: d.admin_id,
+          name: adminLabel(d.admin_id, d.admin_username),
+          sold: 0,
+          income: 0,
+        };
+      }
       map[d.admin_id].sold += d.sold || 0;
       map[d.admin_id].income += d.income || 0;
+      if (d.admin_username && !map[d.admin_id].name.includes(d.admin_username)) {
+        map[d.admin_id].name = adminLabel(d.admin_id, d.admin_username);
+      }
     });
     return Object.values(map);
   })();
+
+  const selectedAdminMeta = selectedAdmin !== "all"
+    ? (admins.find((a) => String(a.id) === String(selectedAdmin)) || { id: selectedAdmin, username: null })
+    : null;
+  const selectedAdminLabel = selectedAdminMeta
+    ? adminLabel(selectedAdminMeta.id, selectedAdminMeta.username)
+    : null;
 
   // Top admin by current metric (across ALL data)
   const topAdminObj = [...adminTotals].sort((a, b) => b[metric] - a[metric])[0] || null;
@@ -458,7 +507,7 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
     accent: "#f59e0b",
   } : {
     icon: Trophy,
-    label: metric === "income" ? `Top Earner · ${selectedAdmin}` : `Most Sold · ${selectedAdmin}`,
+    label: metric === "income" ? `Top Earner · ${selectedAdminLabel}` : `Most Sold · ${selectedAdminLabel}`,
     line1: productLabel(specificAdminTopProduct),
     line2: specificAdminTopProduct?.category_name || null,
     line3: specificAdminTopProduct
@@ -480,7 +529,7 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
     accent: "#8b5cf6",
   } : {
     icon: TrendingUp,
-    label: metric === "income" ? `${selectedAdmin} · Income` : `${selectedAdmin} · Units`,
+    label: metric === "income" ? `${selectedAdminLabel} · Income` : `${selectedAdminLabel} · Units`,
     line1: metric === "income"
       ? fmtIncome(filtered.reduce((s, d) => s + (d.income || 0), 0))
       : fmtUnits(filtered.reduce((s, d) => s + (d.sold || 0), 0)),
@@ -573,6 +622,30 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
                 />
               </div>
 
+              <div style={{ position: "relative", minWidth: 140, flex: 1 }}>
+                <Calendar size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none", zIndex: 1 }} />
+                <DatePicker
+                  selectsRange
+                  startDate={startDate}
+                  endDate={endDate}
+                  onChange={(update) => setDateRange(update)}
+                  isClearable
+                  placeholderText="Select date range"
+                  customInput={
+                    <input
+                      style={{
+                        width: "100%", boxSizing: "border-box",
+                        background: "#0b1424", border: "1px solid #1a2540",
+                        color: startDate || endDate ? "#e2e8f0" : "#8997abff",
+                        padding: "6px 28px 6px 26px",
+                        borderRadius: 8, outline: "none", fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    />
+                  }
+                />
+              </div>
+
               <div style={{ position: "relative", minWidth: 120 }}>
                 <User size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
                 <select
@@ -587,7 +660,11 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
                   }}
                 >
                   <option value="all">All Admins</option>
-                  {admins.map(a => <option key={a} value={a}>{`Admin #${a}`}</option>)}
+                  {admins.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.username ? `${a.username} (#${a.id})` : `Admin #${a.id}`}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown size={10} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
               </div>
@@ -640,8 +717,18 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
           }}>
             <div style={{ alignContent: "center", fontSize: 10, fontWeight: 700, color: "#8294aeff", letterSpacing: 1, marginBottom: 14 }}>
               {metric === "sold" ? "UNITS SOLD" : "INCOME"} BY {viewMode === "categories" ? "CATEGORY" : "PRODUCT"}
-              {selectedAdmin !== "all" && <span style={{ color: "#8b5cf6" }}> · ADMIN #{selectedAdmin}</span>}
+              {selectedAdmin !== "all" && (
+                <span style={{ color: "#8b5cf6" }}> · {selectedAdminLabel || `ADMIN #${selectedAdmin}`}</span>
+              )}
               {selectedCategory !== "all" && <span style={{ color: "#3b82f6" }}> · {selectedCategory.toUpperCase()}</span>}
+              {(startDate || endDate) && (
+                <span style={{ color: "#34d399" }}>
+                  {" · "}
+                  {startDate ? startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "…"}
+                  {" – "}
+                  {endDate ? endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "…"}
+                </span>
+              )}
             </div>
             <ColumnChart data={displayData} metric={metric} loading={loading} />
 

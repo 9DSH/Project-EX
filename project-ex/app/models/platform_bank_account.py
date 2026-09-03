@@ -10,6 +10,8 @@ class PlatformBankAccount(Base):
     id = Column(Integer, primary_key=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, index=True)
 
+    platform_kind = Column(String(20), nullable=False, default="telegram_bot", server_default="telegram_bot")
+
     bank_name = Column(String(255), nullable=True)
     bank_holder_name = Column(String(255), nullable=True)
     bank_card_number = Column(String(255), nullable=True)

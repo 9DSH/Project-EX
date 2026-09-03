@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master
+from app.models.user import User
 from app.models.invitation_code import InvitationCode
 from app.services.invitation_service import (
     ensure_invitation_pool,
@@ -25,7 +26,39 @@ def get_all_codes(db: Session = Depends(get_db_rls), user=Depends(get_current_us
         # 🔥 AUTO-HEAL POOL ON EVERY FETCH
     ensure_invitation_pool(db, DEFAULT_POOL_SIZE)
 
-    return db.query(InvitationCode).order_by(InvitationCode.id.desc()).all()
+    codes = db.query(InvitationCode).order_by(InvitationCode.id.desc()).all()
+    user_ids = {code.created_by_user_id for code in codes if code.created_by_user_id}
+    user_ids.update({code.used_by_user_id for code in codes if code.used_by_user_id})
+    users = {
+        row.user_id: row
+        for row in db.query(User).filter(User.user_id.in_(user_ids)).all()
+    } if user_ids else {}
+
+    def serialize_user(row):
+        if not row:
+            return None
+        full_name = " ".join(part for part in [row.first_name, row.last_name] if part).strip() or None
+        return {
+            "user_id": row.user_id,
+            "username": row.username,
+            "full_name": full_name,
+            "role": row.role,
+            "admin_id": row.admin_id,
+            "invited_by": row.invited_by,
+        }
+
+    return [{
+        "id": code.id,
+        "code": code.code,
+        "created_by_user_id": code.created_by_user_id,
+        "created_by": serialize_user(users.get(code.created_by_user_id)),
+        "used_by_user_id": code.used_by_user_id,
+        "used_by": serialize_user(users.get(code.used_by_user_id)),
+        "is_used": code.is_used,
+        "is_active": code.is_active,
+        "created_at": code.created_at,
+        "used_at": code.used_at,
+    } for code in codes]
 
 
 # =========================

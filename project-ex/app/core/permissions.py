@@ -3,6 +3,7 @@
 class Permissions:
     # DASHBOARD
     DASHBOARD_VIEW = "dashboard.view"
+    PERSONAL_BOT_ACCESS_POINT = "telegram_personal_bot"
 
     # USERS
     USERS_VIEW = "users.view"
@@ -57,6 +58,7 @@ class Permissions:
 ROLE_PERMISSIONS = {
     "master": "*",  # full access
     "admin": [
+        Permissions.PERSONAL_BOT_ACCESS_POINT,
         Permissions.DASHBOARD_VIEW,
         Permissions.USERS_VIEW,
         Permissions.USERS_CREATE,

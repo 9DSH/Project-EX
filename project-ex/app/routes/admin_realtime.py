@@ -163,10 +163,10 @@ async def get_stats(admin_id: int | None = None):
                 "time": o.created_at.isoformat() if o.created_at else None,
             })
 
-        try:
-            wallet = get_wallet_status()
-        except Exception:
-            wallet = None
+      #  try:
+       #     wallet = get_wallet_status()
+       # except Exception:
+        #    wallet = None
 
         return {
             "admin_balances": admin_balances,
@@ -177,7 +177,7 @@ async def get_stats(admin_id: int | None = None):
                 "exchange": {"count": len(exchange_items), "items": exchange_items},
                 "wire_transfer": {"count": pending_wire_count, "items": wire_items},
             },
-            "wallet": wallet,
+            # "wallet": wallet,
         }
 
     finally:

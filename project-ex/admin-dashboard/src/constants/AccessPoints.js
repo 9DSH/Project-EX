@@ -7,6 +7,7 @@ const ACCESS_OPTIONS = [
   { key: "users.create", label: "Create Users", group: "basic" },
   { key: "users.edit", label: "Edit Users", group: "basic" },
   { key: "telegram_global_bot_access", label: "Global Bot Visibility", group: "basic" },
+  { key: "telegram_personal_bot", label: "Personal Bot", group: "basic" },
     // ───────────────── MESSAGE
   { key: "send.message", label: "Send Message", group: "basic" },
    { key: "broadcast.message", label: "Broadcast Message", group: "basic" },
@@ -43,6 +44,7 @@ const ACCESS_OPTIONS = [
   { key: "products.delete", label: "Delete Products", group: "products" },
   { key: "products.manage", label: "Manage Products", group: "products" },
 
+  
   
 
 ];

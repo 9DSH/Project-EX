@@ -15,6 +15,7 @@ class PlatformBankAccountCreate(BaseModel):
     bank_holder_name: Optional[str] = None
     bank_card_number: Optional[str] = None
     bank_sheba: Optional[str] = None
+    platform_kind: str = "telegram_bot"
     is_active: bool = False
 
 
@@ -23,6 +24,7 @@ class PlatformBankAccountUpdate(BaseModel):
     bank_holder_name: Optional[str] = None
     bank_card_number: Optional[str] = None
     bank_sheba: Optional[str] = None
+    platform_kind: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -35,6 +37,7 @@ def _serialize(account: PlatformBankAccount, db: Session):
         "bank_holder_name": account.bank_holder_name,
         "bank_card_number": account.bank_card_number,
         "bank_sheba": account.bank_sheba,
+        "platform_kind": account.platform_kind or "telegram_bot",
         "is_active": account.is_active,
         "has_transactions": tx_count > 0,
         "created_at": account.created_at,
@@ -47,10 +50,24 @@ def _ensure_admin_access(current_user: dict):
         raise HTTPException(403, "Admin access required")
 
 
-def _set_single_active_account(db: Session, account_id: Optional[int]):
+def _normalize_kind(value: Optional[str]) -> str:
+    kind = (value or "telegram_bot").strip().lower()
+    if kind not in {"telegram_bot", "wires"}:
+        raise HTTPException(400, "platform_kind must be one of: telegram_bot, wires")
+    return kind
+
+
+def _assert_kind_access(current_user: dict, platform_kind: str):
+    if platform_kind == "wires" and not is_master(current_user):
+        raise HTTPException(403, "Only master can manage wires platform bank accounts")
+
+
+def _set_single_active_account(db: Session, account_id: Optional[int], platform_kind: str):
     if account_id is None:
         return
-    accounts = db.query(PlatformBankAccount).all()
+    accounts = db.query(PlatformBankAccount).filter(
+        PlatformBankAccount.platform_kind == platform_kind
+    ).all()
     for account in accounts:
         if account.id == account_id:
             account.is_active = True
@@ -65,14 +82,22 @@ def _can_edit(account: PlatformBankAccount, db: Session):
 
 @router.get("/")
 def list_accounts(
+    platform_kind: Optional[str] = None,
     db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)
+    query = db.query(PlatformBankAccount)
+    if platform_kind:
+        kind = _normalize_kind(platform_kind)
+        _assert_kind_access(current_user, kind)
+        query = query.filter(PlatformBankAccount.platform_kind == kind)
     if is_master(current_user):
-        accounts = db.query(PlatformBankAccount).order_by(PlatformBankAccount.created_at.desc()).all()
+        accounts = query.order_by(PlatformBankAccount.created_at.desc()).all()
     else:
-        accounts = db.query(PlatformBankAccount).filter(PlatformBankAccount.admin_id == current_user.get("user_id")).order_by(PlatformBankAccount.created_at.desc()).all()
+        accounts = query.filter(
+            PlatformBankAccount.admin_id == current_user.get("user_id")
+        ).order_by(PlatformBankAccount.created_at.desc()).all()
     return [_serialize(account, db) for account in accounts]
 
 
@@ -83,19 +108,22 @@ def create_account(
     current_user=Depends(get_current_user),
 ):
     _ensure_admin_access(current_user)
+    platform_kind = _normalize_kind(payload.platform_kind)
+    _assert_kind_access(current_user, platform_kind)
     account = PlatformBankAccount(
         admin_id=current_user.get("user_id"),
         bank_name=payload.bank_name,
         bank_holder_name=payload.bank_holder_name,
         bank_card_number=payload.bank_card_number,
         bank_sheba=payload.bank_sheba,
+        platform_kind=platform_kind,
         is_active=False,
     )
     db.add(account)
     db.flush()
 
     if payload.is_active:
-        _set_single_active_account(db, account.id)
+        _set_single_active_account(db, account.id, platform_kind)
 
     db.commit()
     db.refresh(account)
@@ -124,6 +152,11 @@ def update_account(
             return _serialize(account, db)
         raise HTTPException(400, "This bank account has transaction history and cannot be edited")
 
+    if payload.platform_kind is not None:
+        new_kind = _normalize_kind(payload.platform_kind)
+        _assert_kind_access(current_user, new_kind)
+        account.platform_kind = new_kind
+
     if payload.bank_name is not None:
         account.bank_name = payload.bank_name
     if payload.bank_holder_name is not None:
@@ -134,7 +167,7 @@ def update_account(
         account.bank_sheba = payload.bank_sheba
     if payload.is_active is not None:
         if payload.is_active:
-            _set_single_active_account(db, account.id)
+            _set_single_active_account(db, account.id, account.platform_kind or "telegram_bot")
         else:
             account.is_active = False
 

@@ -13,7 +13,9 @@ class OrderItem(Base):
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     
-    price = Column(Numeric(precision=18, scale=8), nullable=False)
+    original_price = Column(Numeric(precision=18, scale=8), nullable=True)   # pre-discount price snapshot
+    discount_percent = Column(Numeric(precision=5, scale=2), nullable=True)  # snapshot of discount applied at order time
+    price = Column(Numeric(precision=18, scale=8), nullable=False)           # final price actually charged
     currency = Column(String(10), default="USDT")
     network = Column(String(20), nullable=True)
     
@@ -21,6 +23,21 @@ class OrderItem(Base):
     
     delivery_info = Column(JSONB, nullable=True)     # credentials, gift code, vpn config...
     delivered_at = Column(DateTime, nullable=True)
+
+    # ── Status-change audit trail (mirrors wire_transfer_orders convention:
+    #    the admin's username is stored directly, not an FK) ────────────
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(String(255), nullable=True)
+
+    rejected_at = Column(DateTime, nullable=True)
+    rejected_by = Column(String(255), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+
+    delivered_by = Column(String(255), nullable=True)
+
+    failed_at = Column(DateTime, nullable=True)
+    failed_by = Column(String(255), nullable=True)
+    fail_reason = Column(Text, nullable=True)
 
     input_data = Column(
         JSONB,

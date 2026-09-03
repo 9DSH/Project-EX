@@ -213,6 +213,22 @@ def get_native_tatum_symbol(chain: str) -> str:
     return CHAIN_ENDPOINTS[chain_key]["native_tatum"]
 
 
+def get_recommended_blockchain_fee(chain: str) -> dict:
+    chain_key = "TRON" if (chain or "").upper() in {"TRON", "TRX"} else (chain or "").upper()
+    if not chain_key:
+        raise Exception("Chain is required")
+
+    res = requests.get(f"{BASE_URL}/blockchain/fee/{chain_key}", headers=headers)
+    if res.status_code != 200:
+        raise Exception(f"Fee lookup failed ({chain_key}): {res.text}")
+
+    data = res.json()
+    if not isinstance(data, dict):
+        raise Exception(f"Unexpected fee response for {chain_key}")
+
+    return data
+
+
 # =========================
 # UNIVERSAL TOKEN TRANSFER
 # Works for any currency/network defined in NETWORK_CONFIG

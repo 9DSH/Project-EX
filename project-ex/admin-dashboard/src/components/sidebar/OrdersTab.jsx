@@ -69,7 +69,7 @@ export default function OrdersTab({
   setExchangeAmount,
   formatRate,
   setCustomRate,
-  providerName
+  
 }) {
 
   // =====================
@@ -843,7 +843,7 @@ const BigNumber = ({ value, style = {} }) => {
 
                    <PermissionGate allowed={hasPermission(user, "orders.view")}>
                   {
-                  console.log(orders)}
+                  console.log("Orders:", orders)}
                   <div style={styles.ordersList}>
                     {loadingOrders ? (
                       <div style={styles.emptyOrders}>Loading orders...</div>
@@ -862,7 +862,7 @@ const BigNumber = ({ value, style = {} }) => {
 
                         {o.product_admin_id != null && (
                           <div style={styles.providerMeta}>
-                            Provider #{o.product_admin_id} {providerName}
+                            Provider #{o.product_admin_id} {o.product_owner_displayName}
                           </div>
                         )}
                       </div>
@@ -1308,7 +1308,7 @@ const BigNumber = ({ value, style = {} }) => {
                                           }</span>
                                 <span style={{ ...styles.networkBadge, marginLeft: 10 }}>FEE {Number(o.fee_amount).toLocaleString()}</span>
                               </div>
-                              <div style={styles.orderMeta}>#{o.id} • Exchange #{o.admin_id} {providerName}</div>
+                              <div style={styles.orderMeta}>#{o.id} • Exchange #{o.admin_id} {o.admin_displayName}</div>
                             </div>
                             <div style={{
                               ...styles.orderStatus,

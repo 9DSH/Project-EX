@@ -1,0 +1,188 @@
+.login-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #04050a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The sphere is oversized and centered so its wires extend past every
+   edge of the viewport — reads as being inside it rather than looking
+   at it from outside. */
+.login-wire-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  
+  animation: loginZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-wire-bg .wire-canvas {
+  filter: saturate(0.85) brightness(0.8);
+}
+
+/* Darkens the edges/center so the form stays readable over the wires. */
+.login-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(
+    circle at center,
+    rgba(4, 5, 10, 0.35) 0%,
+    rgba(4, 5, 10, 0.65) 45%,
+    rgba(4, 5, 10, 0.92) 100%
+  );
+  pointer-events: none;
+}
+
+.login-logo {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  animation: loginLogoFadeIn 0.9s ease both;
+  animation-delay: 0.15s;
+}
+
+.login-logo-button {
+  background: none;
+  border: none;
+  outline: none;
+  padding: 6px 10px;
+  margin: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
+}
+
+.login-logo-button:hover,
+.login-logo-button:focus {
+  background: none;
+  outline: none;
+  transform: translateX(-50%) scale(1.08);
+}
+
+.login-logo-button:active {
+  transform: translateX(-50%) scale(1.02);
+}
+
+@keyframes loginLogoFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.site-logo-img {
+  height: 30px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(130, 160, 255, 0.45));
+}
+
+.login-card {
+  position: relative;
+  z-index: 2;
+  width: 320px;
+  padding: 32px 28px;
+  border-radius: 16px;
+  background: rgba(17, 24, 39, 0.214);
+  border: 1px solid rgba(140, 165, 255, 0.18);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(90, 120, 255, 0.08);
+  /* TUNABLE: change 0.75s to speed up/slow down the login card's entrance */
+  animation: loginZoomIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Feels like the card is emerging from far behind the screen, coming
+   toward the viewer to settle at its resting size/position. */
+@keyframes loginZoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+    filter: blur(10px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+.login-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #eaf1ff;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.login-subtitle {
+  margin: 6px 0 24px;
+  font-size: 12px;
+  color: #5b6b90;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.login-field {
+  margin-bottom: 16px;
+}
+
+.login-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7f8fb5;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.login-field input {
+  width: 100%;
+}
+
+.login-error {
+  margin: -4px 0 16px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 12px;
+  text-align: center;
+}
+
+.login-button {
+  width: 100%;
+  padding: 11px 0;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(90, 120, 255, 0.45), rgba(60, 80, 200, 0.35));
+  border: 1px solid rgba(150, 175, 255, 0.4);
+  color: #eaf1ff;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  transition: all 0.2s ease;
+}
+
+.login-button:hover {
+  background: linear-gradient(135deg, rgba(110, 140, 255, 0.6), rgba(70, 95, 220, 0.45));
+  transform: translateY(-1px);
+}
+
+.login-button:active {
+  transform: translateY(0);
+}

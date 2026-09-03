@@ -11,7 +11,7 @@ from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.wire_transfer_order import WireTransferOrder
 from app.models.user import User
-from app.routes.shared_functions import _admin_username_map
+from app.routes.utilts.shared_functions import _admin_telegram_displayName_map
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
 from app.models.transaction import Transaction
@@ -304,7 +304,7 @@ def list_pairs(
 
     pairs = query.order_by(WireTransferPair.id).all()
 
-    admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    admins_map = _admin_telegram_displayName_map(db, {p.admin_id for p in pairs})
     return [_pair_out(p, admins_map) for p in pairs]
 
 
@@ -344,7 +344,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
         joinedload(WireTransferPair.from_currency),
         joinedload(WireTransferPair.to_currency)
     ).filter(WireTransferPair.id == pair.id).first()
-    admins_map = _admin_username_map(db, {pair.admin_id})
+    admins_map = _admin_telegram_displayName_map(db, {pair.admin_id})
     return _pair_out(pair, admins_map)
 
 
@@ -388,7 +388,7 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
         joinedload(WireTransferPair.from_currency),
         joinedload(WireTransferPair.to_currency)
     ).filter(WireTransferPair.id == pair_id).first()
-    admins_map = _admin_username_map(db, {pair.admin_id})
+    admins_map = _admin_telegram_displayName_map(db, {pair.admin_id})
     return _pair_out(pair, admins_map)
 
 
@@ -435,7 +435,7 @@ def list_orders(
 
     orders = query.order_by(WireTransferOrder.created_at.desc()).all()
 
-    admins_map = _admin_username_map(db, {o.admin_id for o in orders})
+    admins_map = _admin_telegram_displayName_map(db, {o.admin_id for o in orders})
     return [_order_out(o, admins_map) for o in orders]
 
 
@@ -458,7 +458,7 @@ def get_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get
     if not is_master(admin) and order.admin_id != admin["user_id"] and not can_view_all_admins(admin):
         raise HTTPException(403, "Not authorized to view this order")
 
-    admins_map = _admin_username_map(db, {order.admin_id})
+    admins_map = _admin_telegram_displayName_map(db, {order.admin_id})
     return _order_out(order, admins_map)
 
 

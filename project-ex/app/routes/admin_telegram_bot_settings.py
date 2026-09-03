@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.security import get_current_user, is_admin_or_above, is_master
+from app.core.permissions import has_access
 from app.models.user import TelegramBotSettings, User
 from app.services.telegram_validation_service import validate_telegram_token, set_bot_display_name
 
@@ -14,6 +15,8 @@ router = APIRouter(prefix="/admin/telegram-bot-settings", tags=["Admin Telegram 
 
 SUPPORTED_LANGUAGES = {"en", "fa"}
 GLOBAL_KINDS = {"global_main", "support"}
+
+PERSONAL_BOT_ACCESS_POINT = "telegram_personal_bot"
 
 
 class TelegramBotSettingsUpdate(BaseModel):
@@ -43,6 +46,20 @@ def get_admin(user=Depends(get_current_user)):
 def get_master(user=Depends(get_current_user)):
     if not is_master(user):
         raise HTTPException(status_code=403, detail="Master access required")
+    return user
+
+
+def require_personal_bot_access(user=Depends(get_current_user)):
+    """
+    Gate for any admin/master managing their OWN personal bot
+    (bot_kind="admin"). Master always passes (has_access short-circuits for
+    role == master). Regular admins need the telegram_personal_bot access
+    point explicitly granted.
+    """
+    if not is_admin_or_above(user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if not has_access(user, PERSONAL_BOT_ACCESS_POINT):
+        raise HTTPException(status_code=403, detail="Personal Telegram bot access not granted")
     return user
 
 
@@ -112,11 +129,11 @@ async def _apply_update(settings: TelegramBotSettings, payload: TelegramBotSetti
 
 
 # ─────────────────────────────────────────────
-# MY BOT (any admin, including master's own personal bot)
+# MY BOT (any admin/master with telegram_personal_bot access)
 # ─────────────────────────────────────────────
 
 @router.get("/")
-def get_my_bot_settings(db: Session = Depends(get_db), admin=Depends(get_admin)):
+def get_my_bot_settings(db: Session = Depends(get_db), admin=Depends(require_personal_bot_access)):
     settings = _get_or_create(admin.get("user_id"), "admin", db)
     return _serialize(settings)
 
@@ -125,7 +142,7 @@ def get_my_bot_settings(db: Session = Depends(get_db), admin=Depends(get_admin))
 async def update_my_bot_settings(
     payload: TelegramBotSettingsUpdate,
     db: Session = Depends(get_db),
-    admin=Depends(get_admin),
+    admin=Depends(require_personal_bot_access),
 ):
     settings = _get_or_create(admin.get("user_id"), "admin", db)
     settings = await _apply_update(settings, payload, db)
@@ -136,7 +153,7 @@ async def update_my_bot_settings(
 async def set_my_display_name(
     payload: DisplayNameUpdate,
     db: Session = Depends(get_db),
-    admin=Depends(get_admin),
+    admin=Depends(require_personal_bot_access),
 ):
     settings = _get_or_create(admin.get("user_id"), "admin", db)
     if not settings.main_bot_token:
@@ -152,6 +169,9 @@ async def set_my_display_name(
 
 # ─────────────────────────────────────────────
 # MASTER: list every admin's personal bot (for "All Admin Bots" tab)
+# Only admins who (a) have the telegram_personal_bot access point and
+# (b) have actually configured a token are shown — an admin who was never
+# granted/never set up a bot shouldn't clutter this directory.
 # ─────────────────────────────────────────────
 
 @router.get("/all")
@@ -165,12 +185,20 @@ def list_all_admin_bot_settings(db: Session = Depends(get_db), master=Depends(ge
     result = []
     for u in admins:
         s = settings_map.get(u.user_id)
+
+        access_points = u.access_points or []
+        has_personal_bot_access = u.role == "master" or PERSONAL_BOT_ACCESS_POINT in access_points
+        if not has_personal_bot_access:
+            continue
+
+        token_set = bool(s and s.main_bot_token)
+
         result.append({
             "admin_id": u.user_id,
             "username": u.username,
             "role": u.role,
             "default_language": s.default_language if s else "en",
-            "main_bot_token_set": bool(s.main_bot_token) if s else False,
+            "main_bot_token_set": token_set,
             "bot_username": s.bot_username if s else None,
             "display_name": s.display_name if s else None,
             "is_active": s.is_active if s else False,
@@ -179,13 +207,27 @@ def list_all_admin_bot_settings(db: Session = Depends(get_db), master=Depends(ge
             "is_running": s.is_running if s else False,
             "last_restart_at": s.last_restart_at if s else None,
             "last_crash_error": s.last_crash_error if s else None,
+            "enabled_services": s.enabled_services if s else None,
         })
     return result
 
 
 # ─────────────────────────────────────────────
-# MASTER: edit any admin's personal bot on their behalf
+# MASTER: view / edit any admin's personal bot on their behalf
 # ─────────────────────────────────────────────
+
+@router.get("/{admin_id}")
+def master_get_admin_bot_settings(
+    admin_id: int,
+    db: Session = Depends(get_db),
+    master=Depends(get_master),
+):
+    target = db.query(User).filter(User.user_id == admin_id).first()
+    if not target:
+        raise HTTPException(404, "Admin not found")
+    settings = _get_or_create(admin_id, "admin", db)
+    return _serialize(settings)
+
 
 @router.put("/{admin_id}")
 async def master_update_admin_bot_settings(

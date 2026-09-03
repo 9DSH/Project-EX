@@ -1,0 +1,52 @@
+.landing-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #04050a;
+  z-index: 1000;
+}
+
+.wire-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.landing-label {
+  position: absolute;
+  top: 70%;
+  left: 50%;
+  transform: translate(-50%, 40px);
+  text-align: center;
+  color: #e6ecff;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 2;
+}
+
+.landing-label p {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #4a5578;
+  text-transform: uppercase;
+}
+
+.site-logo {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.site-logo-img {
+  height: 30px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(130, 160, 255, 0.45));
+}

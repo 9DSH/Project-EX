@@ -505,6 +505,40 @@ def ensure_schema():
                             )
                 conn.execute(text("DROP TABLE global_bot_settings"))
                 
+        order_items_columns = [
+            ("order_items", "original_price", "NUMERIC(18,8)"),
+            ("order_items", "discount_percent", "NUMERIC(5,2)"),
+            ("order_items", "approved_at", "TIMESTAMP"),
+            ("order_items", "approved_by", "VARCHAR(255)"),
+            ("order_items", "rejected_at", "TIMESTAMP"),
+            ("order_items", "rejected_by", "VARCHAR(255)"),
+            ("order_items", "rejection_reason", "TEXT"),
+            ("order_items", "delivered_by", "VARCHAR(255)"),
+            ("order_items", "failed_at", "TIMESTAMP"),
+            ("order_items", "failed_by", "VARCHAR(255)"),
+            ("order_items", "fail_reason", "TEXT"),
+        ]
+
+        for table_name, column_name, column_type in order_items_columns:
+            if not _table_exists(conn, table_name):
+                print(f"[ensure_schema] skip {table_name}.{column_name}: table does not exist")
+                continue
+            if _column_exists(conn, table_name, column_name):
+                continue
+            conn.execute(
+                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            )
+
+        # backfill original_price for pre-existing rows so old orders don't
+        # show a bogus "discount" once the frontend starts reading these fields
+        if _table_exists(conn, "order_items"):
+            conn.execute(
+                text(
+                    "UPDATE order_items SET original_price = price "
+                    "WHERE original_price IS NULL"
+                )
+            )
+
         wire_order_columns = [
             ("wire_transfer_orders", "approved_at", "TIMESTAMP"),
             ("wire_transfer_orders", "rejected_at", "TIMESTAMP"),
@@ -518,6 +552,7 @@ def ensure_schema():
             ("wire_transfer_orders", "delivery_message", "TEXT"),
             ("wire_transfer_orders", "balance_was_insufficient", "BOOLEAN DEFAULT FALSE"),
             ("transactions", "wire_transfer_order_id", "INTEGER"),
+            ("platform_bank_accounts", "platform_kind", "VARCHAR(20) DEFAULT 'telegram_bot'"),
         ]
 
         for table_name, column_name, column_type in wire_order_columns:

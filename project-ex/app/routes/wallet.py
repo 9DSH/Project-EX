@@ -302,19 +302,25 @@ def get_transactions(
     user=Depends(get_current_user)
 ):
 
-    transactions = db.query(Transaction).filter(
-        Transaction.user_id == user["user_id"]
-    ).order_by(Transaction.id.desc()).all()
+    transactions = (
+        db.query(Transaction, Currency.symbol, Network.chain)
+        .outerjoin(Currency, Transaction.currency_id == Currency.id)
+        .outerjoin(Network, Transaction.network_id == Network.id)
+        .filter(Transaction.user_id == user["user_id"])
+        .order_by(Transaction.id.desc())
+        .all()
+    )
 
     result = []
 
-    for t in transactions:
+    for t, currency_symbol, network_chain in transactions:
 
         result.append({
             "id": t.id,
+            "user_id": t.user_id,
             "amount": t.amount,
-            "currency": t.currency.symbol if t.currency else None,
-            "network": t.network.chain if t.network else None,
+            "currency": currency_symbol,
+            "network": network_chain,
             "type": t.type,
             "status": t.status,
             "tx_hash": t.tx_hash,

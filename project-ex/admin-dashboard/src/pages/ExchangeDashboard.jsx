@@ -437,7 +437,7 @@ function OrderRow({ item, showOwner }) {
         borderRadius: 11,
         padding: "10px 12px",
         display: "grid",
-        gridTemplateColumns: "1.3fr 1fr 1.6fr 1fr",
+        gridTemplateColumns: "1.3fr 1.6fr 1fr 1fr 1fr",
         alignItems: "center",
         gap: 12,
       }}
@@ -472,35 +472,74 @@ function OrderRow({ item, showOwner }) {
         </div>
       </div>
 
-      {/* ================= COLUMN 2: USER INFO ================= */}
+      
+      {/* ================= COLUMN 2: Symbol & Price INFO ================= */}
       <div style={{ minWidth: 0 }}>
            
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            
-          
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#9098a7ff" }}>
+                      
             {fromSym} → {toSym}
           </div>
+          <div style={{ fontSize: 14, color: "white", fontWeight: 600 }}>
+          {fmt(item.from_amount, 2)} → {fmt(item.to_amount, 2)}
+        </div>
+        
 
-          
-          <div style={{ fontSize: 12, color: "#475569" , marginTop:3, display:"flex", alignItems:"center", gap:6}}>
-            ORDER #{item.id}
-            {showOwner && item.admin_id != null && (
-              <span style={{ fontSize:10, fontWeight:700, color:"#a78bfa", background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.22)", borderRadius:999, padding:"1px 6px" }}>
-                {item.admin_username}  {`#${item.admin_id}`}
-              </span>
-            )}
+ 
+      </div>
+
+      {/* ================= COLUMN 3: Rate ================= */}
+      <div style={{ minWidth: 0 }}>
+           
+  
+        <div style={{ display: "flex", flexDirection: "row", gap: "2px" }}>
+            
+            <div style={{ fontSize: 12, color: "#9098a7ff", marginTop: 3 }}>
+            Rate  
           </div>
+            
+            <div style={{ 
+              fontSize: 14, 
+              color: "white", 
+              fontWeight: 600 ,
+              marginLeft:"3px"}}>
+            {fmt(displayRate, 6)}
+                      
+            {showOwner && item.admin_id != null && (
+                <span style={{ 
+                  fontSize:10, 
+                  fontWeight:700, 
+                  color:"#a78bfa", 
+                  background:"rgba(139,92,246,.12)", 
+                  border:"1px solid rgba(139,92,246,.22)", 
+                  borderRadius:999, 
+                  padding:"1px 6px" }}>
+                  {item.admin_username}  {`#${item.admin_id}`}
+                </span>
+
+                
+                
+              )}
+          </div>
+        </div>
+
+ 
       </div>
 
       {/* ================= COLUMN 3: AMOUNT + RATE + FEE ================= */}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 14, color: "white", fontWeight: 600 }}>
-          {fmt(item.from_amount, 2)} → {fmt(item.to_amount, 2)}
+         
+          <div style={{ fontSize: 12, color: "#475569" , marginTop:3, display:"flex", alignItems:"center", gap:6}}>
+            ORDER ID #{item.id}
+
+          </div>
+
+          
+          <div style={{ fontSize: 12, color: "#9098a7ff", marginTop: 3 }}>
+          Fee {fmt(item.fee_amount, 2)} {fromSym} ({item.fee_percent}%)
         </div>
 
-        <div style={{ fontSize: 12, color: "#9098a7ff", marginTop: 3 }}>
-          Rate {fmt(displayRate, 6)} · Fee {fmt(item.fee_amount, 2)} {fromSym} ({item.fee_percent}%)
-        </div>
+
       </div>
 
       {/* ================= COLUMN 4: STATUS + TIME ================= */}

@@ -17,7 +17,7 @@ from sqlalchemy import func
 from app.services.telegram_service import send_telegram_message
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from app.routes.shared_functions import _admin_username_map
+from app.routes.utilts.shared_functions import get_admin_username, get_admin_usernames , _admin_telegram_displayName_map
 
 router = APIRouter(prefix="/admin/orders", tags=["Admin Orders"])
 #
@@ -39,6 +39,24 @@ def get_admin(user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
+
+
+def _resolve_admin_username(admin, db: Session) -> Optional[str]:
+    """
+    admin (from get_current_user) reliably carries "user_id" / "role"
+    (see the /transactions endpoint below), but not always "username" —
+    so look it up from the users table when it isn't already present.
+    """
+    username = admin.get("username") if isinstance(admin, dict) else getattr(admin, "username", None)
+    if username:
+        return username
+
+    admin_user_id = admin.get("user_id") if isinstance(admin, dict) else getattr(admin, "user_id", None)
+    if not admin_user_id:
+        return None
+
+    row = db.query(User).filter(User.user_id == admin_user_id).first()
+    return row.username if row else None
 
 # -------------------------
 # HELPER: SPLIT ORDER FUNDS
@@ -405,6 +423,8 @@ def approve_order(
     ))
 
     order_item.status = "approved"
+    order_item.approved_at = datetime.utcnow()
+    order_item.approved_by = _resolve_admin_username(admin, db)
 
     # ── Split funds to owner / referrer / master ───────────
     split_order_funds(order_item, db)
@@ -429,6 +449,7 @@ def approve_order(
 @router.post("/{order_id}/reject")
 def reject_order(
     order_id: int,
+    reason: Optional[str] = None,
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
@@ -502,6 +523,9 @@ def reject_order(
     balance_row.available_balance = available + price
 
     order_item.status = "rejected"
+    order_item.rejected_at = datetime.utcnow()
+    order_item.rejected_by = _resolve_admin_username(admin, db)
+    order_item.rejection_reason = reason
 
     # -------------------------
     # REFUND TRANSACTION
@@ -612,7 +636,8 @@ async def deliver_order(
         "message": "Order delivered successfully"
     }
     order_item.delivered_at = datetime.utcnow()
-
+    order_item.delivered_by = _resolve_admin_username(admin, db)
+   
     try:
         db.commit()
         db.refresh(order_item)
@@ -831,9 +856,29 @@ def build_order_response(order_item: OrderItem, db: Session, include_buyer_detai
     if product and product.extra_data:
         extra_data = product.extra_data
 
+    # -------------------------
+    # PRODUCT OWNER USERNAME
+    # -------------------------
+    product_owner_displayName = None
+    product_owner_username = None
+    if product and product.admin_id:
+        owner_map = _admin_telegram_displayName_map(db, {product.admin_id})
+        owner_username= get_admin_username(db, product.admin_id)
+        product_owner_displayName = owner_map.get(product.admin_id)
+        product_owner_username = owner_username
 
+    # -------------------------
+    # ORIGINAL PRICE (pre-discount)
+    # -------------------------
+    original_price = float(order_item.original_price) if getattr(order_item, "original_price", None) is not None else None
+    if original_price is None and product and product.discount_percent:
+        try:
+            dp = float(product.discount_percent)
+            if dp < 100:
+                original_price = round(float(order_item.price) / (1 - dp / 100), 8)
+        except (TypeError, ZeroDivisionError):
+            original_price = None
 
-   
     # -------------------------
     # RESPONSE
     # -------------------------
@@ -844,12 +889,22 @@ def build_order_response(order_item: OrderItem, db: Session, include_buyer_detai
         "status": order_item.status,
         "created_at": order_item.created_at,
         "delivered_at": order_item.delivered_at,
+        "delivered_by": order_item.delivered_by,
+        "approved_at": order_item.approved_at,
+        "approved_by": order_item.approved_by,
+        "rejected_at": order_item.rejected_at,
+        "rejected_by": order_item.rejected_by,
+        "rejection_reason": order_item.rejection_reason,
+        "failed_at": getattr(order_item, "failed_at", None),
+        "failed_by": getattr(order_item, "failed_by", None),
+        "fail_reason": getattr(order_item, "fail_reason", None),
         "delivery_info": order_item.delivery_info,
 
         # USER
         "user_id": order_item.user_id,
         "username": user.username if user and include_buyer_detail else None,
         "user_admin_id": user.admin_id if user and include_buyer_detail else None,
+
         "telegram_id" : user.telegram_id if user and include_buyer_detail else None,
         "user_status" : user.status if user and include_buyer_detail else None,
         "balances": [
@@ -869,6 +924,8 @@ def build_order_response(order_item: OrderItem, db: Session, include_buyer_detai
         # PRODUCT
         "product_id": product.id if product else None,
         "product_admin_id": product.admin_id if product else None,
+        "product_owner_displayName": product_owner_displayName,
+        "product_owner_username": product_owner_username,
         "product_name": product.name if product else "unknown",
         "slug": product.slug if product else None,
         "product_reward": product.system_reward_percent if product else None,
@@ -885,6 +942,7 @@ def build_order_response(order_item: OrderItem, db: Session, include_buyer_detai
 
         # PRICE
         "price": float(order_item.price),
+        "original_price": original_price,
         "discount_percent": float(product.discount_percent) if product and product.discount_percent else None,
         "currency": order_item.currency,
         "network": order_item.network,
@@ -918,6 +976,8 @@ def build_order_response(order_item: OrderItem, db: Session, include_buyer_detai
 
 @router.get("/analytics/products")
 def get_product_analytics(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
@@ -935,18 +995,23 @@ def get_product_analytics(
         raise HTTPException(403, "Access denied")
  
     # Aggregate delivered orders per product
-    rows = (
+    q = (
         db.query(
             OrderItem.product_id,
             func.count(OrderItem.id).label("sold"),
             func.sum(OrderItem.price).label("income"),
         )
         .filter(OrderItem.status == "delivered")
-        .group_by(OrderItem.product_id)
-        .all()
     )
+    if start_date is not None:
+        q = q.filter(OrderItem.created_at >= start_date)
+    if end_date is not None:
+        q = q.filter(OrderItem.created_at <= end_date)
+
+    rows = q.group_by(OrderItem.product_id).all()
  
     result = []
+    admin_ids = set()
     for row in rows:
         product = db.query(Product).filter(Product.id == row.product_id).first()
         if not product:
@@ -963,6 +1028,7 @@ def get_product_analytics(
         is_admin_product = False
         admin_id = product.admin_id or None
         if product.admin_id:
+            admin_ids.add(product.admin_id)
             creator = (
                 db.query(User)
                 .filter(User.user_id == product.admin_id)
@@ -982,6 +1048,11 @@ def get_product_analytics(
             "admin_id":         admin_id,              # <-- used for admin filter dropdown
             "is_admin_product": is_admin_product,
         })
+            # Resolve admin display names / usernames in one pass
+    username_map = get_admin_usernames(db, admin_ids)
+    for item in result:
+        if item["admin_id"] is not None:
+            item["admin_username"] = username_map.get(item["admin_id"])
  
     result.sort(key=lambda x: x["sold"], reverse=True)
     return result

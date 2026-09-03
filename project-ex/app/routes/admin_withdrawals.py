@@ -171,6 +171,36 @@ def approve_withdrawal(
             detail="Insufficient frozen balance"
         )
 
+    is_manual_irt = (
+        (currency.symbol or "").upper() == "IRT"
+        or (network.chain or "").upper() == "INTERNAL"
+        or (tx.blockchain or "").lower() == "irt_manual"
+    )
+
+    if is_manual_irt:
+        balance.frozen_balance -= tx.amount
+        tx.status = COMPLETED
+
+        withdrawal = Withdrawal(
+            user_id=user.user_id,
+            amount=tx.amount,
+            currency_id=tx.currency_id,
+            network_id=tx.network_id,
+            wallet_address=tx.wallet_address or "",
+            status=COMPLETED,
+            tx_hash=None,
+            created_at=datetime.utcnow(),
+            processed_at=datetime.utcnow()
+        )
+
+        db.add(withdrawal)
+        db.commit()
+
+        return {
+            "status": "withdraw_completed",
+            "tx_hash": None
+        }
+
     resolve_currency_network_pair(
         db=db,
         currency_symbol=currency.symbol,

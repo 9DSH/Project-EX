@@ -19,7 +19,7 @@ from app.schemas.product import ProductCreate , ProductUpdate
 from typing import Optional, Dict, Any
 from app.schemas.product import ProductOut
 from app.core.security import get_current_user, is_master, is_admin_or_above
-
+from app.routes.utilts.shared_functions import get_admin_usernames
 from app.core.permissions import has_access
 
 router = APIRouter(prefix="/admin/products", tags=["Admin Products"])
@@ -51,8 +51,18 @@ def get_all_products(
     if category_id is not None:
         query = query.filter(Product.category_id == category_id)
 
-    return query.order_by(Product.name.asc()).all()
+    products = query.order_by(Product.name.asc()).all()
 
+    # Batch-resolve admin usernames to avoid N+1 queries
+    admin_usernames = get_admin_usernames(db, [p.admin_id for p in products])
+
+    results = []
+    for product in products:
+        product_out = ProductOut.model_validate(product)
+        product_out.admin_username = admin_usernames.get(product.admin_id) if product.admin_id else ""
+        results.append(product_out)
+
+    return results
 
 # CREATE
 @router.post("/")

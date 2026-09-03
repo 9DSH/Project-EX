@@ -42,6 +42,15 @@ const S = {
     display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,.04)",
     border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: "10px 14px", minWidth: 130,
   },
+
+      
+  
+  title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
+  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
+  header: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: 14, padding :"10px 0 20px 20px",  flexWrap: "wrap"
+  },
 };
 
 function StatPill({ icon: Icon, label, value, accent }) {
@@ -168,7 +177,7 @@ function PaymentAccountCard({ account, canActivate, onActivate }) {
 }
 
 /* ── PAYMENTS CARD (view + activate-only list) ──────────────────── */
-function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, description }) {
+function PaymentsCard({ token, adminId, platformKind = "telegram_bot", title = "Payments", canEdit = true, description }) {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -177,7 +186,10 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, 
+        { headers: { Authorization: `Bearer ${token}` }, 
+       params: { platform_kind: platformKind },
+      });
       const all = res.data || [];
       setAccounts(adminId != null ? all.filter(a => a.admin_id === adminId) : all);
     } catch (e) {
@@ -185,7 +197,7 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
     } finally {
       setLoading(false);
     }
-  }, [token, adminId]);
+  }, [token, adminId, platformKind]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -199,7 +211,7 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
   };
 
   return (
-    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <CreditCard size={15} color="#93c5fd" />
         <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
@@ -221,7 +233,7 @@ function PaymentsCard({ token, adminId, title = "Payments", canEdit = true, desc
 }
 
 /* ── PAYMENT SETTINGS TAB (full CRUD, lives inside ConfigModal) ──── */
-function PaymentSettingsTab({ token, adminId }) {
+function PaymentSettingsTab({ token, adminId, platformKind = "telegram_bot" }) {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyBankForm());
@@ -235,7 +247,10 @@ function PaymentSettingsTab({ token, adminId }) {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API}/admin/platform-bank-accounts/`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { platform_kind: platformKind },
+      });
       const all = res.data || [];
       setAccounts(adminId != null ? all.filter(a => a.admin_id === adminId) : all);
     } catch (e) {
@@ -243,7 +258,7 @@ function PaymentSettingsTab({ token, adminId }) {
     } finally {
       setLoading(false);
     }
-  }, [token, adminId]);
+  }, [token, adminId, platformKind]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -255,7 +270,7 @@ function PaymentSettingsTab({ token, adminId }) {
       if (editingId) {
         await axios.put(`${API}/admin/platform-bank-accounts/${editingId}`, form, { headers: { Authorization: `Bearer ${token}` } });
       } else {
-        await axios.post(`${API}/admin/platform-bank-accounts/`, form, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(`${API}/admin/platform-bank-accounts/`, { ...form, platform_kind: platformKind }, { headers: { Authorization: `Bearer ${token}` } });
       }
       setForm(emptyBankForm());
       setEditingId(null);
@@ -625,7 +640,11 @@ function ConfigModal({ token, target, onClose, onSaved }) {
         )}
 
         {tab === "payments" && (
-          <PaymentSettingsTab token={token} adminId={paymentAdminId} />
+          <PaymentSettingsTab
+            token={token}
+            adminId={paymentAdminId}
+            platformKind={target.scope === "global" ? "global_bot" : "telegram_bot"}
+          />
         )}
       </div>
     </div>
@@ -633,7 +652,7 @@ function ConfigModal({ token, target, onClose, onSaved }) {
 }
 
 /* ── ALL ADMIN BOTS TAB (master) ─────────────────────────────────── */
-function AllAdminBotsTab({ token }) {
+function AllAdminBotsTab({ token, onFleetChange }) {
   const [bots, setBots] = useState([]);
   const [statusMap, setStatusMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -654,8 +673,9 @@ function AllAdminBotsTab({ token }) {
       ]);
       setBots(settingsRes.data);
       setStatusMap(statusRes.data || {});
+      onFleetChange?.();
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, [token]);
+  }, [token, onFleetChange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -694,7 +714,6 @@ function AllAdminBotsTab({ token }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bots, search, roleFilter, statusFilter, statusMap]);
-
   const selected = bots.find(b => b.admin_id === selectedId) || null;
   const liveStatus = selected ? statusMap[String(selected.admin_id)] : null;
 
@@ -722,28 +741,8 @@ function AllAdminBotsTab({ token }) {
     } catch (e) { console.error(e); }
   };
 
-  // ── Stat pills ──
-  const stats = useMemo(() => {
-    const total = bots.length;
-    const running = bots.filter(isRunning).length;
-    const configuredStopped = bots.filter(b => b.main_bot_token_set && !isRunning(b)).length;
-    const noToken = bots.filter(b => !b.main_bot_token_set).length;
-    const crashed = bots.filter(b => statusMap[String(b.admin_id)]?.status === "crashed").length;
-    return { total, running, configuredStopped, noToken, crashed };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bots, statusMap]);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%" }}>
-      {/* STAT PILLS */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <StatPill icon={Bot} label="Total Bots" value={stats.total} accent="#60a5fa" />
-        <StatPill icon={Radio} label="Running" value={stats.running} accent="#4ade80" />
-        <StatPill icon={Activity} label="Configured / Stopped" value={stats.configuredStopped} accent="#facc15" />
-        <StatPill icon={SettingsIcon} label="No Token" value={stats.noToken} accent="#94a3b8" />
-        <StatPill icon={X} label="Crashed" value={stats.crashed} accent="#f87171" />
-      </div>
-
       {/* FILTERS */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
@@ -774,7 +773,7 @@ function AllAdminBotsTab({ token }) {
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "0.5fr 1fr", gap: 14, flex: 1, minHeight: 0 }}>
         {/* LEFT: list */}
         <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }}>
           {loading ? (
@@ -802,66 +801,66 @@ function AllAdminBotsTab({ token }) {
           })}
         </div>
 
-        {/* RIGHT: detail / payments / logs */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+        {/* RIGHT: single detail container — details+payments | logs */}
+        <div style={{ ...S.card, display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflow: "hidden", padding: 16 }}>
           {!selected ? (
-            <div style={{ ...S.card, flex: 1, color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ flex: 1, color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}>
               Select a bot on the left to view its configuration, payments and logs.
             </div>
           ) : (
-            <>
-              <div style={{ ...S.card, display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
-                {/* LEFT — bot detail + all fields */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <div style={{ fontSize: 17, fontWeight: 800 }}>{selected.display_name || selected.username}</div>
-                      <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(300px, 1.2fr)", gap: 16, flex: 1, minHeight: 0, height: "100%" }}>
+              {/* LEFT — compact details stacked above payments */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected.display_name || selected.username}</div>
+                      <div style={{ color: "#64748b", fontSize: 11, marginTop: 2 }}>
                         Admin #{selected.admin_id} · @{selected.username} · {selected.role}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => restart(selected.admin_id)} style={{ ...S.primaryBtn, padding: "7px 10px", fontSize: 11 }}>
-                        <RefreshCw size={12} /> {liveStatus?.running ? "Restart" : "Start"}
+                    <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                      <button onClick={() => restart(selected.admin_id)} style={{ ...S.primaryBtn, padding: "6px 9px", fontSize: 11 }}>
+                        <RefreshCw size={11} /> {liveStatus?.running ? "Restart" : "Start"}
                       </button>
-                      <button onClick={() => stop(selected.admin_id)} style={{ ...S.primaryBtn, background: "rgba(239,68,68,.14)", color: "#f87171", padding: "7px 10px", fontSize: 11 }}>
+                      <button onClick={() => stop(selected.admin_id)} style={{ ...S.primaryBtn, background: "rgba(239,68,68,.14)", color: "#f87171", padding: "6px 9px", fontSize: 11 }}>
                         Stop
                       </button>
                       <button
                         onClick={() => setModalTarget({ scope: "admin", kind: "admin", adminId: selected.admin_id, label: `${selected.display_name || selected.username}'s Bot` })}
-                        style={{ ...S.primaryBtn, padding: "7px 10px", fontSize: 11 }}
+                        style={{ ...S.primaryBtn, padding: "6px 9px", fontSize: 11 }}
                       >
-                        <SettingsIcon size={12} /> Edit
+                        <SettingsIcon size={11} /> Edit
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                     {[
                       ["Status", liveStatus?.status || (selected.is_running ? "running" : "stopped"), liveStatus?.running ? "#4ade80" : "#f87171"],
-                      ["Last Restart", (liveStatus?.last_restart_at ?? selected.last_restart_at) ? new Date(liveStatus?.last_restart_at ?? selected.last_restart_at).toLocaleString() : "—", "white"],
-                      ["Token Configured", selected.main_bot_token_set ? "Yes" : "No", selected.main_bot_token_set ? "#4ade80" : "#f87171"],
-                      ["Default Language", selected.default_language === "fa" ? "Persian" : "English", "white"],
-                      ["Bot Active Flag", selected.is_active ? "Active" : "Inactive", selected.is_active ? "#4ade80" : "#f87171"],
+                      ["Token", selected.main_bot_token_set ? "Yes" : "No", selected.main_bot_token_set ? "#4ade80" : "#f87171"],
+                      ["Bot Active", selected.is_active ? "Active" : "Inactive", selected.is_active ? "#4ade80" : "#f87171"],
+                      ["Language", selected.default_language === "fa" ? "Persian" : "English", "white"],
                       ["Bot Username", selected.bot_username ? `@${selected.bot_username}` : "—", "white"],
+                      ["Services", selected.enabled_services == null ? "All" : `${selected.enabled_services.length}`, "white"],
+                      ["Last Restart", (liveStatus?.last_restart_at ?? selected.last_restart_at) ? new Date(liveStatus?.last_restart_at ?? selected.last_restart_at).toLocaleString() : "—", "white"],
                       ["Last Validated", selected.last_validated_at ? new Date(selected.last_validated_at).toLocaleString() : "—", "white"],
-                      ["Enabled Services", selected.enabled_services == null ? "All permitted" : `${selected.enabled_services.length} enabled`, "white"],
                     ].map(([label, val, color]) => (
-                      <div key={label} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase" }}>{label}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color, marginTop: 3, wordBreak: "break-word" }}>{val}</div>
+                      <div key={label} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 8, padding: "7px 9px" }}>
+                        <div style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 2, wordBreak: "break-word", lineHeight: 1.3 }}>{val}</div>
                       </div>
                     ))}
                   </div>
 
                   {(selected.last_validation_error || selected.last_crash_error) && (
-                    <div style={{ background: "rgba(239,68,68,.06)", border: "1px solid rgba(239,68,68,.14)", borderRadius: 10, padding: 10, fontSize: 11, color: "#fda4af" }}>
+                    <div style={{ background: "rgba(239,68,68,.06)", border: "1px solid rgba(239,68,68,.14)", borderRadius: 8, padding: 8, fontSize: 11, color: "#fda4af" }}>
                       {selected.last_validation_error || selected.last_crash_error}
                     </div>
                   )}
 
-                  <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Services Visible in Bot</div>
+                  <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 8, padding: 9 }}>
+                    <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Services Visible in Bot</div>
                     <ServiceToggleBlock
                       accessPoints="*"
                       isFullAccess
@@ -872,8 +871,7 @@ function AllAdminBotsTab({ token }) {
                   </div>
                 </div>
 
-                {/* RIGHT — Payments */}
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flexShrink: 0 }}>
                   <PaymentsCard
                     key={`pay-${selected.admin_id}`}
                     token={token}
@@ -885,9 +883,9 @@ function AllAdminBotsTab({ token }) {
                 </div>
               </div>
 
-              {/* Raw logs, last 24h */}
-              <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {/* RIGHT — logs fill height inside same container */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%", overflow: "hidden", borderLeft: "1px solid rgba(255,255,255,.06)", paddingLeft: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>Bot Logs (last 24h)</div>
                   <button onClick={() => loadLogs(selected.admin_id)} style={{ ...S.refreshBtn, padding: "5px 10px", fontSize: 11 }} disabled={logsLoading}>
                     <RefreshCw size={12} style={{ animation: logsLoading ? "spin 1s linear infinite" : "none" }} />
@@ -895,19 +893,19 @@ function AllAdminBotsTab({ token }) {
                   </button>
                 </div>
                 {!logs?.has_timestamps && logs?.lines?.length > 0 && (
-                  <div style={{ fontSize: 11, color: "#facc15" }}>
+                  <div style={{ fontSize: 11, color: "#facc15", flexShrink: 0 }}>
                     This log file has no timestamps — showing the most recent raw lines instead of a strict 24h window.
                   </div>
                 )}
                 <div style={{
                   background: "#060b16", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10,
                   padding: 12, fontFamily: "monospace", fontSize: 11, color: "#94a3b8",
-                  maxHeight: 320, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  flex: 1, minHeight: 0, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word",
                 }}>
                   {logsLoading ? "Loading logs…" : logs?.message || (logs?.lines?.length ? logs.lines.join("\n") : "No log entries in this window.")}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -932,15 +930,27 @@ export default function TelegramManagement() {
   };
 
   const isMaster = role === "master";
-  const canManage = isMaster || hasPermission(currentUser, "telegram_global_bot_access");
+  const hasPersonalBotAccess = hasPermission(currentUser, "telegram_personal_bot");
 
   const availableTabs = [
-    !isMaster && canManage && { key: "my_bot", label: "My Bot", icon: <Bot size={14} /> },
+    hasPersonalBotAccess && { key: "my_bot", label: "My Bot", icon: <Bot size={14} /> },
     isMaster && { key: "global_bots", label: "Global Bots", icon: <Globe size={14} /> },
     isMaster && { key: "all_bots", label: "All Admin Bots", icon: <Users size={14} /> },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(availableTabs[0]?.key);
+
+  if (!isMaster && !hasPersonalBotAccess) {
+    return (
+      <div style={{ padding: 24, color: "#f8fafc" }}>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Telegram Management</div>
+        <div style={{ color: "#64748b" }}>
+          You don't have access to configure a Telegram bot. Ask your master admin to grant
+          "Personal Telegram Bot Access".
+        </div>
+      </div>
+    );
+  }
 
   /* ── MY BOT (admin) ── */
   const [myBotSettings, setMyBotSettings] = useState(null);
@@ -1003,14 +1013,68 @@ export default function TelegramManagement() {
     }
   };
 
+  /* ── MASTER FLEET STATS (header pills) ── */
+  const [fleetStats, setFleetStats] = useState({ total: 0, running: 0, configuredStopped: 0, noToken: 0, crashed: 0 });
+  const [fleetStatsLoading, setFleetStatsLoading] = useState(false);
+
+  const loadFleetStats = useCallback(async () => {
+    if (!isMaster || !token) return;
+    setFleetStatsLoading(true);
+    try {
+      const [settingsRes, statusRes] = await Promise.all([
+        axios.get(`${API}/admin/telegram-bot-settings/all`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/admin/bot-control/status-all`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const botsList = settingsRes.data || [];
+      const stMap = statusRes.data || {};
+      const isRun = (b) => stMap[String(b.admin_id)]?.running ?? b.is_running;
+      setFleetStats({
+        total: botsList.length,
+        running: botsList.filter(isRun).length,
+        configuredStopped: botsList.filter(b => b.main_bot_token_set && !isRun(b)).length,
+        noToken: botsList.filter(b => !b.main_bot_token_set).length,
+        crashed: botsList.filter(b => stMap[String(b.admin_id)]?.status === "crashed").length,
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFleetStatsLoading(false);
+    }
+  }, [isMaster, token]);
+
+  useEffect(() => {
+    if (isMaster) loadFleetStats();
+  }, [isMaster, loadFleetStats]);
+
   /* ── GLOBAL BOTS (master) ── */
+
   const [globalMain, setGlobalMain] = useState(null);
   const [globalSupport, setGlobalSupport] = useState(null);
   const [globalStatusMain, setGlobalStatusMain] = useState(null);
   const [globalStatusSupport, setGlobalStatusSupport] = useState(null);
   const [globalLoading, setGlobalLoading] = useState(true);
   const [globalModalTarget, setGlobalModalTarget] = useState(null);
+  const [globalLogsKind, setGlobalLogsKind] = useState("global_main");
+  const [globalLogs, setGlobalLogs] = useState(null);
+  const [globalLogsLoading, setGlobalLogsLoading] = useState(false);
   const masterUserId = Number(localStorage.getItem("user_id")) || null;
+
+  const loadGlobalLogs = useCallback(async (kind) => {
+    setGlobalLogsLoading(true);
+    try {
+      const res = await axios.get(`${API}/admin/bot-control/global/${kind}/logs`, { headers: { Authorization: `Bearer ${token}` }, params: { hours: 24 } });
+      setGlobalLogs(res.data);
+    } catch (e) {
+      setGlobalLogs({ lines: [], message: e?.response?.data?.detail || "Failed to load logs." });
+    } finally {
+      setGlobalLogsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (tab === "global_bots") loadGlobalLogs(globalLogsKind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, globalLogsKind]);
 
   const loadGlobal = useCallback(async () => {
     setGlobalLoading(true);
@@ -1061,11 +1125,33 @@ export default function TelegramManagement() {
 
   return (
     <div style={{ padding: 24, color: "#f8fafc", height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 28, fontWeight: 800 }}>Telegram Management</div>
-        <div style={{ color: "#64748b", marginTop: 6 }}>
-          {isMaster ? "Manage global bots, monitor every admin's bot, and oversee payment accounts." : "Manage your bot, its live status, and connected payment accounts."}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={S.header}>
+          <div>
+            <div style={S.title}>Telegram Management</div>
+            <div style={S.subtitle}>Manage global bots, monitor every admin's bot, and oversee payment accounts.</div>
+          </div>
+
+      {isMaster && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <StatPill icon={Bot} label="Total Bots" value={fleetStatsLoading ? "…" : fleetStats.total} accent="#60a5fa" />
+              <StatPill icon={Radio} label="Running" value={fleetStatsLoading ? "…" : fleetStats.running} accent="#4ade80" />
+              <StatPill icon={Activity} label="Configured / Stopped" value={fleetStatsLoading ? "…" : fleetStats.configuredStopped} accent="#facc15" />
+              <StatPill icon={SettingsIcon} label="No Token" value={fleetStatsLoading ? "…" : fleetStats.noToken} accent="#94a3b8" />
+              <StatPill icon={X} label="Crashed" value={fleetStatsLoading ? "…" : fleetStats.crashed} accent="#f87171" />
+            </div>
+          )}
+        
+        
+  
+
         </div>
+        {isMaster && (
+          <button onClick={loadFleetStats} style={S.refreshBtn} disabled={fleetStatsLoading}>
+            <RefreshCw size={13} style={{ animation: fleetStatsLoading ? "spin 1s linear infinite" : "none" }} />
+            {fleetStatsLoading ? "Loading…" : "Refresh"}
+          </button>
+        )}
       </div>
 
       {availableTabs.length > 1 && (
@@ -1082,7 +1168,7 @@ export default function TelegramManagement() {
           myBotLoading ? (
             <div style={{ color: "#64748b" }}>Loading…</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, height: "100%" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, height: "100%", alignItems: "start" }}>
               {/* Column 1: Bot Card + quick actions */}
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <BotCard
@@ -1111,16 +1197,20 @@ export default function TelegramManagement() {
                 </div>
               </div>
 
-              {/* Column 2: Payments (activate-only view) */}
-              <PaymentsCard
-                token={token}
-                adminId={ownAdminId}
-                title="Payments"
-                canEdit
-                description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via Manage Bot & Payments."
-              />
+              {/* Column 2: Payments — content height (same layer logic as global) */}
+              <div style={{ minHeight: 0, minWidth: 0 }}>
+                <PaymentsCard
+                  token={token}
+                  platformKind="telegram_bot"
+                  adminId={ownAdminId}
+                  title="Payments"
+                  canEdit
+                  description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via Manage Bot & Payments."
+                />
+              </div>
 
               {/* Column 3: Live status */}
+              <div style={{ minHeight: 0, height: "100%", alignSelf: "stretch" }}>
               <LiveStatusCard
                 botUsername={myBotSettings?.bot_username}
                 displayName={myBotSettings?.display_name}
@@ -1133,78 +1223,128 @@ export default function TelegramManagement() {
                 enabledServices={myBotSettings?.enabled_services}
                 onToggleService={toggleMyService}
               />
+              </div>
             </div>
           )
         )}
 
-        {/* ═══════════════ GLOBAL BOTS (master) — 3 columns, left stacked ═══ */}
+        {/* ═══════════════ GLOBAL BOTS (master) — left: bots+payments+logs | right: live status ═══ */}
         {tab === "global_bots" && (
           globalLoading ? (
             <div style={{ color: "#64748b" }}>Loading…</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, height: "100%" }}>
-              {/* Column 1: stacked global bot cards */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <BotCard
-                  username="Global Main Bot"
-                  displayName={globalMain?.display_name}
-                  botUsername={globalMain?.bot_username}
-                  isActive={globalMain?.is_active}
-                  tokenSet={globalMain?.main_bot_token_set}
-                  running={globalStatusMain?.running}
-                  lastRestartAt={globalStatusMain?.last_restart_at}
-                  lastCrashError={globalStatusMain?.last_error || globalMain?.last_validation_error}
-                  showActions
-                  showEdit
-                  onRestart={() => restartGlobal("global_main")}
-                  onDeactivate={() => stopGlobal("global_main")}
-                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "global_main", masterAdminId: masterUserId, label: "Global Main Bot" })}
-                />
-                <BotCard
-                  username="Support Bot"
-                  displayName={globalSupport?.display_name}
-                  botUsername={globalSupport?.bot_username}
-                  isActive={globalSupport?.is_active}
-                  tokenSet={globalSupport?.main_bot_token_set}
-                  running={globalStatusSupport?.running}
-                  lastRestartAt={globalStatusSupport?.last_restart_at}
-                  lastCrashError={globalStatusSupport?.last_error || globalSupport?.last_validation_error}
-                  showActions
-                  showEdit
-                  onRestart={() => restartGlobal("support")}
-                  onDeactivate={() => stopGlobal("support")}
-                  onEdit={() => setGlobalModalTarget({ scope: "global", kind: "support", masterAdminId: masterUserId, label: "Support Bot" })}
-                />
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, height: "100%", minHeight: 0, alignItems: "stretch" }}>
+              {/* LEFT: bots + payments on top, logs fill remaining height — aligned with Live Status */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0, height: "100%", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start", flexShrink: 0 }}>
+                  {/* Bot config (stacked global bot cards) */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <BotCard
+                      username="Global Main Bot"
+                      displayName={globalMain?.display_name}
+                      botUsername={globalMain?.bot_username}
+                      isActive={globalMain?.is_active}
+                      tokenSet={globalMain?.main_bot_token_set}
+                      running={globalStatusMain?.running}
+                      lastRestartAt={globalStatusMain?.last_restart_at}
+                      lastCrashError={globalStatusMain?.last_error || globalMain?.last_validation_error}
+                      showActions
+                      showEdit
+                      onRestart={() => restartGlobal("global_main")}
+                      onDeactivate={() => stopGlobal("global_main")}
+                      onEdit={() => setGlobalModalTarget({ scope: "global", kind: "global_main", masterAdminId: masterUserId, label: "Global Main Bot" })}
+                    />
+                    <BotCard
+                      username="Support Bot"
+                      displayName={globalSupport?.display_name}
+                      botUsername={globalSupport?.bot_username}
+                      isActive={globalSupport?.is_active}
+                      tokenSet={globalSupport?.main_bot_token_set}
+                      running={globalStatusSupport?.running}
+                      lastRestartAt={globalStatusSupport?.last_restart_at}
+                      lastCrashError={globalStatusSupport?.last_error || globalSupport?.last_validation_error}
+                      showActions
+                      showEdit
+                      onRestart={() => restartGlobal("support")}
+                      onDeactivate={() => stopGlobal("support")}
+                      onEdit={() => setGlobalModalTarget({ scope: "global", kind: "support", masterAdminId: masterUserId, label: "Support Bot" })}
+                    />
+                  </div>
+
+                  {/* Payments — natural height, no forced 100% stretch */}
+                  <div style={{ minHeight: 0, minWidth: 0 }}>
+                    <PaymentsCard
+                      token={token}
+                      platformKind="global_bot"
+                      adminId={masterUserId}
+                      title="Payments"
+                      canEdit
+                      description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via each bot's Edit button."
+                    />
+                  </div>
+                </div>
+
+                {/* Logs — fills remaining height under bots+payments, bottom aligns with Live Status */}
+                <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <TabButton
+                        active={globalLogsKind === "global_main"}
+                        onClick={() => setGlobalLogsKind("global_main")}
+                        icon={<Bot size={13} />}
+                        label="Main Bot Logs"
+                      />
+                      <TabButton
+                        active={globalLogsKind === "support"}
+                        onClick={() => setGlobalLogsKind("support")}
+                        icon={<Bot size={13} />}
+                        label="Support Bot Logs"
+                      />
+                    </div>
+                    <button onClick={() => loadGlobalLogs(globalLogsKind)} style={{ ...S.refreshBtn, padding: "5px 10px", fontSize: 11 }} disabled={globalLogsLoading}>
+                      <RefreshCw size={12} style={{ animation: globalLogsLoading ? "spin 1s linear infinite" : "none" }} />
+                      {globalLogsLoading ? "Loading…" : "Refresh"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                    {globalLogsKind === "global_main" ? "Global Main Bot" : "Support Bot"} — Logs (last 24h)
+                  </div>
+                  {!globalLogs?.has_timestamps && globalLogs?.lines?.length > 0 && (
+                    <div style={{ fontSize: 11, color: "#facc15", flexShrink: 0 }}>
+                      This log file has no timestamps — showing the most recent raw lines instead of a strict 24h window.
+                    </div>
+                  )}
+                  <div style={{
+                    background: "#060b16", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10,
+                    padding: 12, fontFamily: "monospace", fontSize: 11, color: "#94a3b8",
+                    flex: 1, minHeight: 0, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  }}>
+                    {globalLogsLoading ? "Loading logs…" : globalLogs?.message || (globalLogs?.lines?.length ? globalLogs.lines.join("\n") : "No log entries in this window.")}
+                  </div>
+                </div>
               </div>
 
-              {/* Column 2: Payments (master's own accounts) */}
-              <PaymentsCard
-                token={token}
-                adminId={masterUserId}
-                title="Payments"
-                canEdit
-                description="This bank account is connected to your bot — your users see whichever one is marked Active. Add or edit via each bot's Edit button."
-              />
-
-              {/* Column 3: Live status (main bot = what users see) — now editable */}
-              <LiveStatusCard
-                botUsername={globalMain?.bot_username}
-                displayName={globalMain?.display_name}
-                username={username}
-                accessPoints="*"
-                isFullAccess
-                defaultLanguage={globalMain?.default_language}
-                isActive={globalMain?.is_active}
-                editable
-                enabledServices={globalMain?.enabled_services}
-                onToggleService={toggleGlobalService("global_main")}
-              />
+              {/* RIGHT: Live status — same height as left column */}
+              <div style={{ minHeight: 0, height: "100%", overflow: "hidden" }}>
+                <LiveStatusCard
+                  botUsername={globalMain?.bot_username}
+                  displayName={globalMain?.display_name}
+                  username={username}
+                  accessPoints="*"
+                  isFullAccess
+                  defaultLanguage={globalMain?.default_language}
+                  isActive={globalMain?.is_active}
+                  editable
+                  enabledServices={globalMain?.enabled_services}
+                  onToggleService={toggleGlobalService("global_main")}
+                />
+              </div>
             </div>
           )
         )}
 
         {/* ═══════════════ ALL ADMIN BOTS (master) ═══════════════ */}
-        {tab === "all_bots" && <AllAdminBotsTab token={token} />}
+        {tab === "all_bots" && <AllAdminBotsTab token={token} onFleetChange={loadFleetStats} />}
       </div>
 
       {globalModalTarget && (
@@ -1214,7 +1354,7 @@ export default function TelegramManagement() {
       {myBotModalOpen && (
         <ConfigModal
           token={token}
-          target={{ scope: "admin", kind: "admin", adminId: ownAdminId, label: "My Bot" }}
+          target={{ scope: "self", kind: "admin", label: "My Bot" }}
           onClose={() => setMyBotModalOpen(false)}
           onSaved={loadMyBot}
         />
@@ -1224,3 +1364,5 @@ export default function TelegramManagement() {
     </div>
   );
 }
+
+

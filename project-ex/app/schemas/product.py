@@ -55,7 +55,7 @@ class ProductOut(BaseModel):
     admin_id: Optional[int] = None
     required_user_data: Optional[Dict[str, Any]]
     approval_status: str
-
+    admin_username: Optional[str] = None
     approved_by: Optional[str]
 
     approved_at: Optional[datetime]

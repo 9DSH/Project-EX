@@ -154,10 +154,11 @@ export default function Menu({ pinned, setPinned }) {
         boxShadow: floating ? "8px 0 30px rgba(0,0,0,.55)" : "none",
       }}
     >
-      <Link to="/" style={linkStyle(isActive("/"))} title="Overview">
+
+          <Link to="/my_account" style={linkStyle(isActive("/") || isActive("/overview") || isActive("/my_account"))} title="My Account">
         <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
-        {label("Overview")}
-      </Link>
+        {label("My Account")}
+      </Link> 
 
       <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))} title="Telegram Management">
         <Shield size={17} style={{ flexShrink: 0 }} />
@@ -184,6 +185,10 @@ export default function Menu({ pinned, setPinned }) {
             {label("Products")}
             {arrow(open.products)}
           </div>
+
+
+  
+
           <div style={submenu(expanded && open.products)}>
             {hasPermission(user, "products.manage") && (
               <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))}>

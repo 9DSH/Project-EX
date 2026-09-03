@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -7,6 +7,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.user_bank_info import UserBankInfo
 from app.models.platform_bank_account import PlatformBankAccount
+from sqlalchemy import or_
 from app.models.transaction import Transaction
 
 router = APIRouter(prefix="/account", tags=["Account"])
@@ -154,10 +155,33 @@ def upsert_bank_info(
 
 @router.get("/active-bank-account")
 def get_active_bank_account(
+    kind: Optional[str] = Query(default="wires"),
     db: Session = Depends(get_db_rls),
     current_user=Depends(get_current_user),
 ):
-    account = db.query(PlatformBankAccount).filter(PlatformBankAccount.is_active == True).order_by(PlatformBankAccount.id.desc()).first()
+    normalized_kind = (kind or "wires").strip().lower()
+    if normalized_kind not in {"general", "wires"}:
+        raise HTTPException(400, "kind must be one of: general, wires")
+
+    account = (
+        db.query(PlatformBankAccount)
+        .filter(
+            PlatformBankAccount.is_active == True,
+            or_(
+                PlatformBankAccount.platform_kind == normalized_kind,
+                PlatformBankAccount.platform_kind.is_(None) if normalized_kind == "general" else False,
+            ),
+        )
+        .order_by(PlatformBankAccount.id.desc())
+        .first()
+    )
+    if not account and normalized_kind == "wires":
+        account = (
+            db.query(PlatformBankAccount)
+            .filter(PlatformBankAccount.is_active == True)
+            .order_by(PlatformBankAccount.id.desc())
+            .first()
+        )
     if not account:
         return {"account": None}
 
@@ -168,5 +192,6 @@ def get_active_bank_account(
             "bank_holder_name": account.bank_holder_name,
             "bank_card_number": account.bank_card_number,
             "bank_sheba": account.bank_sheba,
+            "platform_kind": account.platform_kind or "general",
         }
     }

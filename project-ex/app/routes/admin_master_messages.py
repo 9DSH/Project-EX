@@ -3,6 +3,7 @@ import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import Optional
@@ -35,13 +36,23 @@ def get_master(user=Depends(get_current_user)):
 def _get_or_create_conversation(db: Session, user_id: int) -> Conversation:
     conv = db.query(Conversation).filter(
         Conversation.user_id == user_id,
-        Conversation.kind == INTERNAL_KIND,
     ).first()
-    if not conv:
-        conv = Conversation(user_id=user_id, kind=INTERNAL_KIND)
-        db.add(conv)
+    if conv:
+        if conv.kind != INTERNAL_KIND:
+            conv.kind = INTERNAL_KIND
+            db.commit()
+        return conv
+
+    conv = Conversation(user_id=user_id, kind=INTERNAL_KIND)
+    db.add(conv)
+    try:
         db.commit()
         db.refresh(conv)
+    except IntegrityError:
+        db.rollback()
+        conv = db.query(Conversation).filter(Conversation.user_id == user_id).first()
+        if not conv:
+            raise
     return conv
 
 

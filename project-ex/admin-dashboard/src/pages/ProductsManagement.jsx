@@ -687,7 +687,6 @@ const ProductCard = ({
   token,
 }) => {
   const extra = safeExtra(p);
-  const [adminUsername, setAdminUsername] = useState("");
 
   const statusColor = {
     approved: "#22c55e",
@@ -701,27 +700,6 @@ const ProductCard = ({
     rejected: "REJECTED",
   }[p.approval_status] || p.approval_status?.toUpperCase();
 
-      // Get USERNAME by ID
-  async function getUsernameById(userId) {
-    if (!userId) return "";
-    const res = await fetch(`${API_URL}/admin/users/username/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return "";
-    const data = await res.json();
-    return data.username || "";
-  }
-
-    // Fetch admin username when component mounts or product changes
-  useEffect(() => {
-      if (p?.admin_id) {
-        getUsernameById(p.admin_id).then(setAdminUsername);
-      } else {
-        setAdminUsername("");
-      }
-    }, [p?.admin_id]);
-
-  
 
   return (
     <div style={S.productCard}>
@@ -783,7 +761,7 @@ const ProductCard = ({
           )}
           {/* Created by (shown in all/pending/rejected views) */}
           {p.admin_id != null && (
-            <div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>admin #{p.admin_id} {adminUsername}</div>
+            <div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>admin #{p.admin_id} {p.admin_username}</div>
           )}
         </div>
       </div>
@@ -1119,6 +1097,7 @@ export default function ProductsManagement() {
       const [pRes, cRes, currRes, netRes, pendRes, rejRes, userRes ] = results;
  
       const products = await pRes.json().then(d => Array.isArray(d) ? d : d.products || []);
+      console.log("products",products)
       setAllProducts(products);
       // "My products" = products created by current user
       setMyProducts(products.filter(p => Number(p.admin_id) === currentUser.user_id));
@@ -1316,7 +1295,6 @@ export default function ProductsManagement() {
 
   // ── STATS ──
   const activeCount = useMemo(() => allProducts.filter(p => p.is_active).length, [allProducts]);
-  const totalStock  = useMemo(() => allProducts.reduce((acc, p) => acc + Number(p.stock || 0), 0), [allProducts]);
   const panelOpen   = panel !== null;
 
   // ── TABS CONFIG ──
@@ -1428,13 +1406,12 @@ export default function ProductsManagement() {
         {/* Top bar */}
         <div style={S.topBar}>
           <div style={S.header}>
-                    <div>
+          <div>
             <div style={S.title}>Products Management</div>
             <div style={S.subtitle}>Manage your catalog, products and categories</div>
           </div>
             <StatPill icon={Package} label="Active Products" value={`${activeCount} / ${allProducts.length}`} accent="#10b981" loading={loading} />
             <StatPill icon={Tag} label="Categories" value={categories.length} accent="#dab822ff" loading={loading} />
-            <StatPill icon={Layers} label="Total Stock" value={totalStock} accent="#e56611ff" loading={loading} />
             {currentUser.role === "master" && <StatPill icon={Clock} label="Pending" value={pendingProducts.length} accent="#eab308" loading={loading} />}
           </div>
         </div>

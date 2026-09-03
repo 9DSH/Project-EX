@@ -13,8 +13,8 @@ from app.models.failed_sweeps import FailedSweep
 from app.models.exchange_pair import ExchangePair
 from app.models.exchange_order import ExchangeOrder
 from app.models.exchange_analysis import ExchangeRateHistory
-from app.models.user import User
-from app.routes.shared_functions import _admin_username_map
+from app.models.user import User  
+from app.routes.utilts.shared_functions import _admin_telegram_displayName_map , get_admin_username, get_admin_usernames
 from sqlalchemy.orm import joinedload
 from decimal import Decimal, getcontext
 
@@ -442,7 +442,8 @@ def get_pairs(
 
     pairs = query.all()
 
-    admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    admins_displayName_map = _admin_telegram_displayName_map(db, {p.admin_id for p in pairs})
+    admins_username_map = get_admin_usernames(db, {p.admin_id for p in pairs})
 
     result = []
     for p in pairs:
@@ -470,7 +471,8 @@ def get_pairs(
             "max_amount": p.max_amount,
             "is_active": p.is_active,
             "admin_id": p.admin_id,
-            "admin_username": admins_map.get(p.admin_id),
+            "admin_displayName": admins_displayName_map.get(p.admin_id),
+            "admin_username": admins_username_map.get(p.admin_id),
         })
     return result
 
@@ -653,7 +655,8 @@ def admin_all_orders(
 
     orders = query.order_by(ExchangeOrder.id.desc()).all()
 
-    admins_map = _admin_username_map(db, {o.admin_id for o in orders})
+    admins_displayName_map = _admin_telegram_displayName_map(db, {o.admin_id for o in orders})
+    admins_username_map = get_admin_usernames(db, {o.admin_id for o in orders})
 
     result = []
     for o in orders:
@@ -665,7 +668,8 @@ def admin_all_orders(
             "user_id": o.user_id,
             "username": o.user.username if o.user else None,
             "admin_id": o.admin_id,
-            "admin_username": admins_map.get(o.admin_id),
+            "admin_displayName": admins_displayName_map.get(o.admin_id),
+            "admin_username": admins_username_map.get(o.admin_id),
             "from_currency": {
                 "id": from_cur.id if from_cur else None,
                 "symbol": from_cur.symbol if from_cur else "N/A"
@@ -717,6 +721,10 @@ def admin_user_exchange_orders(
 
     result = []
 
+    admins_displayName_map = _admin_telegram_displayName_map(db, {o.admin_id for o in orders})
+    admins_username_map = get_admin_usernames(db, {o.admin_id for o in orders})
+
+
     for o in orders:
         from_cur = (
             db.query(Currency)
@@ -735,7 +743,8 @@ def admin_user_exchange_orders(
             "user_id": o.user_id,
             "username": o.user.username if o.user else None,
             "admin_id": o.admin_id,
-
+             "admin_displayName": admins_displayName_map.get(o.admin_id),
+            "admin_username": admins_username_map.get(o.admin_id),
 
             "from_currency": {
                 "id": from_cur.id if from_cur else None,
@@ -802,14 +811,16 @@ def get_failed_sweeps(
             continue
         scoped.append((s, eff_admin_id, linked))
 
-    admins_map = _admin_username_map(db, {a for _, a, _ in scoped})
+    admins_displayName_map = _admin_telegram_displayName_map(db, {a for _, a, _ in scoped})
+    admins_username_map = get_admin_usernames(db, {a for _, a, _ in scoped})
 
     return [{
         "id": s.id,
         "user_id": s.user_id,
         "username": s.user.username if s.user else None,
         "admin_id": eff_admin_id,
-        "admin_username": admins_map.get(eff_admin_id),
+        "admin_displayName": admins_displayName_map.get(eff_admin_id),
+        "admin_username": admins_username_map.get(eff_admin_id),
         "admin_linked": linked,  # False = attributed via buyer's admin (no exchange_order_id on record)
         "amount": s.amount,
         "currency": s.currency_symbol,

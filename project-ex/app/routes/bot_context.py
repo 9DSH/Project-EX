@@ -8,7 +8,7 @@ from app.services.exchange_service import normalize_db_rate
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.product import Product
 from app.models.user import User , TelegramBotSettings
-from app.routes.shared_functions import _admin_username_map
+from app.routes.utilts.shared_functions import _admin_telegram_displayName_map
 
 router = APIRouter(prefix="/bot-context", tags=["Bot Context"])
 
@@ -36,7 +36,7 @@ def get_admin_access_points(
 @router.get("/exchange-pairs")
 def get_exchange_pairs(db: Session = Depends(get_db_rls_bot_context)):
     pairs = db.query(ExchangePair).filter(ExchangePair.is_active == True).all()
-    admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    admins_map = _admin_telegram_displayName_map(db, {p.admin_id for p in pairs})
     return [{
         "id": p.id,
         "from_currency": {"symbol": p.from_currency.symbol},
@@ -51,7 +51,7 @@ def get_exchange_pairs(db: Session = Depends(get_db_rls_bot_context)):
 @router.get("/wire-pairs")
 def get_wire_pairs(db: Session = Depends(get_db_rls_bot_context)):
     pairs = db.query(WireTransferPair).filter(WireTransferPair.is_active == True).all()
-    admins_map = _admin_username_map(db, {p.admin_id for p in pairs})
+    admins_map = _admin_telegram_displayName_map(db, {p.admin_id for p in pairs})
     print(admins_map)
     return [{
         "id": p.id,
@@ -72,7 +72,7 @@ def get_products(
     if category_id is not None:
         q = q.filter(Product.category_id == category_id)
     products = q.all()
-    admins_map = _admin_username_map(db, {p.admin_id for p in products})
+    admins_map = _admin_telegram_displayName_map(db, {p.admin_id for p in products})
     return [{
         "id": p.id,
         "name": p.name,

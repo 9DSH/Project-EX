@@ -253,8 +253,8 @@ export default function Users() {
   };
 
 
-  const COLS = "3% 6% 10% 10% 10% 1fr";
-  const HEAD_COLS = "5% 8% 10% 7% 10% 1fr";
+  const COLS = "3% 6% 10% 10% 10% minmax(180px, 1fr)";
+  const HEAD_COLS = "5% 8% 10% 7% 10% minmax(180px, 1fr)";
 
   return (
     <>
@@ -263,9 +263,32 @@ export default function Users() {
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         * { box-sizing: border-box; }
         button, input, select { font-family: inherit; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #060b16; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #060b16; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+
+        /* balances row horizontal scroll — force narrow custom bar */
+        .balances-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #1e293b #060b16;
+        }
+        .balances-scroll::-webkit-scrollbar {
+          width: 4px;
+          height: 4px;
+        }
+        .balances-scroll::-webkit-scrollbar-track {
+          background: #060b16;
+          border-radius: 4px;
+        }
+        .balances-scroll::-webkit-scrollbar-thumb {
+          background: #1e293b;
+          border-radius: 4px;
+        }
+        .balances-scroll::-webkit-scrollbar-thumb:hover {
+          background: #334155;
+        }
       `}</style>
 
       <div style={{ 
@@ -806,13 +829,28 @@ export default function Users() {
           {/* Table rows */}
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 28px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
             {filteredUsers.map((u) => (
-              <div
-                key={u.user_id}
-                style={{ display: "grid", gridTemplateColumns: COLS, gap: 12, alignItems: "center", padding: "12px 14px", background: "#0d1526", border: "1px solid #1a2540", borderRadius: 14, cursor: "pointer", transition: "border-color 0.15s ease" }}
-                onClick={() => openUser(u)}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2a3a5c")}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1a2540")}
-              >
+                <div
+                  key={u.user_id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: COLS,
+                    gap: 12,
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    background: "#0d1526",
+                    border: "1px solid #1a2540",
+                    borderRadius: 14,
+                    cursor: "pointer",
+                    transition: "border-color 0.15s ease",
+                    height: 104,
+                    minHeight: 104,
+                    maxHeight: 104,
+                    overflow: "hidden",
+                  }}
+                  onClick={() => openUser(u)}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2a3a5c")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1a2540")}
+                >
                 <div style={{ color: "#475569", fontSize: 12, fontWeight: 600 }}>#{u.user_id}</div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -856,12 +894,39 @@ export default function Users() {
 
                 <div />
 
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div
+                      className="balances-scroll"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "nowrap",
+                        overflowX: "auto",
+                        overflowY: "hidden",
+                        minWidth: 0,
+                        maxWidth: "100%",
+                        height: "100%",
+                        paddingBottom: 2,
+                      }}
+                    >
                   {u.balances?.length > 0 ? u.balances.map((b, idx) => {
                     const available = Number(b.available || 0);
                     const frozen = Number(b.frozen || 0);
                     return (
-                      <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#0b1220", border: "1px solid #1a2540", minWidth: 170 }}>
+                        <div
+                                key={idx}
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 8,
+                                  padding: "8px 10px",
+                                  borderRadius: 12,
+                                  background: "#0b1220",
+                                  border: "1px solid #1a2540",
+                                  minWidth: 170,
+                                  flexShrink: 0,
+                                }}
+                              >
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <span style={{ padding: "3px 8px", borderRadius: 999, background: "rgba(96,165,250,0.12)", color: "#bfdbfe", fontSize: 11, fontWeight: 700, border: "1px solid rgba(96,165,250,0.14)" }}>{b.currency}</span>
                           <span

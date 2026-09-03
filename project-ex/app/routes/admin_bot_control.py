@@ -13,6 +13,16 @@ router = APIRouter(prefix="/admin/bot-control", tags=["Bot Control"])
 GLOBAL_KINDS = {"global_main", "support"}
 LOG_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs", "bots"))
 
+# Must mirror instance_manager._spawn()'s `f"{inst.kind}_{inst.key}.log"` naming
+# for the two platform-wide bots (kind, key -> filename):
+#   global_main -> kind="main_global", key="global_main"
+#   support     -> kind="support",     key="global_support"
+GLOBAL_LOG_FILENAMES = {
+    "global_main": "main_global_global_main.log",
+    "support": "support_global_support.log",
+}
+
+
 def get_admin(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
@@ -25,17 +35,15 @@ def get_master(user=Depends(get_current_user)):
     return user
 
 
-@router.get("/logs/{admin_id}")
-def get_admin_bot_logs(admin_id: int, hours: int = 24, master=Depends(get_master)):
-    log_path = os.path.join(LOG_DIR, f"admin_{admin_id}.log")
+def _read_recent_log_lines(log_path: str, hours: int):
     if not os.path.exists(log_path):
-        return {"lines": [], "message": "No log file found for this bot yet.", "has_timestamps": False}
+        return {"lines": [], "message": "No log file found for this bot yet.", "has_timestamps": False, "log_path": log_path}
 
     try:
         with open(log_path, "r", encoding="utf-8", errors="replace") as f:
             all_lines = f.readlines()
     except Exception as e:
-        return {"lines": [], "message": f"Failed to read log file: {e}", "has_timestamps": False}
+        return {"lines": [], "message": f"Failed to read log file: {e}", "has_timestamps": False, "log_path": log_path}
 
     cutoff = datetime.utcnow() - timedelta(hours=hours)
     date_pat = re.compile(r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})")
@@ -61,6 +69,20 @@ def get_admin_bot_logs(admin_id: int, hours: int = 24, master=Depends(get_master
         recent = [l.rstrip("\n") for l in all_lines[-500:]]
 
     return {"lines": recent, "has_timestamps": any_dated, "log_path": log_path}
+
+
+@router.get("/logs/{admin_id}")
+def get_admin_bot_logs(admin_id: int, hours: int = 24, master=Depends(get_master)):
+    log_path = os.path.join(LOG_DIR, f"admin_{admin_id}.log")
+    return _read_recent_log_lines(log_path, hours)
+
+
+@router.get("/global/{kind}/logs")
+def get_global_bot_logs(kind: str, hours: int = 24, master=Depends(get_master)):
+    if kind not in GLOBAL_KINDS:
+        raise HTTPException(400, "Invalid kind")
+    log_path = os.path.join(LOG_DIR, GLOBAL_LOG_FILENAMES[kind])
+    return _read_recent_log_lines(log_path, hours)
 
 
 def _get_settings(admin_id: int, bot_kind: str, db: Session):
