@@ -28,6 +28,7 @@ from app.services.auth_service import reset_user_password
 from app.services.wallet_derivation_service import get_or_create_wallet_for_pair, create_default_wallets_for_user
 from app.routes.admin_orders import  build_order_response
 from app.routes.utilts.shared_functions import get_admin_username
+from app.services.subscription_service import sync_master_grants, enroll_free_plan_on_signup
 
 router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 
@@ -489,11 +490,14 @@ def create_user(
             status="active",
             role=requested_role,
             admin_id=assigned_admin_id,
-            access_points=access_points,
+            access_points=[],
         )
 
         db.add(new_user)
         db.flush()
+
+        if access_points:
+            sync_master_grants(db, new_user.user_id, access_points)
 
         # =========================
         # WALLET GENERATION
@@ -502,6 +506,11 @@ def create_user(
         wallets = create_wallet_for_user(db, new_user)
 
         create_default_balances(db, new_user.user_id)
+
+        # Every new admin is auto-enrolled in the default free/showcase
+        # plan at zero cost. Not applicable to role=user or role=master.
+        if requested_role == "admin":
+            enroll_free_plan_on_signup(db, new_user.user_id)
 
         db.commit()
         db.refresh(new_user)
@@ -1192,10 +1201,15 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db_
     # =========================
     # PERMISSIONS
     # =========================
-    if payload.access_points is not None:
-        db_user.access_points = payload.access_points
-
     db.commit()
+
+    # =========================
+    # PERMISSIONS (routed through provenance layer — only master-sourced
+    # grants are touched; plan/addon-sourced access points are untouched)
+    # =========================
+    if payload.access_points is not None:
+        sync_master_grants(db, db_user.user_id, payload.access_points)
+
     return {"message": "User updated"}
 
 

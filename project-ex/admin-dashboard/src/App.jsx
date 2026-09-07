@@ -8,7 +8,6 @@ import MyAccount from "./pages/MyAccount";
 
 import Users from "./pages/Users";
 import ProductsManagement  from "./pages/ProductsManagement";
-import OrdersManagement from "./pages/OrdersManagement";
 import Transactions from "./pages/Transactions";
 import MessagesPage from "./pages/MessagesPage";
 import Withdraws from "./pages/Withdraws";
@@ -16,6 +15,7 @@ import AssetManager from "./pages/AssetManager";
 import ExchangeDashboard from "./pages/ExchangeDashboard";
 import WireTransferDashboard from "./pages/WireTransferDashboard";
 import TelegramManagement from "./pages/TelegramManagement";
+
 
 export default function App() {
   const [logged, setLogged] = useState(
@@ -67,8 +67,6 @@ export default function App() {
           {/* SERVICES */}
           <Route path="/ProductsManagement" element={<ProductsManagement/>} />
 
-          {/* ORDERS */}
-          <Route path="/OrdersManagement" element={<OrdersManagement />} />
 
           {/* TRANSACTIONS */}
           <Route path="/transactions" element={<Transactions />} />

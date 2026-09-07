@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-  Upload, Plus, Layers, RefreshCcw, Edit3, Trash2, Power, Package,
-  X, Tag, Search, Grid3X3, Clock, CheckCircle, XCircle, ShieldCheck,
-  AlertTriangle, ChevronDown, DollarSign, Percent
+  Upload, Plus, Layers, RefreshCcw, Edit3, Trash2, Power, PowerOff, Package,
+  X, Tag, Grid3X3, Clock, CheckCircle, XCircle,ShieldCheck,
+  AlertTriangle, DollarSign, Percent, ArrowUpDown, User,
+  CheckCircle2, Store, Star, BarChart3, FileText, SlidersHorizontal, Wallet,
 } from "lucide-react";
 import { API_URL } from "../config";
 import { hasPermission } from "../utils/permissions";
+import API from "../api/client";
+import HeroHub from "../components/HeroHub";
+import OrderSidebar from "../components/OrderSidebar";
+import UserSidebar from "../components/UserSidebar";
+import OrderAnalysisPanel from "../components/OrderAnalysisPanel";
+import "./ProductsManagement.css";
 
 const COMMON_FIELDS = [
   { key: "username", label: "Username", type: "text", step: "before_order" },
@@ -93,6 +100,125 @@ function StatPill({ icon: Icon, label, value, accent, loading }) {
   );
 }
 
+// ── ORDERS: status config / row (merged from OrdersManagement) ─
+const STATUS_CFG = {
+  pending:   { color: "#fbbf24", bg: "#f59e0b22", icon: Clock,        label: "PENDING" },
+  approved:  { color: "#34d399", bg: "#10b98122", icon: CheckCircle2, label: "APPROVED" },
+  delivered: { color: "#60a5fa", bg: "#3b82f622", icon: CheckCircle,  label: "DELIVERED" },
+  rejected:  { color: "#f87171", bg: "#ef444422", icon: XCircle,      label: "REJECTED" },
+  failed:    { color: "#fb923c", bg: "#f9731622", icon: AlertTriangle,label: "FAILED" },
+};
+
+function StatusEvent({ icon: Icon, color, label, at, by, formatDate }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 90 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>
+        <Icon size={10} />{label}
+      </span>
+      <span style={{ fontSize: 11, color: "#cbd5e1aa", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        by {by || "—"}
+      </span>
+      {at && <span style={{ fontSize: 10, color: "#475569" }}>{formatDate(at)}</span>}
+    </div>
+  );
+}
+
+function OrderRow({ o, selected, onClick, formatDate }) {
+  const cfg = STATUS_CFG[o.status] || STATUS_CFG.pending;
+  const StatusIcon = cfg.icon;
+  const hasDiscount = o.discount_percent && Number(o.discount_percent) > 0 && o.original_price;
+
+  const statusEvents = [
+    (o.approved_at || o.approved_by) && { key: "approved", icon: CheckCircle2, color: "#34d399", label: "Approved", at: o.approved_at, by: o.approved_by },
+    (o.rejected_at || o.rejected_by) && { key: "rejected", icon: XCircle, color: "#f87171", label: "Rejected", at: o.rejected_at, by: o.rejected_by },
+    (o.delivered_at || o.delivered_by) && { key: "delivered", icon: CheckCircle, color: "#60a5fa", label: "Delivered", at: o.delivered_at, by: o.delivered_by },
+    (o.failed_at || o.failed_by) && { key: "failed", icon: AlertTriangle, color: "#fb923c", label: "Failed", at: o.failed_at, by: o.failed_by },
+  ].filter(Boolean);
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: selected ? "#172554" : "#0b1424",
+        border: `1px solid ${selected ? "#3b82f6" : "#1e293b"}`,
+        borderRadius: 10, padding: "10px 16px", cursor: "pointer",
+        display: "grid",
+        gridTemplateColumns: "0.3fr 0.5fr 0.5fr 0.5fr 1fr 1fr 100px 0.5fr minmax(60px,1fr)",
+        alignItems: "center", gap: 18, transition: "border-color .15s, background .15s",
+      }}
+    >
+      <span style={{ color: "#475569", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>#{o.id}</span>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+        <User size={12} color="#64748b" style={{ flexShrink: 0 }} />
+        <span style={{ color: "white", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.username}</span>
+      </div>
+
+      <div style={{ minWidth: 0, display: "flex", alignItems: "center", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden" }}>
+          <span style={{ color: "white", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.product_name}</span>
+          {o.is_featured && <Star size={11} color="#fbbf24" style={{ flexShrink: 0 }} />}
+        </div>
+        <div>
+          {o.plan && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, background: "#1e293b", padding: "3px 9px", borderRadius: 999, fontSize: 11, textTransform: "capitalize", color: "#cbd5e1", whiteSpace: "nowrap", marginTop: 3 }}>
+              <Layers size={10} />{o.plan}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, background: "#1e293b", padding: "3px 9px", borderRadius: 999, fontSize: 11, textTransform: "capitalize", color: "#cbd5e1", whiteSpace: "nowrap" }}>
+          <Tag size={10} />{o.product_type || "-"}
+        </span>
+      </div>
+
+      <div style={{ textAlign: "center" }}>
+        {hasDiscount && (
+          <div style={{ fontSize: 11, color: "#64748b", textDecoration: "line-through" }}>
+            {parseFloat(o.original_price).toFixed(2)} <span style={{ fontSize: 10, color: "#4ade80", fontWeight: 700, marginLeft: 5 }}>-{Number(o.discount_percent)}%</span>
+          </div>
+        )}
+        <div>
+          <span style={{ fontSize: 14, fontWeight: 800, color: hasDiscount ? "#4ade80" : "#e2e8f0" }}>{parseFloat(o.price).toFixed(2)}</span>{" "}
+          <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{o.currency}</span>
+        </div>
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Owner</div>
+        {o.product_owner_displayName ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#a78bfa", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Store size={11} />{o.product_owner_displayName}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, color: "#475569" }}>—</span>
+        )}
+      </div>
+
+      <span style={{
+        display: "flex", alignItems: "center", gap: 5, justifyContent: "center",
+        background: cfg.bg, color: cfg.color, padding: "4px 0", borderRadius: 999, fontSize: 10, fontWeight: 700,
+      }}>
+        <StatusIcon size={11} />{cfg.label}
+      </span>
+
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Created</div>
+        <div style={{ fontSize: 11, color: "#94a3b8" }}>{formatDate(o.created_at)}</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, overflowX: "auto", justifyContent: "flex-end", minWidth: 0 }}>
+        {statusEvents.length > 0
+          ? statusEvents.map((ev) => <StatusEvent key={ev.key} {...ev} formatDate={formatDate} />)
+          : <span style={{ fontSize: 11, color: "#334155" }}>—</span>
+        }
+      </div>
+    </div>
+  );
+}
+
 // ── APPROVE MODAL ─────────────────────────────────────────────
 const ApproveModal = ({ product, onConfirm, onClose }) => {
   const [commission, setCommission] = useState(product?.system_commision ?? "");
@@ -109,8 +235,8 @@ const ApproveModal = ({ product, onConfirm, onClose }) => {
   };
 
   return (
-    <div style={S.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modalCard, maxWidth: 420, height: "auto", padding: 28 }}>
+    <div className="pm-modalOverlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="pm-modalCard" style={{ maxWidth: 420, height: "auto", padding: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <div style={{ color: "#22c55e", fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 8 }}>
@@ -118,7 +244,7 @@ const ApproveModal = ({ product, onConfirm, onClose }) => {
             </div>
             <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>{product?.name}</div>
           </div>
-          <button style={S.closeIconBtn} onClick={onClose}><X size={16} /></button>
+          <button className="pm-closeIconBtn" onClick={onClose}><X size={16} /></button>
         </div>
 
         <div style={{ background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -134,7 +260,7 @@ const ApproveModal = ({ product, onConfirm, onClose }) => {
               <DollarSign size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
               <input
                 type="number"
-                style={{ ...S.input, paddingLeft: 30 }}
+                className="pm-input" style={{ paddingLeft: 30 }}
                 placeholder="e.g. 1.5"
                 value={commission}
                 onChange={(e) => setCommission(e.target.value)}
@@ -146,7 +272,7 @@ const ApproveModal = ({ product, onConfirm, onClose }) => {
               <Percent size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
               <input
                 type="number"
-                style={{ ...S.input, paddingLeft: 30 }}
+                className="pm-input" style={{ paddingLeft: 30 }}
                 placeholder="e.g. 5.00"
                 value={reward}
                 onChange={(e) => setReward(e.target.value)}
@@ -157,9 +283,9 @@ const ApproveModal = ({ product, onConfirm, onClose }) => {
           {error && <div style={{ color: "#ef4444", fontSize: 12, fontWeight: 600 }}>{error}</div>}
 
           <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-            <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
+            <button className="pm-cancelBtn" onClick={onClose}>Cancel</button>
             <button
-              style={{ ...S.submitBtn, background: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.3)", color: "#22c55e" }}
+              className="pm-submitBtn" style={{ background: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.3)", color: "#22c55e" }}
               onClick={handleSubmit}
               disabled={loading}
             >
@@ -185,8 +311,8 @@ const RejectModal = ({ product, onConfirm, onClose }) => {
   };
 
   return (
-    <div style={S.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modalCard, maxWidth: 400, height: "auto", padding: 28 }}>
+    <div className="pm-modalOverlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="pm-modalCard" style={{ maxWidth: 400, height: "auto", padding: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <div style={{ color: "#ef4444", fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 8 }}>
@@ -194,21 +320,21 @@ const RejectModal = ({ product, onConfirm, onClose }) => {
             </div>
             <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>{product?.name}</div>
           </div>
-          <button style={S.closeIconBtn} onClick={onClose}><X size={16} /></button>
+          <button className="pm-closeIconBtn" onClick={onClose}><X size={16} /></button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <Field label="Rejection Reason (optional)">
             <textarea
-              style={{ ...S.textarea, minHeight: 90 }}
+              className="pm-textarea" style={{ minHeight: 90 }}
               placeholder="Explain why this product is being rejected…"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
           </Field>
           <div style={{ display: "flex", gap: 8 }}>
-            <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
+            <button className="pm-cancelBtn" onClick={onClose}>Cancel</button>
             <button
-              style={{ ...S.submitBtn, background: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.3)", color: "#ef4444" }}
+              className="pm-submitBtn" style={{ background: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.3)", color: "#ef4444" }}
               onClick={handleSubmit}
               disabled={loading}
             >
@@ -358,28 +484,28 @@ const ProductForm = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Product Name">
-                <input style={S.input} placeholder="Netflix Premium" value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} />
+                <input className="pm-input" placeholder="Netflix Premium" value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} />
               </Field>
               <Field label="Plan">
-                <input style={S.input} placeholder="1 Month" value={data.plan} onChange={(e) => setData({ ...data, plan: e.target.value })} />
+                <input className="pm-input" placeholder="1 Month" value={data.plan} onChange={(e) => setData({ ...data, plan: e.target.value })} />
               </Field>
             </div>
             <Field label="Description">
-              <textarea style={S.textarea} placeholder="Short description..." value={data.description} onChange={(e) => setData({ ...data, description: e.target.value })} />
+              <textarea className="pm-textarea" placeholder="Short description..." value={data.description} onChange={(e) => setData({ ...data, description: e.target.value })} />
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Category">
-              <select style={S.input} value={data.category_id} onChange={(e) => setData({ ...data, category_id: e.target.value })}>
+              <select className="pm-input" value={data.category_id} onChange={(e) => setData({ ...data, category_id: e.target.value })}>
                 {[{ id: "__none__", name: "Select…" }, ...categories].map((c) => (
                   <option key={c.id} value={c.id === "__none__" ? "" : c.id}>{c.name}</option>
                 ))}
               </select>
               </Field>
               <Field label="Stock">
-                <input type="number" style={S.input} value={data.stock} onChange={(e) => setData({ ...data, stock: e.target.value })} />
+                <input type="number" className="pm-input" value={data.stock} onChange={(e) => setData({ ...data, stock: e.target.value })} />
               </Field>
               <Field label="Product Owner">
-            <select style={S.input} value={data.admin_id || ""} onChange={(e) => setData({ ...data, admin_id: e.target.value ? Number(e.target.value) : null })}>
+            <select className="pm-input" value={data.admin_id || ""} onChange={(e) => setData({ ...data, admin_id: e.target.value ? Number(e.target.value) : null })}>
               {[{ user_id: "", username: "", display: "Select Owner" }, ...users].map((u) => (
                 <option key={u.user_id || "owner-default"} value={u.user_id}>{u.display ?? u.username}</option>
               ))}
@@ -409,22 +535,22 @@ const ProductForm = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Currency">
-                <select style={S.input} value={data.currency} onChange={handleCurrencyChange}>
+                <select className="pm-input" value={data.currency} onChange={handleCurrencyChange}>
                   {currencies.map((c) => <option key={c.id} value={c.symbol || c.code || c.name}>{c.symbol || c.code || c.name}</option>)}
                 </select>
               </Field>
               {isCrypto && (
                 <Field label="Network">
-                  <select style={S.input} value={data.network} onChange={(e) => setData({ ...data, network: e.target.value })}>
+                  <select className="pm-input" value={data.network} onChange={(e) => setData({ ...data, network: e.target.value })}>
                     {networks.map((n) => <option key={n.id} value={n.name}>{n.name}</option>)}
                   </select>
                 </Field>
               )}
               <Field label="Price">
-                <input type="number" style={S.input} value={data.price} onChange={(e) => setData({ ...data, price: e.target.value })} />
+                <input type="number" className="pm-input" value={data.price} onChange={(e) => setData({ ...data, price: e.target.value })} />
               </Field>
               <Field label="Discount (%)">
-                <input type="number" style={S.input} value={data.discount_percent} onChange={(e) => setData({ ...data, discount_percent: e.target.value })} />
+                <input type="number" className="pm-input" value={data.discount_percent} onChange={(e) => setData({ ...data, discount_percent: e.target.value })} />
               </Field>
 
             </div>
@@ -432,8 +558,8 @@ const ProductForm = ({
               <Field label="System Commission">
               <input
                 type="number"
+                className="pm-input"
                 style={{
-                  ...S.input,
                   opacity: isMaster ? 1 : 0.6,
                   cursor: isMaster  ? "text" : "not-allowed"
                 }}
@@ -455,8 +581,8 @@ const ProductForm = ({
             <Field label="System Reward Percent (%)">
               <input
                 type="number"
+                className="pm-input"
                 style={{
-                  ...S.input,
                   opacity: isMaster? 1 : 0.6,
                   cursor: isMaster ? "text" : "not-allowed"
                 }}
@@ -482,9 +608,9 @@ const ProductForm = ({
              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}> 
             <div style={{ color: "#6a747fff", fontSize: 12, fontWeight: 600, marginBottom: 20 }}>Validity inputs (can be left empty):</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              <Field label="Days"><input type="number" style={S.input} placeholder="30" value={data.validity_days} onChange={(e) => setData({ ...data, validity_days: e.target.value })} /></Field>
-              <Field label="Hours"><input type="number" style={S.input} placeholder="48" value={data.validity_hours} onChange={(e) => setData({ ...data, validity_hours: e.target.value })} /></Field>
-              <Field label="Volume (GB)"><input type="number" style={S.input} placeholder="10" value={data.data_volume_gb} onChange={(e) => setData({ ...data, data_volume_gb: e.target.value })} /></Field>
+              <Field label="Days"><input type="number" className="pm-input" placeholder="30" value={data.validity_days} onChange={(e) => setData({ ...data, validity_days: e.target.value })} /></Field>
+              <Field label="Hours"><input type="number" className="pm-input" placeholder="48" value={data.validity_hours} onChange={(e) => setData({ ...data, validity_hours: e.target.value })} /></Field>
+              <Field label="Volume (GB)"><input type="number" className="pm-input" placeholder="10" value={data.data_volume_gb} onChange={(e) => setData({ ...data, data_volume_gb: e.target.value })} /></Field>
             </div>
 
               {/* ================= REQUIRED USER DATA (NEW) ================= */}
@@ -525,8 +651,8 @@ const ProductForm = ({
                         <button
                           key={f.key}
                           onClick={() => toggleCommonField(f)}
+                          className="pm-chip"
                           style={{
-                            ...S.chip,
                             background: active ? "rgba(59,130,246,0.2)" : "#0b1525",
                             borderColor: active ? "#3b82f6" : "#313d58ff",
                             color: active ? "#60a5fa" : "#94a3b8",
@@ -550,20 +676,20 @@ const ProductForm = ({
                       placeholder="Label"
                       value={customField.label}
                       onChange={(e) => setCustomField({ ...customField, label: e.target.value })}
-                      style={S.input}
+                      className="pm-input"
                     />
                     <input
                       placeholder="Key (no spaces)"
                       value={customField.key}
                       onChange={(e) => setCustomField({ ...customField, key: e.target.value.replace(/\s/g, "_") })}
-                      style={S.input}
+                      className="pm-input"
                     />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
                     <select
                       value={customField.type}
                       onChange={(e) => setCustomField({ ...customField, type: e.target.value })}
-                      style={S.input}
+                      className="pm-input"
                     >
                       {FIELD_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>{t.label}</option>
@@ -572,7 +698,7 @@ const ProductForm = ({
                     <select
                       value={customField.step}
                       onChange={(e) => setCustomField({ ...customField, step: e.target.value })}
-                      style={S.input}
+                      className="pm-input"
                     >
                         {FIELD_STEPS.map((s) => (
                         <option key={s.value} value={s.value}>{s.label}</option>
@@ -581,7 +707,7 @@ const ProductForm = ({
                   </div>
                   <button
                     onClick={addCustomField}
-                    style={{ ...S.addFeatureBtn, marginTop: 10, padding: "9px 16px", borderRadius: 10 }}
+                    className="pm-addFeatureBtn" style={{ marginTop: 10, padding: "9px 16px", borderRadius: 10 }}
                   >
                     + Add Custom Field
                   </button>
@@ -597,7 +723,7 @@ const ProductForm = ({
                     {Object.entries(requiredData)
                       .filter(([key]) => key !== "_placeholder")
                       .map(([key, val]) => (
-                        <span key={key} style={S.chip} onClick={() => {
+                        <span key={key} className="pm-chip" onClick={() => {
                           const updated = { ...requiredData };
                           delete updated[key];
                           updateRequiredData(updated);
@@ -636,22 +762,22 @@ const ProductForm = ({
         {tab === "extra" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Provider"><input style={S.input} placeholder="Netflix" value={data.extra_data?.provider || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, provider: e.target.value } })} /></Field>
-              <Field label="Region"><input style={S.input} placeholder="Worldwide" value={data.extra_data?.region || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, region: e.target.value } })} /></Field>
+              <Field label="Provider"><input className="pm-input" placeholder="Netflix" value={data.extra_data?.provider || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, provider: e.target.value } })} /></Field>
+              <Field label="Region"><input className="pm-input" placeholder="Worldwide" value={data.extra_data?.region || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, region: e.target.value } })} /></Field>
             </div>
             {data.id && (
-              <Field label="Delivery"><input style={S.input} placeholder="Instant" value={data.extra_data?.delivery || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, delivery: e.target.value } })} /></Field>
+              <Field label="Delivery"><input className="pm-input" placeholder="Instant" value={data.extra_data?.delivery || ""} onChange={(e) => setData({ ...data, extra_data: { ...data.extra_data, delivery: e.target.value } })} /></Field>
             )}
             <Field label="Features">
               <div style={{ display: "flex", gap: 8 }}>
-                <input style={S.input} placeholder="e.g. 4K Streaming" value={featureInput} onChange={(e) => setFeatureInput(e.target.value)}
+                <input className="pm-input" placeholder="e.g. 4K Streaming" value={featureInput} onChange={(e) => setFeatureInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && featureInput) {
                       setData({ ...data, extra_data: { ...data.extra_data, features: [...(data.extra_data?.features || []), featureInput] } });
                       setFeatureInput("");
                     }
                   }} />
-                <button style={S.addFeatureBtn} onClick={() => {
+                <button className="pm-addFeatureBtn" onClick={() => {
                   if (!featureInput) return;
                   setData({ ...data, extra_data: { ...data.extra_data, features: [...(data.extra_data?.features || []), featureInput] } });
                   setFeatureInput("");
@@ -659,7 +785,7 @@ const ProductForm = ({
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
                 {(data.extra_data?.features || []).map((f, i) => (
-                  <span key={i} style={S.chip} onClick={() => {
+                  <span key={i} className="pm-chip" onClick={() => {
                     const updated = data.extra_data.features.filter((_, idx) => idx !== i);
                     setData({ ...data, extra_data: { ...data.extra_data, features: updated } });
                   }}>{f} <X size={10} style={{ marginLeft: 4, verticalAlign: "middle" }} /></span>
@@ -671,8 +797,8 @@ const ProductForm = ({
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 20, paddingTop: 16, borderTop: "1px solid #0f172a" }}>
-        {onCancel && <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>}
-        <button style={S.submitBtn} onClick={onSubmit}>{submitLabel}</button>
+        {onCancel && <button className="pm-cancelBtn" onClick={onCancel}>Cancel</button>}
+        <button className="pm-submitBtn" onClick={onSubmit}>{submitLabel}</button>
       </div>
     </div>
   );
@@ -702,7 +828,7 @@ const ProductCard = ({
 
 
   return (
-    <div style={S.productCard}>
+    <div className="pm-productCard">
       {/* Status bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 25 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -731,8 +857,8 @@ const ProductCard = ({
           )}
         </div>
         <div style={{ display: "flex", gap: 5 }}>
-          {p.discount_percent && <span style={S.discountBadge}>🏷️{p.discount_percent}%</span>}
-          {p.is_featured && <span style={S.featuredBadge}>★ Featured</span>}
+          {p.discount_percent && <span className="pm-discountBadge">🏷️{p.discount_percent}%</span>}
+          {p.is_featured && <span className="pm-featuredBadge">★ Featured</span>}
         </div>
       </div>
 
@@ -742,7 +868,7 @@ const ProductCard = ({
           {p.icon_path ? (
             <img src={`${API_URL}${p.icon_path}`} alt={p.name} style={{ width: "100%", height: "100%", borderRadius: 8, objectFit: "cover" }} />
           ) : (
-            <div style={S.avatar}>{p.name?.[0]?.toUpperCase() || "?"}</div>
+            <div className="pm-avatar">{p.name?.[0]?.toUpperCase() || "?"}</div>
           )}
         </div>
         <div style={{ minWidth: 0 }}>
@@ -771,11 +897,11 @@ const ProductCard = ({
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {p.plan && <span style={S.planBadge}>{p.plan}</span>}
-        {p.product_type && <span style={S.typeBadge}>{p.product_type}</span>}
-        {extra.region && <span style={S.regionBadge}>🌍 {extra.region}</span>}
-        {extra.provider && <span style={S.typeBadge}>{extra.provider}</span>}
-        {(extra.features || []).slice(0, 2).map((f, i) => <span key={i} style={S.typeBadge}>{f}</span>)}
+        {p.plan && <span className="pm-planBadge">{p.plan}</span>}
+        {p.product_type && <span className="pm-typeBadge">{p.product_type}</span>}
+        {extra.region && <span className="pm-regionBadge">🌍 {extra.region}</span>}
+        {extra.provider && <span className="pm-typeBadge">{extra.provider}</span>}
+        {(extra.features || []).slice(0, 2).map((f, i) => <span key={i} className="pm-typeBadge">{f}</span>)}
       </div>
 
       {/* Rejection reason */}
@@ -787,11 +913,11 @@ const ProductCard = ({
 
       <div style={{ marginTop: "auto" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, paddingBottom: 10 }}>
-          <span style={S.metaPill}>📦 {p.stock ?? "∞"}</span>
-          {p.network && <span style={S.metaPill}>🌐 {p.network}</span>}
-          <span style={S.metaPill}>⏳ {p.validity_days || 0}d{p.validity_hours ? ` ${p.validity_hours}h` : ""}</span>
-          {p.data_volume_gb && <span style={S.metaPill}>💾 {p.data_volume_gb}GB</span>}
-          {p.is_recurring && <span style={S.metaPill}>🔁 Recurring</span>}
+          <span className="pm-metaPill">📦 {p.stock ?? "∞"}</span>
+          {p.network && <span className="pm-metaPill">🌐 {p.network}</span>}
+          <span className="pm-metaPill">⏳ {p.validity_days || 0}d{p.validity_hours ? ` ${p.validity_hours}h` : ""}</span>
+          {p.data_volume_gb && <span className="pm-metaPill">💾 {p.data_volume_gb}GB</span>}
+          {p.is_recurring && <span className="pm-metaPill">🔁 Recurring</span>}
         </div>
 
         {/* Actions */}
@@ -923,7 +1049,7 @@ const ProductCard = ({
           {/* Edit — always shown where applicable */}
           {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.edit") && (
             <button
-              style={{ ...S.cardBtnEdit }}
+              className="pm-cardBtnEdit"
               onClick={() => onEdit(p)}
             >
               <Edit3 size={12} style={{ marginRight: 5 }} /> Edit
@@ -933,8 +1059,8 @@ const ProductCard = ({
           {/* Toggle active */}
           {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.management") && (
             <button
+              className="pm-cardBtnToggle"
               style={{
-                ...S.cardBtnToggle,
                 background: p.is_active ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
                 borderColor: p.is_active ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)",
                 color: p.is_active ? "#ef4444" : "#22c55e",
@@ -948,11 +1074,272 @@ const ProductCard = ({
 
           {/* Delete */}
           {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.delete") && (
-            <button style={S.cardBtnDelete} onClick={() => onDelete(p.id)}>
+            <button className="pm-cardBtnDelete" onClick={() => onDelete(p.id)}>
               <Trash2 size={12} />
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ── PRODUCT ROW (sidebar list, like exchange PairRow) ──────────
+const ProductRow = ({ p, selected, onClick }) => {
+  const hasDiscount = p.discount_percent && Number(p.discount_percent) > 0;
+  const discountedPrice = hasDiscount ? (p.price * (1 - p.discount_percent / 100)).toFixed(2) : null;
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "9px 12px", borderRadius: 9, cursor: "pointer",
+        border: `1px solid ${selected ? "rgba(59,130,246,.28)" : "transparent"}`,
+        background: selected ? "rgba(59,130,246,.1)" : "transparent",
+        transition: "all .15s", marginBottom: 3,
+      }}
+    >
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+        background: p.is_active ? "#22c55e" : "#374151",
+        boxShadow: p.is_active ? "0 0 6px rgba(34,197,94,.4)" : "none",
+        display: "inline-block",
+      }} />
+
+      {/* small icon before product name */}
+      <div style={{
+        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+        background: "#0b1525", border: "1px solid #313d58ff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        overflow: "hidden",
+      }}>
+        {p.icon_path ? (
+          <img src={`${API_URL}${p.icon_path}`} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 800, color: "#3b82f6" }}>{p.name?.[0]?.toUpperCase() || "?"}</span>
+        )}
+      </div>
+
+      {/* left-aligned: name / plan / admin */}
+      <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: selected ? "white" : "#cbd5e1",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {p.name}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
+          <span style={{ fontSize: 11, color: "#5f728eff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {p.plan || "—"}
+          </span>
+          {p.admin_id != null && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: "#a78bfa",
+              background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.25)",
+              borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap",
+              maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0,
+            }}>
+              {p.admin_username || `#${p.admin_id}`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* right-aligned: price (with discount if any) */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, textAlign: "right" }}>
+        {hasDiscount ? (
+          <>
+            <span style={{ fontSize: 10, color: "#5f728eff", textDecoration: "line-through" }}>
+              {p.price} {p.currency || ""}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: p.is_active ? "#22c55e" : "#374151", whiteSpace: "nowrap" }}>
+              {discountedPrice} {p.currency || ""}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 13, fontWeight: 700, color: p.is_active ? "#3b82f6" : "#374151", whiteSpace: "nowrap" }}>
+            {p.price != null ? `${p.price} ${p.currency || ""}` : "—"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── PRODUCT DETAIL PANEL (sidebar, like exchange PairDetail) ───
+const ProductDetailPanel = ({ product, categories, safeExtra, currentUser, viewMode, onEdit, onToggleActive, onDelete, onApprove, onReject, onResubmit }) => {
+  const extra = safeExtra(product);
+  const category = categories.find(c => Number(c.id) === Number(product.category_id));
+  const isMaster = currentUser.role === "master";
+
+  // parse required_user_data safely (may be a JSON string or an object keyed by field name)
+  const requiredFields = (() => {
+    try {
+      const raw = product.required_user_data;
+      if (!raw) return {};
+      return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch { return {}; }
+  })();
+  const requiredEntries = Object.entries(requiredFields);
+  const STEP_LABELS = { before_order: "Before Order", after_login: "After Login" };
+  const requiredByStep = requiredEntries.reduce((acc, [key, f]) => {
+    const step = f?.step || "before_order";
+    (acc[step] = acc[step] || []).push([key, f]);
+    return acc;
+  }, {});
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* head */}
+      <div style={{ padding: "12px 15px", borderBottom: "1px solid rgba(255,255,255,.05)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: product.is_active ? "#22c55e" : "#a31919ff", boxShadow: product.is_active ? "0 0 8px rgba(34,197,94,.5)" : "none", flexShrink: 0 }} />
+          <span style={{ color: "white", fontWeight: 800, fontSize: 15, flex: 1, letterSpacing: "-.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{product.name}</span>
+          <span style={{ background: product.is_active ? "rgba(34,197,94,.1)" : "#a31919ff", border: `1px solid ${product.is_active ? "rgba(34,197,94,.22)" : "rgba(252,253,254,.15)"}`, color: product.is_active ? "#4ade80" : "#cba3a3ff", borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700 }}>
+            {product.is_active ? "LIVE" : "OFF"}
+          </span>
+        </div>
+        <div style={{ marginTop: 6, fontSize: 11, color: "#7c8696ff" }}>{category?.name || "Uncategorized"}</div>
+        {product.admin_id != null && (
+          <div style={{ marginTop: 3, fontSize: 11, color: "#a78bfa", display: "flex", alignItems: "center", gap: 4 }}>
+            <User size={11} /> {product.admin_username || `#${product.admin_id}`}
+          </div>
+        )}
+      </div>
+
+      {/* body */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "13px 15px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* price hero */}
+        <div style={{ background: "#040a14", border: "1px solid rgba(59,130,246,.15)", borderRadius: 11, padding: 12 }}>
+          <div style={{ fontSize: 10, color: "#3b82f6", fontWeight: 700, letterSpacing: ".07em", marginBottom: 4 }}>PRICE</div>
+          <div style={{ fontSize: 22, color: "white", fontWeight: 900, letterSpacing: "-.04em" }}>
+            {product.price} <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>{product.currency}</span>
+          </div>
+          {product.discount_percent ? (
+            <div style={{ fontSize: 13, color: "#22c55e", marginTop: 3 }}>
+              Discounted: {(product.price * (1 - product.discount_percent / 100)).toFixed(2)} {product.currency} (−{product.discount_percent}%)
+            </div>
+          ) : null}
+        </div>
+
+        {/* stats grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {[
+            ["Plan", product.plan || "—"],
+            ["Stock", product.stock ?? "∞"],
+            ["Type", product.product_type || "—"],
+            ["Product ID", `#${product.id}`],
+            ["Validity", `${product.validity_days || 0}d${product.validity_hours ? ` ${product.validity_hours}h` : ""}`],
+            ["Data", product.data_volume_gb ? `${product.data_volume_gb}GB` : "—"],
+            ["Commission", product.system_commision != null ? product.system_commision : "—"],
+            ["Reward %", product.system_reward_percent != null ? `${product.system_reward_percent}%` : "—"],
+          ].map(([k, v]) => (
+            <div key={k} style={{ background: "#040a14", border: "1px solid rgba(255,255,255,.06)", borderRadius: 9, padding: "9px 10px" }}>
+              <div style={{ fontSize: 12, color: "#7c8696ff", marginBottom: 3 }}>{k}</div>
+              <div style={{ fontSize: 14, color: "white", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {product.description && (
+          <div>
+            <div style={{ fontSize: 10, color: "#7c8696ff", fontWeight: 700, letterSpacing: ".07em", marginBottom: 6 }}>DESCRIPTION</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{product.description}</div>
+          </div>
+        )}
+
+        {(extra.region || extra.provider || (extra.features || []).length > 0) && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {extra.region && <span className="pm-regionBadge">🌍 {extra.region}</span>}
+            {extra.provider && <span className="pm-typeBadge">{extra.provider}</span>}
+            {(extra.features || []).map((f, i) => <span key={i} className="pm-typeBadge">{f}</span>)}
+          </div>
+        )}
+
+        {/* required user data / steps (like wire pair required-fields preview) */}
+        {requiredEntries.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: "#7c8696ff", fontWeight: 700, letterSpacing: ".07em", marginBottom: 6 }}>
+              REQUIRED USER DATA ({requiredEntries.length})
+            </div>
+            {["before_order", "after_login"].map(step => {
+              const items = requiredByStep[step];
+              if (!items || items.length === 0) return null;
+              return (
+                <div key={step} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <div style={{ width: 3, height: 11, borderRadius: 3, background: step === "before_order" ? "#3b82f6" : "#a78bfa" }} />
+                    <span style={{ fontSize: 11, color: step === "before_order" ? "#60a5fa" : "#a78bfa", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                      {STEP_LABELS[step] || step}
+                    </span>
+                  </div>
+                  {items.map(([key, f]) => (
+                    <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#040a14", border: "1px solid rgba(255,255,255,.06)", borderRadius: 8, padding: "6px 10px", marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>{f?.label || key}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: f?.required ? "#4ade80" : "#64748b", background: f?.required ? "rgba(34,197,94,.1)" : "rgba(255,255,255,.05)", border: `1px solid ${f?.required ? "rgba(34,197,94,.25)" : "rgba(255,255,255,.08)"}`, borderRadius: 999, padding: "2px 8px" }}>
+                        {f?.required ? "Required" : "Optional"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {viewMode === "rejected" && product.rejection_reason && (
+          <div style={{ background: "rgba(239,68,68,.07)", border: "1px solid rgba(239,68,68,.18)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#f87171", lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 700 }}>Reason: </span>{product.rejection_reason}
+          </div>
+        )}
+      </div>
+
+      {/* footer actions */}
+      <div style={{ padding: "11px 15px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
+        {viewMode === "pending" && isMaster ? (
+          <>
+            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+              <Edit3 size={11} style={{ marginRight: 5 }} />Edit
+            </button>
+            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(34,197,94,.1)", borderColor: "rgba(34,197,94,.22)", color: "#4ade80" }} onClick={() => onApprove(product)}>
+              <CheckCircle size={11} style={{ marginRight: 5 }}  />Approve
+            </button>
+            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(239,68,68,.1)", borderColor: "rgba(239,68,68,.22)", color: "#f87171" }} onClick={() => onReject(product)}>
+              <XCircle size={11} style={{ marginRight: 5 }}  />Reject
+            </button>
+          </>
+        ) : viewMode === "rejected" ? (
+          <>
+            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(234,179,8,.1)", borderColor: "rgba(234,179,8,.25)", color: "#eab308" }} onClick={() => onResubmit(product.id)}>
+              <RefreshCcw size={11} style={{ marginRight: 5 }} />Resubmit
+            </button>
+            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+              <Edit3 size={11} style={{ marginRight: 5 }}  />Edit
+            </button>
+          </>
+        ) : (
+          <>
+            {hasPermission(currentUser, "products.edit") && (
+              <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+                <Edit3 size={11} style={{ marginRight: 5 }} />Edit
+              </button>
+            )}
+            {hasPermission(currentUser, "products.management") && (
+              <button
+                className="pm-actionBtn" style={{ flex: 1, background: product.is_active ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)", borderColor: product.is_active ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)", color: product.is_active ? "#f87171" : "#4ade80" }}
+                onClick={() => onToggleActive(product.id, !product.is_active)}
+              >
+                {product.is_active ? <><PowerOff size={11} style={{ marginRight: 5 }}  />Disable</> : <> <Power size={11} style={{ marginRight: 5 }} />Enable</>}
+              </button>
+            )}
+            {hasPermission(currentUser, "products.delete") && (
+              <button className="pm-actionBtn" style={{ background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(product.id)}>
+                <Trash2 size={12} />
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1038,14 +1425,41 @@ export default function ProductsManagement() {
   const [loading, setLoading]               = useState(false);
 
   // UI State
-  const [activeTab, setActiveTab]           = useState("all"); // "all" | "my" | "pending" | "rejected"
-  const [search, setSearch]                 = useState("");
+  const [mainView, setMainView]             = useState("products"); // "products" | "orders" | "analysis"
+  const [activeTab, setActiveTab]           = useState("all"); // "all" | "my" | "pending" | "rejected" (master only)
+  // single-click cyclic sort: field is "price" | "plan" | null, dir is "asc" | "desc" | null. Default: none.
+  const [sortField, setSortField]           = useState(null);
+  const [sortDir, setSortDir]                = useState(null);
+  const toggleSort = (field) => {
+    if (sortField !== field) { setSortField(field); setSortDir("asc"); }
+    else if (sortDir === "asc") { setSortDir("desc"); }
+    else { setSortField(null); setSortDir(null); }
+  };
+
+  // ── UNIFIED HERO FILTERS — one shared filter set, applied across Products / Orders / Analysis ──
+  const [unifiedSearch, setUnifiedSearch]       = useState("");
+  const [statusFilter, setStatusFilter]         = useState("all");       // order status (Orders tab)
+  const [unifiedProductType, setUnifiedProductType] = useState("all");   // product_type (all tabs)
+  const [unifiedCurrency, setUnifiedCurrency]   = useState("all");       // currency (all tabs)
+  const [unifiedCategory, setUnifiedCategory]   = useState("all");       // category name (all tabs)
+  const [unifiedAdmin, setUnifiedAdmin]         = useState("all");       // admin id / owner (all tabs, master only)
+  const [unifiedDateRange, setUnifiedDateRange] = useState([null, null]);
+  const [unifiedStart, unifiedEnd]              = unifiedDateRange;
+  const [analysisMetric, setAnalysisMetric]     = useState("sold");      // "sold" | "income" (Analysis tab)
+  const [analysisViewMode, setAnalysisViewMode] = useState("products");  // "products" | "categories" (Analysis tab)
   const [panel, setPanel]                   = useState(null);  // null | "add-product" | "add-category"
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [form, setForm]                     = useState(emptyForm());
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryName, setCategoryName]     = useState("");
   const [featureInput, setFeatureInput]     = useState("");
+
+  // ── Orders (merged from OrdersManagement) ──
+  const [orders, setOrders]                 = useState([]);
+  const [ordersLoading, setOrdersLoading]   = useState(false);
+  const [selectedOrder, setSelectedOrder]   = useState(null);
+  const [selectedUser, setSelectedUser]     = useState(null);
 
   // Approval modals
   const [approveTarget, setApproveTarget]   = useState(null);
@@ -1117,6 +1531,131 @@ export default function ProductsManagement() {
   
   useEffect(() => { loadData(); }, []);
 
+  // keep selected product in sync after reload
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const all = [...allProducts, ...myProducts, ...pendingProducts, ...rejectedProducts];
+    const fresh = all.find(p => p.id === selectedProduct.id);
+    setSelectedProduct(fresh || null);
+  }, [allProducts, myProducts, pendingProducts, rejectedProducts]);
+
+  // ── ORDERS: load + filter (merged from OrdersManagement) ──
+  const isMaster = currentUser.role === "master";
+  // Non-master admins can only ever browse their own products
+  const effectiveTab = isMaster ? activeTab : "my";
+
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const res = await API.get("/admin/orders/all");
+      setOrders(res.data || []);
+    } catch (err) {
+      console.error("loadOrders error:", err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  // an item "matches" an admin/category filter if it either has no ownership/category info at all
+  // (can't be excluded) or one of its known fields actually equals the selected value
+  const matchesAdmin = (item, val) => {
+    if (val === "all") return true;
+    const selectedUser = users.find(u => String(u.user_id) === String(val));
+    const idCandidates = [item.admin_id, item.product_owner_id, item.owner_admin_id, item.created_by_admin_id, item.seller_admin_id]
+      .filter(v => v != null);
+    const nameCandidates = [item.admin_username, item.product_owner_displayName, item.owner_username, item.seller_username]
+      .filter(Boolean);
+    if (idCandidates.length === 0 && nameCandidates.length === 0) return true; // no ownership info on this item — can't exclude
+    const idMatch = idCandidates.some(id => String(id) === String(val));
+    const nameMatch = !!selectedUser && nameCandidates.some(n => n === selectedUser.username || n === selectedUser.display);
+    return idMatch || nameMatch;
+  };
+  const matchesCategory = (item, val) => {
+    if (val === "all") return true;
+    const name = item.category_name ?? categories.find(c => Number(c.id) === Number(item.category_id))?.name;
+    if (name == null) return true;
+    return name === val;
+  };
+
+  const applyOrderFilters = (list, { status }) => {
+    let data = [...list];
+    if (unifiedSearch.trim()) {
+      const q = unifiedSearch.toLowerCase().trim();
+      data = data.filter((o) =>
+        o.id?.toString().includes(q) ||
+        o.username?.toLowerCase().includes(q) ||
+        o.product_name?.toLowerCase().includes(q) ||
+        o.product_type?.toLowerCase().includes(q)
+      );
+    }
+    if (status !== "all") data = data.filter((o) => o.status === status);
+    if (unifiedProductType !== "all") data = data.filter((o) => o.product_type === unifiedProductType);
+    if (unifiedCurrency !== "all") data = data.filter((o) => o.currency === unifiedCurrency);
+    data = data.filter((o) => matchesCategory(o, unifiedCategory));
+    data = data.filter((o) => matchesAdmin(o, unifiedAdmin));
+    if (unifiedStart) data = data.filter((o) => new Date(o.created_at) >= unifiedStart);
+    if (unifiedEnd) {
+      const end = new Date(unifiedEnd);
+      end.setHours(23, 59, 59, 999);
+      data = data.filter((o) => new Date(o.created_at) <= end);
+    }
+    return data;
+  };
+
+  const filteredOrders = useMemo(
+    () => applyOrderFilters(orders, { status: statusFilter }),
+    [orders, unifiedSearch, statusFilter, unifiedProductType, unifiedCurrency, unifiedCategory, unifiedAdmin, unifiedStart, unifiedEnd, categories]
+  );
+
+  // currency options come strictly from what products are actually priced in —
+  // the same list is then used to filter Products, Orders, and Analytics alike
+  const currencyOptions = useMemo(() => {
+    const set = new Set(allProducts.map((p) => p.currency).filter(Boolean));
+    return [...set].sort().map((c) => ({ label: c, value: c }));
+  }, [allProducts]);
+
+  // Analytics reflects completed (delivered) sales only. This is computed straight from `orders`
+  // (ignoring whatever `statusFilter` is currently set to for the Orders tab — the two must not
+  // interfere) with every other shared filter still applied, so the Hero's Orders/Value pills on
+  // the Analysis tab always match "Orders tab filtered to Delivered", regardless of what status
+  // was last picked while browsing Orders.
+  const heroPillOrders = useMemo(
+    () => (mainView === "analysis" ? applyOrderFilters(orders, { status: "delivered" }) : filteredOrders),
+    [mainView, orders, filteredOrders, unifiedSearch, unifiedProductType, unifiedCurrency, unifiedCategory, unifiedAdmin, unifiedStart, unifiedEnd, categories]
+  );
+
+  const filteredOrderCurrencies = [...new Set(heroPillOrders.map((o) => o.currency).filter(Boolean))];
+  const totalPurchaseValue = (() => {
+    if (filteredOrderCurrencies.length !== 1) return null;
+    const currency = filteredOrderCurrencies[0];
+    const sum = heroPillOrders.reduce((acc, o) => acc + (parseFloat(o.price) || 0), 0);
+    const fractionDigits = currency === "IRT" ? 0 : 1;
+    return sum.toLocaleString("en-US", {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    });
+  })();
+  const totalPurchaseCurrency = filteredOrderCurrencies.length === 1 ? filteredOrderCurrencies[0] : null;
+
+  const openOrder = (order) => setSelectedOrder(order);
+  const closeOrderSidebar = () => setSelectedOrder(null);
+  const openUserSidebar = (userData) => setSelectedUser(userData);
+  const closeUserSidebar = () => setSelectedUser(null);
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    const day = d.getDate();
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = d.getMinutes().toString().padStart(2, "0");
+    const ampm = hours >= 12 ? "pm" : "am";
+    hours = hours % 12 || 12;
+    return `${day} ${month} ${year} ${hours}:${minutes} ${ampm}`;
+  }
+
   // ── CATEGORY ACTIONS ──
   const addCategory = async () => {
     if (!categoryName.trim()) return;
@@ -1177,6 +1716,7 @@ export default function ProductsManagement() {
       alert(`❌ Cannot delete product\n\nOrders: ${data.order_count}\nOrder IDs: ${data.order_ids.join(", ")}`);
       return;
     }
+    if (selectedProduct?.id === id) setSelectedProduct(null);
     loadData();
   };
 
@@ -1277,33 +1817,65 @@ export default function ProductsManagement() {
     })(),
   });
 
-  // ── FILTERED DATA ──
-  const filterProducts = (list) => {
-    const q = search.toLowerCase();
-    return list.filter(p =>
-      p.name?.toLowerCase().includes(q) ||
-      p.plan?.toLowerCase().includes(q) ||
-      p.product_type?.toLowerCase().includes(q) ||
-      String(p.admin_id || "").includes(q)
-    );
+  // ── SORTED DATA (price or plan, ascending/descending, or none) ──
+  const sortProducts = (list) => {
+    if (!sortField || !sortDir) return list;
+    const arr = [...list];
+    if (sortField === "price") {
+      arr.sort((a, b) => sortDir === "asc"
+        ? (Number(a.price) || 0) - (Number(b.price) || 0)
+        : (Number(b.price) || 0) - (Number(a.price) || 0));
+    } else if (sortField === "plan") {
+      arr.sort((a, b) => sortDir === "asc"
+        ? (a.plan || "").localeCompare(b.plan || "")
+        : (b.plan || "").localeCompare(a.plan || ""));
+    }
+    return arr;
   };
 
   const currentProducts = useMemo(() => {
     const map = { all: allProducts, my: myProducts, pending: pendingProducts, rejected: rejectedProducts };
-    return filterProducts(map[activeTab] || []);
-  }, [activeTab, allProducts, myProducts, pendingProducts, rejectedProducts, search]);
+    let list = map[effectiveTab] || [];
+    if (unifiedSearch.trim()) {
+      const q = unifiedSearch.toLowerCase().trim();
+      list = list.filter(p =>
+        p.name?.toLowerCase().includes(q) ||
+        p.plan?.toLowerCase().includes(q) ||
+        p.product_type?.toLowerCase().includes(q)
+      );
+    }
+    if (unifiedProductType !== "all") list = list.filter(p => p.product_type === unifiedProductType);
+    if (unifiedCurrency !== "all") list = list.filter(p => p.currency === unifiedCurrency);
+    list = list.filter(p => matchesCategory(p, unifiedCategory));
+    list = list.filter(p => matchesAdmin(p, unifiedAdmin));
+    if (unifiedStart) list = list.filter(p => !p.created_at || new Date(p.created_at) >= unifiedStart);
+    if (unifiedEnd) {
+      const end = new Date(unifiedEnd);
+      end.setHours(23, 59, 59, 999);
+      list = list.filter(p => !p.created_at || new Date(p.created_at) <= end);
+    }
+    return sortProducts(list);
+  }, [effectiveTab, allProducts, myProducts, pendingProducts, rejectedProducts, sortField, sortDir,
+      unifiedSearch, unifiedProductType, unifiedCurrency, unifiedCategory, unifiedAdmin, unifiedStart, unifiedEnd]);
 
   // ── STATS ──
   const activeCount = useMemo(() => allProducts.filter(p => p.is_active).length, [allProducts]);
   const panelOpen   = panel !== null;
 
-  // ── TABS CONFIG ──
+  // ── TABS CONFIG (product filter, moved into Hero dropdown — master only) ──
   const tabs = [
-    hasPermission(currentUser, "products.view") && { id: "all", label: "All Products", icon: Package, count: allProducts.length, accent: "#3b82f6" },
+    hasPermission(currentUser, "products.view") && { id: "all", label: "Products", icon: Package, count: allProducts.length, accent: "#3b82f6" },
     { id: "my", label: "My Products", icon: ShieldCheck, count: myProducts.length, accent: "#8b5cf6" },
     currentUser.role === "master" && { id: "pending", label: "Pending Approval", icon: Clock, count: pendingProducts.length, accent: "#eab308" },
     currentUser.role === "master" && { id: "rejected", label: "Rejected", icon: XCircle, count: rejectedProducts.length, accent: "#ef4444" },
   ].filter(Boolean);
+
+  // ── MAIN VIEW TABS (like ExchangeDashboard's right-side Orders/Sweeps/Analysis) ──
+  const MAIN_TABS = [
+    { key: "products", label: "Products", icon: Package,   count: currentProducts.length },
+    { key: "orders",   label: "Orders",   icon: FileText,  count: filteredOrders.length },
+    { key: "analysis", label: "Analysis", icon: BarChart3, count: null },
+  ];
 
   // Permission button
   const PermButton = ({ permission, style = {}, children, ...props }) => {
@@ -1317,84 +1889,382 @@ export default function ProductsManagement() {
   };
   
   return (
-    <div style={{ 
-      display: "flex", 
-      height: "100vh", 
-      background: "#060b16", 
-      overflow: "hidden", 
-      padding:"5px ",
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100vh",
+      background: "#060b16",
+      overflow: "hidden",
+      padding: "0px",
+      boxSizing: "border-box",
       fontFamily: "'Inter', sans-serif" }}>
-       
 
-      {/* ── LEFT SIDEBAR PANEL ── */}
-      <div style={{
-        width: panelOpen ? 380 : 0, minWidth: panelOpen ? 380 : 0,
-        transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
-        overflow: "hidden",
-        borderRight: panelOpen ? "1px solid #0f172a" : "none",
-        background: "#080e1a", display: "flex", flexDirection: "column",
-      }}>
-        <div style={{ width: 380, height: "100%", display: "flex", flexDirection: "column", padding: 24, boxSizing: "border-box" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-            <div>
-              <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
-                {panel === "add-product" ? "New Product" : "Manage Categories"}
-              </div>
-              <div style={{ color: "#63748dff", fontSize: 14, marginTop: 3 }}>
-                {panel === "add-product" ? "Fill in the details below" : "Add or edit categories"}
-              </div>
+      {/* ── HERO HUB — ONE fixed filter set, shared and applied across Products / Orders / Analysis ── */}
+      <div style={{ padding: "0 0 10px", flexShrink: 0 }}>
+        <HeroHub
+          title="Products Management"
+          subtitle="Manage your catalog, products, orders and categories"
+          search={{
+            visible: true,
+            value: unifiedSearch,
+            onChange: setUnifiedSearch,
+            placeholder:
+              mainView === "orders" ? "Search Order ID, User or Product…" :
+              mainView === "analysis" ? "Search product, plan or category…" :
+              "Search products, plan, type…",
+          }}
+          dropdowns={[
+            // slot 1 — order status (Orders) / product tab filter (Products, master only).
+            // Not shown on Analysis — its "Sold vs Income" metric lives back inside the Analytics panel itself.
+            (mainView === "orders" || (mainView === "products" && isMaster)) && {
+              key: "status",
+              label: "Status",
+              visible: true,
+              value: mainView === "orders" ? statusFilter : activeTab,
+              onChange: mainView === "orders" ? setStatusFilter : setActiveTab,
+              placeholder: mainView === "orders" ? "All" : "Products",
+              options:
+                mainView === "orders"
+                  ? [
+                      { label: "Pending", value: "pending" },
+                      { label: "Approved", value: "approved" },
+                      { label: "Rejected", value: "rejected" },
+                      { label: "Delivered", value: "delivered" },
+                    ]
+                  : tabs.map(t => ({ label: t.label, value: t.id })),
+            },
+            // slot 2 — product type, same everywhere
+            {
+              key: "productType", 
+              label: "Types",
+              visible: true, 
+              value: unifiedProductType, 
+              onChange: setUnifiedProductType,
+              placeholder: "All",
+              options: [
+                { label: "Subscription", value: "subscription" },
+                { label: "VPN", value: "VPN" },
+                { label: "Gift Card", value: "Gift Cards" },
+                { label: "Account", value: "account" },
+                { label: "Service", value: "service" },
+              ],
+            },
+            // slot 3 — currency, same everywhere
+            { key: "currency", 
+              visible: true, 
+              label: "Currency",
+              value: unifiedCurrency, 
+              onChange: setUnifiedCurrency, 
+              placeholder: "All", 
+              options: currencyOptions },
+            // slot 4 — category, same everywhere
+            {
+              key: "category", 
+              label: "Category",
+              visible: true, 
+              value: unifiedCategory, 
+              onChange: setUnifiedCategory,
+              placeholder: "All",
+              options: categories.map(c => ({ label: c.name, value: c.name })),
+            },
+            // slot 5 — admin/owner, master only, "admin" role only (regular admins only ever see their own data anyway)
+            isMaster && {
+              key: "admin",
+              label: "Admins", 
+              visible: true, 
+              value: unifiedAdmin, 
+              onChange: setUnifiedAdmin,
+              placeholder: "All",
+              options: users.filter(u => u.role === "admin").map(u => ({ label: u.username, value: String(u.user_id) })),
+            },
+          ].filter(Boolean)}
+          datePicker={{
+            visible: true,
+            selectsRange: true,
+            startDate: unifiedStart,
+            endDate: unifiedEnd,
+            onChange: (update) => setUnifiedDateRange(update),
+            placeholderText: "Select date range",
+          }}
+          statPills={[
+            { key: "products", icon: Package, label: "Products", value: currentProducts.length, accent: "#3b82f6", loading },
+            { key: "orders", icon: SlidersHorizontal, label: mainView === "analysis" ? "Delivered Orders" : "Orders", value: heroPillOrders.length, accent: "#a78bfa", loading: ordersLoading },
+            { key: "value", icon: Wallet, label: "Value", value: totalPurchaseValue, meta: totalPurchaseCurrency, accent: "#22d3ee", loading: ordersLoading },
+          ]}
+          onRefresh={() => { loadData(); loadOrders(); }}
+          refreshing={loading || ordersLoading}
+          actions={[
+              {
+                key: "categories",
+                visible: hasPermission(currentUser, "categories.manage"),
+                label: "Categories",
+                icon: Grid3X3,
+                active: panelOpen,
+                onClick: () => setPanel(panel === "add-category" ? null : "add-category"),
+              },
+            ]}
+        />
+      </div>
+
+      {/* ── BELOW HERO: sidebar (left) + main container (right) ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+
+      {/* ── LEFT: PRODUCTS SIDEBAR + SLIDE-IN ADD/CATEGORY PANEL + DETAIL PANEL ── */}
+      <div style={{ position: "relative", flexShrink: 0, display: "flex" }}>
+
+        {/* product list sidebar */}
+        <div style={{
+          width: 380, background: "#040a14", borderRight: "1px solid rgba(255,255,255,.05)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          transition: "opacity .2s", opacity: panelOpen ? .3 : 1, paddingLeft: "10px", pointerEvents: panelOpen ? "none" : "auto",
+        }}>
+        {/* sidebar header */}
+        <div
+          style={{
+            padding: "10px 12px",
+            borderBottom: "1px solid rgba(255,255,255,.05)",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            {/* Left: icon + title + count */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              <Package size={16} color="#3b82f6" />
+
+              <span
+                style={{
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 18,
+                }}
+              >
+                Products
+              </span>
+
+              <span
+                style={{
+                  background: "rgba(59,130,246,.12)",
+                  color: "#60a5fa",
+                  borderRadius: 20,
+                  padding: "1px 8px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {currentProducts.length}
+              </span>
             </div>
-            <button onClick={() => setPanel(null)} style={S.closeIconBtn}><X size={16} /></button>
+
+            {/* Right: Add button */}
+            <PermButton
+              permission="products.create"
+              onClick={() =>
+                setPanel(panel === "add-product" ? null : "add-product")
+              }
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(59,130,246,.14)",
+                border: "1px solid rgba(59,130,246,.28)",
+                color: "#93c5fd",
+                borderRadius: 7,
+                padding: "7px 9px",
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              <Plus size={12} />
+              Add
+            </PermButton>
+          </div>
+        </div>
+
+          {/* sort (2 single-click cyclic buttons: none → asc → desc → none) */}
+          <div style={{ padding: "7px 10px", borderBottom: "1px solid rgba(255,255,255,.04)", flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[{ field: "price", label: "Price" }, { field: "plan", label: "Plan" }].map(({ field, label }) => {
+                const active = sortField === field;
+                const arrow = active ? (sortDir === "asc" ? "↑" : "↓") : "";
+                return (
+                  <button
+                    key={field}
+                    onClick={() => toggleSort(field)}
+                    style={{
+                      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                      background: active ? "rgba(59,130,246,.16)" : "#060c18",
+                      border: `1px solid ${active ? "rgba(59,130,246,.4)" : "rgba(255,255,255,.07)"}`,
+                      color: active ? "#60a5fa" : "#94a3b8",
+                      borderRadius: 7, padding: "6px 0", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    }}
+                  >
+                    <ArrowUpDown size={11} />{label}{arrow && <span style={{ fontSize: 12 }}>{arrow}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {panel === "add-product" && (
-            <ProductForm
-              users={users}
-              data={form} setData={setForm} token={token}
-              onSubmit={addProduct} submitLabel="Create Product"
-              onCancel={() => setPanel(null)}
-              featureInput={featureInput} setFeatureInput={setFeatureInput}
-              categories={categories} currencies={currencies} networks={networks} isMaster={currentUser.role === "master"} 
-            />
-          )}
+          {/* product rows, grouped by category */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
+            {loading && currentProducts.length === 0
+              ? [...Array(5)].map((_, i) => <div key={i} style={{ padding: "9px 11px", marginBottom: 3 }}><Sk h={14} /></div>)
+              : currentProducts.length === 0
+                ? <div style={{ color: "#536b8cff", fontSize: 12, textAlign: "center", padding: "30px 10px", fontWeight: 600 }}>No products found</div>
+                : (() => {
+                    const uncategorized = currentProducts.filter(p => !p.category_id || !categories.find(c => Number(c.id) === Number(p.category_id)));
+                    return (
+                      <>
+                        {categories.map((cat) => {
+                          const catProducts = currentProducts.filter(p => Number(p.category_id) === Number(cat.id));
+                          if (catProducts.length === 0) return null;
+                          return (
+                            <div key={cat.id} style={{ marginBottom: 10 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px 4px" , borderBottom: "1px solid #232323cc"}}>
+                                <div style={{ width: 3, height: 12, borderRadius: 4, background: "#3b82f6" }} />
+                                <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>{cat.name}</span>
+                                <span style={{ color: "#475569", fontSize: 10, fontWeight: 700 }}>{catProducts.length}</span>
+                              </div>
+                              {catProducts.map(p => (
+                                <ProductRow key={p.id} p={p} selected={selectedProduct?.id === p.id}
+                                  onClick={() => setSelectedProduct(prev => (prev?.id === p.id ? null : p))} />
+                              ))}
+                            </div>
+                          );
+                        })}
+                        {uncategorized.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px 4px" }}>
+                              <div style={{ width: 3, height: 12, borderRadius: 4, background: "#475569" }} />
+                              <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>Uncategorized</span>
+                              <span style={{ color: "#475569", fontSize: 10, fontWeight: 700 }}>{uncategorized.length}</span>
+                            </div>
+                            {uncategorized.map(p => (
+                              <ProductRow key={p.id} p={p} selected={selectedProduct?.id === p.id}
+                                onClick={() => setSelectedProduct(prev => (prev?.id === p.id ? null : p))} />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
+            }
+          </div>
+        </div>
 
-          {panel === "add-category" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, flex: 1, overflow: "hidden" }}>
-              <div style={{ background: "#050a14", border: "1px solid #1d2b4bff", borderRadius: 14, padding: 16, marginBottom: 16 }}>
-                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>New Category</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input style={{ ...S.input, flex: 1 }} placeholder="Category name…" value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addCategory()} />
-                  <button style={{ ...S.submitBtn, width: "auto", padding: "0 18px", margin: 0 }} onClick={addCategory}>Add</button>
-                </div>
+        {/* ADD PRODUCT / CATEGORIES SLIDE-IN — slides over sidebar from left */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, bottom: 0, width: panelOpen ? 380 : 0,
+          overflow: "hidden", zIndex: 20,
+          transition: "width .32s cubic-bezier(.4,0,.2,1)",
+          background: "#06101e",
+          borderRight: `1px solid ${panelOpen ? "rgba(59,130,246,.22)" : "transparent"}`,
+          display: "flex", flexDirection: "column",
+          boxShadow: panelOpen ? "6px 0 28px rgba(0,0,0,.5)" : "none",
+        }}>
+          <div style={{ minWidth: 340, height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* header */}
+            <div style={{ padding: "11px 14px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {panel === "add-product" ? <Plus size={15} color="#60a5fa" /> : <Grid3X3 size={15} color="#a5b4fc" />}
               </div>
-              <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Existing — {categories.length}</div>
-              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-                {categories.map((cat) => (
-                  <div key={cat.id} style={{ background: "#050a14", border: "1px solid #202e4eff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 9, background: "#0b1525", border: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Layers size={14} color="#475569" />
+              <span style={{ color: "white", fontWeight: 700, fontSize: 18, flex: 1, whiteSpace: "nowrap" }}>
+                {panel === "add-product" ? "Add new product" : "Manage categories"}
+              </span>
+              <button onClick={() => setPanel(null)} className="pm-closeIconBtn"><X size={16} /></button>
+            </div>
+
+            {/* body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+              {panel === "add-product" && (
+                <ProductForm
+                  users={users}
+                  data={form} setData={setForm} token={token}
+                  onSubmit={addProduct} submitLabel="Create Product"
+                  onCancel={() => setPanel(null)}
+                  featureInput={featureInput} setFeatureInput={setFeatureInput}
+                  categories={categories} currencies={currencies} networks={networks} isMaster={currentUser.role === "master"}
+                />
+              )}
+
+              {panel === "add-category" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%", overflow: "hidden" }}>
+                  <div style={{ background: "#050a14", border: "1px solid #1d2b4bff", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+                    <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>New Category</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input className="pm-input" style={{ flex: 1 }} placeholder="Category name…" value={categoryName}
+                        onChange={(e) => setCategoryName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addCategory()} />
+                      <button className="pm-submitBtn" style={{ width: "auto", padding: "0 18px", margin: 0 }} onClick={addCategory}>Add</button>
                     </div>
-                    {editingCategory?.id === cat.id ? (
-                      <>
-                        <input style={{ ...S.input, flex: 1, padding: "8px 12px", fontSize: 13 }}
-                          value={editingCategory.name}
-                          onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                          onKeyDown={(e) => e.key === "Enter" && updateCategory()} />
-                        <button style={{ ...S.submitBtn, margin: 0, padding: "8px 12px", fontSize: 12, whiteSpace: "nowrap" }} onClick={updateCategory}>Save</button>
-                        <button style={S.closeIconBtn} onClick={() => setEditingCategory(null)}><X size={14} /></button>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ color: "#cbd5e1", fontSize: 14, fontWeight: 500, flex: 1 }}>{cat.name}</span>
-                        <button style={S.iconBtnEdit} onClick={() => setEditingCategory(cat)}><Edit3 size={13} /></button>
-                        <button style={S.iconBtnDelete} onClick={() => deleteCategory(cat.id)}><Trash2 size={13} /></button>
-                      </>
-                    )}
                   </div>
-                ))}
-              </div>
+                  <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Existing — {categories.length}</div>
+                  <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {categories.map((cat) => (
+                      <div key={cat.id} style={{ background: "#050a14", border: "1px solid #202e4eff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 9, background: "#0b1525", border: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Layers size={14} color="#475569" />
+                        </div>
+                        {editingCategory?.id === cat.id ? (
+                          <>
+                            <input className="pm-input" style={{ flex: 1, padding: "8px 12px", fontSize: 13 }}
+                              value={editingCategory.name}
+                              onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                              onKeyDown={(e) => e.key === "Enter" && updateCategory()} />
+                            <button className="pm-submitBtn" style={{ margin: 0, padding: "8px 12px", fontSize: 12, whiteSpace: "nowrap" }} onClick={updateCategory}>Save</button>
+                            <button className="pm-closeIconBtn" onClick={() => setEditingCategory(null)}><X size={14} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ color: "#cbd5e1", fontSize: 14, fontWeight: 500, flex: 1 }}>{cat.name}</span>
+                            <button className="pm-iconBtnEdit" onClick={() => setEditingCategory(cat)}><Edit3 size={13} /></button>
+                            <button className="pm-iconBtnDelete" onClick={() => deleteCategory(cat.id)}><Trash2 size={13} /></button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── PRODUCT DETAIL PANEL ── */}
+        <div style={{
+          width: selectedProduct ? 270 : 0, overflow: "hidden", background: "#070f1d",
+          borderRight: "1px solid rgba(255,255,255,.06)", flexShrink: 0,
+          transition: "width .28s cubic-bezier(.4,0,.2,1)", display: "flex", flexDirection: "column",
+        }}>
+          {selectedProduct && (
+            <div style={{ width: 270, height: "100%" }}>
+              <ProductDetailPanel
+                key={selectedProduct.id}
+                product={selectedProduct}
+                categories={categories}
+                safeExtra={safeExtra}
+                currentUser={currentUser}
+                viewMode={effectiveTab}
+                onEdit={openEdit}
+                onToggleActive={toggleActive}
+                onDelete={deleteProduct}
+                onApprove={(p) => setApproveTarget(p)}
+                onReject={(p) => setRejectTarget(p)}
+                onResubmit={resubmitProduct}
+              />
             </div>
           )}
         </div>
@@ -1403,149 +2273,162 @@ export default function ProductsManagement() {
       {/* ── MAIN CONTENT ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-        {/* Top bar */}
-        <div style={S.topBar}>
-          <div style={S.header}>
-          <div>
-            <div style={S.title}>Products Management</div>
-            <div style={S.subtitle}>Manage your catalog, products and categories</div>
-          </div>
-            <StatPill icon={Package} label="Active Products" value={`${activeCount} / ${allProducts.length}`} accent="#10b981" loading={loading} />
-            <StatPill icon={Tag} label="Categories" value={categories.length} accent="#dab822ff" loading={loading} />
-            {currentUser.role === "master" && <StatPill icon={Clock} label="Pending" value={pendingProducts.length} accent="#eab308" loading={loading} />}
-          </div>
+        {/* Action tabs: Products / Orders / Analysis (like ExchangeDashboard) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 20px 12px 25px", flexShrink: 0 }}>
+          {MAIN_TABS.map(({ key, label, icon: Icon, count }) => {
+            const active = mainView === key;
+            return (
+              <button key={key} onClick={() => setMainView(key)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", height: 32, boxSizing: "border-box",
+                  cursor: "pointer", borderRadius: 9, fontSize: 12, fontWeight: active ? 700 : 600,
+                  background: active ? "rgba(59,130,246,0.18)" : "rgba(255,255,255,.03)",
+                  border: `1px solid ${active ? "#3b82f6" : "rgba(255,255,255,.08)"}`,
+                  color: active ? "white" : "#8a96ab", transition: "all 0.2s",
+                }}
+              >
+                <Icon size={13} />{label}
+                {count != null && (
+                  <span style={{
+                    background: active ? "rgba(96,165,250,0.2)" : "rgba(100,116,139,0.15)",
+                    color: active ? "#60a5fa" : "#64748b",
+                    borderRadius: 99, padding: "1px 7px", fontSize: 11, fontWeight: 700,
+                  }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Tab nav + toolbar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px", borderBottom: "1px solid #0d1829", background: "#060b16", flexShrink: 0 }}>
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 7 }}>
-            {tabs.map(({ id, label, icon: Icon, count, accent }) => {
-              const active = activeTab === id;
-              return (
-                <button key={id} onClick={() => setActiveTab(id)}
-                  style={{
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 7,
-                    padding: "6px 10px",
-                    cursor: "pointer",
-                     borderRadius: 8,
-                    fontSize: 12, 
-                    fontWeight: active ? 700 : 500,
-                    background: active   ? accent + "22"
-                      : "rgba(59,130,246,0.12)",
-                    border: `1px solid ${ active 
-                      ? accent
-                      : "rgba(59,130,246,0.3)"
-                  }`,
-                    color: active ? "white" : "#64748b",
-                    transition: "all 0.15s",
-                    marginBottom: -1,
-                  }}
-                >
-                  {label}
-                  {count > 0 && (
-                    <span style={{
-                      background: active ? accent + "22" : "#02050aff",
-                      border: `1px solid ${active ? accent + "44" : "#1e293b"}`,
-                      color: active ? "white" : "#778ca8ff",
-                      fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99,
-                    }}>{count}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+        {/* ── PRODUCTS VIEW ── */}
+        {mainView === "products" && (
+          <>
+            {(effectiveTab === "pending" || effectiveTab === "rejected") && (
+              <div style={{
+                padding: "10px 28px",
+                background: effectiveTab === "pending" ? "rgba(234,179,8,0.05)" : "rgba(239,68,68,0.05)",
+                borderBottom: `1px solid ${effectiveTab === "pending" ? "rgba(234,179,8,0.12)" : "rgba(239,68,68,0.12)"}`,
+                display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+              }}>
+                {effectiveTab === "pending"
+                  ? <><Clock size={13} color="#eab308" /><span style={{ color: "#a3935a", fontSize: 12 }}>Products below are awaiting your approval. You must set <strong style={{ color: "#eab308" }}>system commission</strong> and <strong style={{ color: "#eab308" }}>reward percent</strong> before approving.</span></>
+                  : <><XCircle size={13} color="#ef4444" /><span style={{ color: "#a36060", fontSize: 12 }}>These products were rejected. Admins can resubmit them after making corrections.</span></>
+                }
+              </div>
+            )}
 
-          {/* Right toolbar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#334155" }} />
-              <input
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ ...S.input, width: 220, paddingLeft: 34, height: 38, fontSize: 13 }}
+            <div style={{ flex: 1, overflowY: "auto", padding: "4px 32px 32px", scrollbarWidth: "thin", scrollbarColor: "#1e293b #060b16" }}>
+              <ProductGrid
+                products={currentProducts}
+                categories={categories}
+                safeExtra={safeExtra}
+                user={currentUser}
+                isMaster={isMaster}
+                onEdit={openEdit}
+                onToggleActive={toggleActive}
+                onDelete={deleteProduct}
+                onApprove={(p) => setApproveTarget(p)}
+                onReject={(p) => setRejectTarget(p)}
+                onResubmit={resubmitProduct}
+                viewMode={effectiveTab}
+                loading={loading}
+                token={token}
               />
             </div>
-            <button onClick={loadData} disabled={loading} style={S.refreshBtn}>
-              <RefreshCcw size={13} style={{ marginRight: 6, opacity: loading ? 0.5 : 1 }} />
-              {loading ? "…" : "Refresh"}
-            </button>
-            <PermButton permission="categories.manage"
-              onClick={() => setPanel(panel === "add-category" ? null : "add-category")}
-              style={{
-                ...S.actionBtn,
-                background: panel === "add-category" ? "rgba(99,102,241,0.2)" : "transparent",
-                borderColor: panel === "add-category" ? "#6366f1" : "#1e293b",
-                color: panel === "add-category" ? "#a5b4fc" : "#64748b",
-              }}
-            >
-              <Grid3X3 size={14} style={{ marginRight: 7 }} />
-              Categories
-            </PermButton>
-            <PermButton permission="products.create"
-              onClick={() => setPanel(panel === "add-product" ? null : "add-product")}
-              style={{
-                ...S.actionBtn,
-                background: panel === "add-product" ? "rgba(59,130,246,0.25)" : "rgba(59,130,246,0.12)",
-                borderColor: panel === "add-product" ? "#3b82f6" : "rgba(59,130,246,0.3)",
-                color: panel === "add-product" ? "white" : "#60a5fa",
-              }}
-            >
-              <Plus size={14} style={{ marginRight: 7 }} />
-              Add Product
-            </PermButton>
-          </div>
-        </div>
+          </>
+        )}
 
-        {/* Tab description strip for pending/rejected */}
-        {(activeTab === "pending" || activeTab === "rejected") && (
-          <div style={{
-            padding: "10px 28px",
-            background: activeTab === "pending" ? "rgba(234,179,8,0.05)" : "rgba(239,68,68,0.05)",
-            borderBottom: `1px solid ${activeTab === "pending" ? "rgba(234,179,8,0.12)" : "rgba(239,68,68,0.12)"}`,
-            display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
-          }}>
-            {activeTab === "pending"
-              ? <><Clock size={13} color="#eab308" /><span style={{ color: "#a3935a", fontSize: 12 }}>Products below are awaiting your approval. You must set <strong style={{ color: "#eab308" }}>system commission</strong> and <strong style={{ color: "#eab308" }}>reward percent</strong> before approving.</span></>
-              : <><XCircle size={13} color="#ef4444" /><span style={{ color: "#a36060", fontSize: 12 }}>These products were rejected. Admins can resubmit them after making corrections.</span></>
-            }
+        {/* ── ORDERS VIEW (merged from OrdersManagement) ── */}
+        {mainView === "orders" && (
+          <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", padding: "0 20px 20px 25px" }}>
+            <div style={{ background: "#060d1a", border: "1px solid #313d58bc", borderRadius: 15, overflow: "hidden", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div style={{ overflowY: "auto", flex: 1, padding: 14 }}>
+                {ordersLoading ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} style={{ background: "#0b1424", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 16px", display: "flex", alignItems: "center", gap: 18 }}>
+                        <Sk h={14} w={40} />
+                        <Sk h={14} w={110} />
+                        <div style={{ flex: "2 1 200px" }}><Sk h={14} w="70%" /></div>
+                        <Sk h={20} w={150} />
+                        <Sk h={16} w={80} />
+                        <Sk h={20} w={90} r={999} />
+                        <Sk h={14} w={110} />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredOrders.length === 0 ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 40, minHeight: 400, textAlign: "center", color: "#64748b" }}>No orders found</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {filteredOrders.map((o) => (
+                      <OrderRow
+                        key={o.id}
+                        o={o}
+                        selected={selectedOrder?.id === o.id}
+                        onClick={() => openOrder(o)}
+                        formatDate={formatDate}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Products scrollable area */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 32px 32px", scrollbarWidth: "thin", scrollbarColor: "#1e293b #060b16" }}>
-          <ProductGrid
-            products={currentProducts}
-            categories={categories}
-            safeExtra={safeExtra}
-            user={currentUser}
-            isMaster={currentUser.role === "master"}
-            onEdit={openEdit}
-            onToggleActive={toggleActive}
-            onDelete={deleteProduct}
-            onApprove={(p) => setApproveTarget(p)}
-            onReject={(p) => setRejectTarget(p)}
-            onResubmit={resubmitProduct}
-            viewMode={activeTab}
-            loading={loading}
-            token={token}
-          />
-        </div>
+        {/* ── ANALYSIS VIEW ── */}
+        {mainView === "analysis" && (
+          <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", padding: "0 20px 20px 25px" }}>
+            <OrderAnalysisPanel
+              visible={true}
+              fullWidth
+              onClose={() => setMainView("products")}
+              isMaster={isMaster}
+              hideFilters
+              search={unifiedSearch} onSearchChange={setUnifiedSearch}
+              dateRange={unifiedDateRange} onDateRangeChange={setUnifiedDateRange}
+              selectedAdmin={unifiedAdmin} onAdminChange={setUnifiedAdmin}
+              selectedCategory={unifiedCategory} onCategoryChange={setUnifiedCategory}
+              currency={unifiedCurrency} onCurrencyChange={setUnifiedCurrency}
+              productType={unifiedProductType} onProductTypeChange={setUnifiedProductType}
+              metric={analysisMetric} onMetricChange={setAnalysisMetric}
+              viewMode={analysisViewMode} onViewModeChange={setAnalysisViewMode}
+            />
+          </div>
+        )}
       </div>
+      </div>
+
+      {/* ── ORDER / USER SIDEBARS ── */}
+      {selectedOrder && (
+        <OrderSidebar
+          order={selectedOrder}
+          onClose={closeOrderSidebar}
+          onRefresh={loadOrders}
+          onOpenUser={openUserSidebar}
+        />
+      )}
+      {selectedUser && (
+        <UserSidebar
+          user={selectedUser}
+          onClose={closeUserSidebar}
+          onRefresh={loadOrders}
+        />
+      )}
 
       {/* ── EDIT MODAL ── */}
       {editingProduct && (
-        <div style={S.modalOverlay} onClick={(e) => e.target === e.currentTarget && setEditingProduct(null)}>
-          <div style={S.modalCard}>
+        <div className="pm-modalOverlay" onClick={(e) => e.target === e.currentTarget && setEditingProduct(null)}>
+          <div className="pm-modalCard">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <div>
                 <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>Editing Product</div>
                 <div style={{ color: "#63748cff", fontSize: 14, marginTop: 3 }}>{editingProduct.name}</div>
               </div>
-              <button style={S.closeIconBtn} onClick={() => setEditingProduct(null)}><X size={16} /></button>
+              <button className="pm-closeIconBtn" onClick={() => setEditingProduct(null)}><X size={16} /></button>
             </div>
             <ProductForm
               users = {users}
@@ -1577,125 +2460,6 @@ export default function ProductsManagement() {
         />
       )}
 
-      <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
     </div>
   );
 }
-
-// ── STYLES ────────────────────────────────────────────────────
-const S = {
-  topBar: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-     borderBottom: "1px solid #0a1120",
-    background: "#060b16", flexShrink: 0, flexWrap: "wrap", gap: 12,
-  },
-  refreshBtn: {
-    display: "flex", alignItems: "center",
-    background: "transparent", border: "1px solid #313d58ff",
-    borderRadius: 10, padding: "8px 14px", color: "#6c798dff",
-    cursor: "pointer", fontWeight: 600, fontSize: 13,
-  },
-  actionBtn: {
-    display: "flex", alignItems: "center",
-    border: "1px solid", borderRadius: 10,
-    padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 13,
-    transition: "all 0.2s",
-  },
-  input: {
-    background: "#060d1a", border: "1px solid #313d58ff", color: "white",
-    padding: "10px 13px", borderRadius: 10, outline: "none", fontSize: 13,
-    width: "100%", boxSizing: "border-box", transition: "border-color 0.15s",
-  },
-  textarea: {
-    width: "100%", minHeight: 80, background: "#060d1a",
-    border: "1px solid #313d58ff", color: "white", padding: 12,
-    borderRadius: 10, resize: "vertical", fontSize: 13,
-    lineHeight: 1.6, boxSizing: "border-box", outline: "none",
-  },
-  submitBtn: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flex: 1, background: "rgba(59,130,246,0.2)", border: "1px solid rgba(59,130,246,0.35)",
-    color: "#60a5fa", padding: "10px 20px", borderRadius: 10,
-    cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.15s",
-  },
-  cancelBtn: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    background: "transparent", border: "1px solid #313d58ff",
-    color: "#475569", padding: "10px 16px", borderRadius: 10,
-    cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap",
-  },
-  addFeatureBtn: {
-    background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.25)",
-    padding: "0 16px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13, flexShrink: 0,
-  },
-  chip: {
-    background: "#0b1525", border: "1px solid #313d58ff", color: "#94a3b8",
-    padding: "5px 11px", borderRadius: 99, fontSize: 12, cursor: "pointer",
-    display: "inline-flex", alignItems: "center",
-  },
-  closeIconBtn: {
-    background: "#0b1525", border: "1px solid #313d58ff", color: "#475569",
-    width: 32, height: 32, borderRadius: 8, cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  iconBtnEdit: {
-    background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)",
-    color: "#60a5fa", width: 30, height: 30, borderRadius: 8,
-    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  iconBtnDelete: {
-    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-    color: "#ef4444", width: 30, height: 30, borderRadius: 8,
-    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  productCard: {
-    flexShrink: 0, width: 278, minHeight: 300,
-    background: "#0b1424", border: "1px solid #313d58bc",
-    borderRadius: 18, padding: 16, display: "flex",
-    flexDirection: "column", gap: 11, boxSizing: "border-box", alignSelf: "stretch",
-  },
-  avatar: {
-    width: 40, height: 40, borderRadius: 12, background: "#0b1525",
-    border: "1px solid #313d58ff", display: "flex", alignItems: "center",
-    justifyContent: "center", fontSize: 17, fontWeight: 800, color: "#3b82f6", flexShrink: 0,
-  },
-  planBadge: { background: "#0d1e3a", border: "1px solid #313d58ff", padding: "3px 9px", borderRadius: 99, fontSize: 12, color: "#60a5fa", fontWeight: 600 },
-  typeBadge: { background: "#0b1525", border: "1px solid #313d58ff", padding: "3px 9px", borderRadius: 99, fontSize: 12, color: "#5e6d82ff" },
-  regionBadge: { background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)", padding: "3px 9px", borderRadius: 99, fontSize: 12, color: "#f97316" },
-  discountBadge: { background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)", padding: "3px 8px", borderRadius: 99, fontSize: 12, color: "#eab308", fontWeight: 700 },
-  featuredBadge: { background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)", padding: "4px 8px", borderRadius: 99, fontSize: 12, color: "#eab308" },
-  metaPill: { background: "#060d1a", border: "1px solid #313d58ff", borderRadius: 7, padding: "3px 8px", fontSize: 12, color: "#5d718dff" },
-  cardBtnEdit: {
-    flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-    background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)",
-    borderRadius: 9, padding: "7px 0", color: "#60a5fa", cursor: "pointer", fontWeight: 600, fontSize: 12,
-  },
-  cardBtnToggle: {
-    flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-    border: "1px solid", borderRadius: 9, padding: "7px 0", cursor: "pointer", fontWeight: 600, fontSize: 12,
-  },
-  cardBtnDelete: {
-    width: 32, display: "flex", alignItems: "center", justifyContent: "center",
-    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-    borderRadius: 9, color: "#ef4444", cursor: "pointer",
-  },
-  modalOverlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-    display: "flex", justifyContent: "center", alignItems: "center", zIndex: 999,
-    backdropFilter: "blur(4px)",
-  },
-  modalCard: {
-    width: "92%", maxWidth: 820, height: "80vh",
-    background: "#080e1a", borderRadius: 24, padding: 28,
-    border: "1px solid #0f172a", overflow: "auto",
-    scrollbarWidth: "thin", scrollbarColor: "#1e293b #080e1a",
-    display: "flex", flexDirection: "column",
-  },
-  
-    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
-  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
-  header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: 14, marginLeft: 20, padding :"10px 0 20px 20px",  flexWrap: "wrap"
-  },
-};

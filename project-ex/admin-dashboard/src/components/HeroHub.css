@@ -1,0 +1,655 @@
+/* ── HeroHub ─────────────────────────────────────────────────── */
+
+@keyframes hh-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.hh-wrap {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hh-hub {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: clamp(6px, 1.4vw, 12px);
+  padding: clamp(7px, 1.2vw, 10px) clamp(10px, 2vw, 16px);
+  background: linear-gradient(180deg, #080e1a, #0b1220);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.hh-divider {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  flex-shrink: 0;
+}
+
+/* title / subtitle — inline segment of the single row, exact colors from the page header */
+.hh-title-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hh-title {
+  color: #2e7ce9af;
+  margin: 0;
+  font-size: clamp(13px, 1.6vw, 17px);
+  font-weight: 600;
+  letter-spacing: 0.05rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: clamp(70px, 16vw, 260px);
+}
+
+.hh-subtitle {
+  color: #64748b;
+  font-size: clamp(9.5px, 1vw, 11.5px);
+  margin: 0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* filters — inline segment of the single row, never wraps */
+.hh-filter-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: clamp(5px, 1vw, 8px);
+}
+
+/* ── Field wrapper: small caption above every filter control, plus the
+   same text as a native title tooltip (set on the wrapper in JSX) ── */
+.hh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.hh-field-label {
+  font-size: 9px;
+  color: #5b6b85;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 1px;
+}
+
+.hh-field-search {
+  flex: 1 1 clamp(90px, 14vw, 170px);
+  min-width: 70px;
+  max-width: clamp(90px, 16vw, 170px);
+}
+
+.hh-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.hh-date-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.hh-date-wrap .react-datepicker-wrapper {
+  width: auto;
+}
+
+.hh-field-icon {
+  position: absolute;
+  left: 9px;
+  color: #4b5a75;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hh-input {
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  padding: 6px 10px 6px 28px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 12px;
+  height: 30px;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.hh-input::placeholder {
+  color: #4b5a75;
+}
+
+.hh-input:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hh-input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.hh-date-input {
+  padding-left: 28px;
+  width: clamp(90px, 18vw, 150px);
+  max-width: 100%;
+}
+
+.hh-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 8px;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 1;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hh-select-wrap:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hh-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  padding: 6px 22px 6px 10px;
+  outline: none;
+  cursor: pointer;
+  font-size: 12px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  width: max-content;
+  max-width: clamp(64px, 9vw, 150px);
+  text-overflow: ellipsis;
+  color-scheme: dark;
+}
+
+/* the trigger is now a plain div (not a native <select>) so the actual
+   options panel can be fully styled — see .hh-dropdown-panel below */
+.hh-select-trigger {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.hh-select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.hh-select-icon {
+  position: absolute;
+  right: 8px;
+  color: #4b5a75;
+  pointer-events: none;
+}
+
+/* ── Compact icon trigger — used by the search field (and swapped in
+   as the date field's customInput) on narrow screens, so those fields
+   collapse to a single icon instead of forcing the hub to wrap. ── */
+.hh-field-compact {
+  flex-direction: row;
+  justify-content: center;
+}
+
+.hh-icon-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #8a96ab;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.hh-icon-trigger:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+}
+
+.hh-icon-trigger-active {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
+/* popover that opens below a collapsed icon trigger (currently used by
+   the compact search field) — same icy/blur theme as the dropdown and
+   datepicker panels so every popup in the hub feels like one component */
+.hh-compact-panel {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  width: 220px;
+  background: linear-gradient(165deg, rgba(21, 37, 66, 0.9), rgba(11, 20, 36, 0.9));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: hh-dropdown-in 0.12s ease-out;
+}
+
+/* clear filters — appears only when a filter is active */
+.hh-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 8px;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
+  animation: hh-clear-in 0.15s ease-out;
+}
+
+.hh-clear-btn:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}
+
+.hh-clear-btn:active {
+  transform: scale(0.96);
+}
+
+@keyframes hh-clear-in {
+  from { opacity: 0; transform: translateX(-3px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── dropdown options panel — portal-rendered, same icy/blur theme as
+   the datepicker panel so both popups feel like one component. Border
+   radius and backdrop-filter only take effect because this is a real
+   div, not a native <select> popup (browsers ignore that styling on
+   native option lists). ── */
+.hh-dropdown-panel {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: linear-gradient(165deg, rgba(21, 37, 66, 0.82), rgba(11, 20, 36, 0.82));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: hh-dropdown-in 0.12s ease-out;
+}
+
+@keyframes hh-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hh-dropdown-option {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.hh-dropdown-option:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.hh-dropdown-option-active {
+  background: rgba(59, 130, 246, 0.22);
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+/* stat pills — inline segment of the single row, never wraps, fluid-shrinks */
+.hh-pills-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: clamp(4px, 0.8vw, 8px);
+}
+
+.hh-pill {
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 0.6vw, 8px);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: clamp(4px, 0.6vw, 6px) clamp(7px, 1vw, 11px) clamp(4px, 0.6vw, 6px) clamp(5px, 0.8vw, 8px);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.hh-pill:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.hh-pill-icon {
+  width: clamp(20px, 2.4vw, 25px);
+  height: clamp(20px, 2.4vw, 25px);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hh-pill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.hh-pill-label {
+  font-size: 8.5px;
+  color: #5b6b85;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: clamp(46px, 7vw, 120px);
+}
+
+.hh-pill-value {
+  font-size: clamp(11px, 1.1vw, 13px);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: clamp(46px, 7vw, 120px);
+}
+
+/* ── Compact stat pill — icon only; hovering (or focusing, for
+   keyboard users) reveals title + value in a portal-rendered popover
+   so it's never clipped by hh-hub's overflow. ── */
+.hh-pill-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  cursor: default;
+  outline: none;
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.hh-pill-compact:hover,
+.hh-pill-compact:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+}
+
+.hh-pill-tooltip {
+  position: fixed;
+  z-index: 9999;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 11px;
+  min-width: max-content;
+  background: linear-gradient(165deg, rgba(21, 37, 66, 0.92), rgba(11, 20, 36, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 16px 32px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  pointer-events: none;
+  animation: hh-dropdown-in 0.12s ease-out;
+}
+
+.hh-pill-tooltip-label {
+  font-size: 9px;
+  color: #5b6b85;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hh-pill-tooltip-value {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+.hh-sk {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #151f30 25%, #1e2d44 50%, #151f30 75%);
+  background-size: 200% 100%;
+  animation: hh-shimmer 1.5s infinite;
+}
+
+/* right-corner group — actions + refresh; margin-left: auto pushes this
+   whole group to the far right of .hh-hub while title/filters/pills stay
+   left-aligned in their natural order */
+.hh-right-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: clamp(6px, 1vw, 12px);
+  margin-left: auto;
+}
+
+/* action buttons — e.g. "Add User" — styled like the page-level primary
+   action button so moving it into the hub doesn't change its look */
+.hh-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  gap: clamp(4px, 0.8vw, 8px);
+}
+
+.hh-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  padding: 8px clamp(8px, 1.2vw, 16px);
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.hh-action-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.hh-action-btn-active {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
+  color: white;
+}
+
+.hh-action-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hh-action-btn-icon {
+  flex-shrink: 0;
+}
+
+/* refresh — icon-only button, far-right corner */
+.hh-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #8a96ab;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.hh-refresh-btn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+}
+
+.hh-refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+@keyframes hh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.hh-spin {
+  animation: hh-spin 0.8s linear infinite;
+}
+
+/* ── Responsive behavior ─────────────────────────────────────────
+   The hub is ALWAYS a single row that never wraps and never scrolls.
+   Every segment above uses CSS clamp()/flex-shrink so it continuously
+   resizes with the viewport, and the search field, each dropdown, and
+   the date range collapse to icon-only triggers (via useIsCompact in
+   HeroHub.jsx) below ~680px — opening their real control in a popover
+   or calendar right under the icon on click. The rules below are small
+   supplemental hides for secondary text at the narrowest widths, on
+   top of that continuous fluid resizing — not a fallback scrollbar. */
+
+@media (max-width: 680px) {
+  .hh-subtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 1760px) {
+  .hh-action-btn-label,
+  .hh-clear-btn-label {
+    display: none;
+  }
+
+  .hh-action-btn {
+    padding: 8px;
+    gap: 0;
+  }
+
+  .hh-clear-btn {
+    padding: 0 8px;
+    gap: 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .hh-pill-label {
+    display: none;
+  }
+
+  .hh-title {
+    max-width: 90px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hh-pill-text {
+    display: none;
+  }
+
+  .hh-title-col {
+    display: none;
+  }
+}

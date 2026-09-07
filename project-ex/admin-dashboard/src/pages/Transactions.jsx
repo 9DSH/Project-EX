@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "../config";
 import UserSidebar from "../components/UserSidebar";
 import OrderSidebar from "../components/OrderSidebar";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import HeroHub from "../components/HeroHub";
+import { SlidersHorizontal, Wallet, Clock, CheckCircle2 } from "lucide-react";
 
   // ── Skeleton ─────────────────────────────────────────────────────
 function Sk({ w = "100%", h = 16, r = 6 }) {
@@ -14,48 +14,6 @@ function Sk({ w = "100%", h = 16, r = 6 }) {
 
 const fmt = (n, d = 2) =>
   n != null ? Number(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: d }) : "—";
-
-  // ── Stat pill ────────────────────────────────────────────────────
-function StatPill({ icon: Icon, label, value, accent, loading }) {
-    return (
-      <div style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 10, 
-        background: "#071020ff", 
-        borderRadius: 12, 
-        padding: "10px 10px" }}>
-        <div style={{ 
-          width: 36, 
-          height: 36, 
-          borderRadius: 10, 
-          background: accent + "18", 
-          color: accent, 
-          display: "flex", 
-          alignItems: "center", 
-          justifyContent: "center",
-          flexShrink: 0 
-          }}>
-          <Icon size={17} />
-        </div>
-        <div>
-          <div style={{ 
-            fontSize: 10, 
-            color: "#475569", 
-            fontWeight: 700, 
-            letterSpacing: 0.6, 
-            marginBottom: 3 
-            }}>{label}</div>
-          {loading ? <Sk w={56} h={22} /> : <div style={{ 
-                                                  fontSize: 16, 
-                                                  fontWeight: 800, 
-                                                  color: accent, 
-                                                  letterSpacing: -0.5 
-                                                  }}>{value ?? "—"}</div>}
-        </div>
-      </div>
-    );
-  }
 
 
 
@@ -342,6 +300,17 @@ export default function Transactions() {
     setDateRange([null, null]);
   };
 
+  // Stat pill values — computed from the currently filtered set
+  const filteredTxCount = filteredTx.length;
+
+  // Total volume — only meaningful when the filtered set spans a single currency
+  const filteredTxCurrencies = [...new Set(filteredTx.map((t) => t.currency_symbol).filter(Boolean))];
+  const totalVolume =
+    filteredTxCurrencies.length === 1
+      ? fmt(filteredTx.reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0))
+      : null;
+  const totalVolumeCurrency = filteredTxCurrencies.length === 1 ? filteredTxCurrencies[0] : null;
+
   const IN_TYPES = new Set([
   "income",
   "deposit",
@@ -362,124 +331,89 @@ export default function Transactions() {
   // =========================
   return (
     <div style={styles.page}>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
-      {/* HEADER */}
+      {/* ── HERO HUB (title/subtitle + filters + stat pills), centered on the page ── */}
       <div style={styles.header}>
-          <div>
-            <div style={styles.title}>Transactions Management</div>
-            <div style={styles.subtitle}>            Monitor deposits, withdrawals,
-            purchases and blockchain activity</div>
-          </div>
-
-        <button
-          onClick={loadTransactions}
-          style={styles.refreshBtn}
-        >
-          Refresh
-        </button>
-
-      </div>
-
-      {/* FILTERS */}
-      <div style={styles.filtersContainer}>
-
-        <input
-          placeholder="Search transactions..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={styles.searchInput}
+        <HeroHub
+          title="Transactions Management"
+          subtitle="Monitor deposits, withdrawals, purchases and blockchain activity"
+          search={{
+            visible: true,
+            value: search,
+            onChange: setSearch,
+            placeholder: "Search transactions...",
+          }}
+          dropdowns={[
+            {
+              key: "type",
+              visible: true,
+              value: typeFilter,
+              onChange: setTypeFilter,
+              placeholder: "All Types",
+              options: [
+                { label: "Deposit", value: "deposit" },
+                { label: "Withdraw", value: "withdraw" },
+                { label: "Purchase", value: "purchase" },
+                { label: "Refund", value: "refund" },
+              ],
+            },
+            {
+              key: "status",
+              visible: true,
+              value: statusFilter,
+              onChange: setStatusFilter,
+              placeholder: "All Status",
+              options: [
+                { label: "Pending", value: "pending" },
+                { label: "Completed", value: "completed" },
+                { label: "Failed", value: "failed" },
+                { label: "Frozen", value: "frozen" },
+              ],
+            },
+            {
+              key: "currency",
+              visible: true,
+              value: currencyFilter,
+              onChange: setCurrencyFilter,
+              placeholder: "All Currency",
+              options: currencies.map((c) => ({ label: c, value: c })),
+            },
+            {
+              key: "network",
+              visible: true,
+              value: networkFilter,
+              onChange: setNetworkFilter,
+              placeholder: "All Networks",
+              options: networks.map((n) => ({ label: n, value: n })),
+            },
+            {
+              key: "actor",
+              visible: true,
+              value: actorFilter,
+              onChange: setActorFilter,
+              placeholder: "All Actors",
+              options: [
+                { label: "Admin Only", value: "admin" },
+                { label: "User Only", value: "user" },
+              ],
+            },
+          ]}
+          datePicker={{
+            visible: true,
+            selectsRange: true,
+            startDate,
+            endDate,
+            onChange: (update) => setDateRange(update),
+            placeholderText: "Select date range",
+          }}
+          statPills={[
+            { key: "totalTx", icon: SlidersHorizontal, label: "Transactions", value: filteredTxCount, accent: "#a78bfa", loading },
+            { key: "volume", icon: Wallet, label: "Volume", value: totalVolume, meta: totalVolumeCurrency, accent: "#22d3ee", loading },
+          ]}
+          onRefresh={loadTransactions}
+          refreshing={loading}
         />
-
-        <select
-          value={typeFilter}
-          onChange={(e) =>
-            setTypeFilter(e.target.value)
-          }
-          style={styles.filterInput}
-        >
-          <option value="all">All Types</option>
-          <option value="deposit">Deposit</option>
-          <option value="withdraw">Withdraw</option>
-          <option value="purchase">Purchase</option>
-          <option value="refund">Refund</option>
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={(e) =>
-            setStatusFilter(e.target.value)
-          }
-          style={styles.filterInput}
-        >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-          <option value="frozen">Frozen</option>
-        </select>
-
-        <select
-          value={currencyFilter}
-          onChange={(e) =>
-            setCurrencyFilter(e.target.value)
-          }
-          style={styles.filterInput}
-        >
-          <option value="all">All Currency</option>
-
-          {currencies.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={networkFilter}
-          onChange={(e) =>
-            setNetworkFilter(e.target.value)
-          }
-          style={styles.filterInput}
-        >
-          <option value="all">All Networks</option>
-
-          {networks.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <select
-            value={actorFilter}
-            onChange={(e) => setActorFilter(e.target.value)}
-            style={styles.filterInput}
-          >
-            <option value="all">All Actors</option>
-            <option value="admin">Admin Only</option>
-            <option value="user">User Only</option>
-          </select>
-
-          <DatePicker
-              selectsRange
-              startDate={startDate}
-              endDate={endDate}
-              onChange={(update) => setDateRange(update)}
-              isClearable
-              placeholderText="Select date range"
-              customInput={<input style={styles.searchInput} />}
-            />
-
-          <button
-              onClick={clearFilters}
-              style={{
-                ...styles.refreshBtn,
-                marginLeft: 5,
-                color: "#9e9fa0ff"
-              }}
-            >
-              Clear 
-            </button>
-
       </div>
 
       {/* TABLE */}
@@ -794,7 +728,7 @@ const tdStyle = {
 
 const styles = {
   page: {
-    padding: "5px",
+    padding: "0px",
     background: "#020617",
     height: "100vh",
     display: "flex",
@@ -815,8 +749,11 @@ tableScroll: {
     title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
   subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
   header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: 14, padding :"10px 0 20px 20px",  flexWrap: "wrap"
+    display: "flex",
+    justifyContent: "flex-start",
+    width: "100%",
+    padding: "0px 0px 10px",
+    boxSizing: "border-box",
   },
 
   refreshBtn: {
@@ -867,7 +804,7 @@ tableScroll: {
     flex: 1,
     minHeight: 0,
     
-    marginLeft: 10
+    margin: "10px 100px 20px 100px",
   },
 
   table: {

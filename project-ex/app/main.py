@@ -49,8 +49,8 @@ from app.routes.admin_invitations import router as admin_invitations_router
 from app.routes.admin_account import router as admin_account_router
 from app.routes.admin_platform_wallet import router as admin_platform_wallet_router
 from app.routes.admin_master_messages import router as admin_master_messages_router
-
-
+from app.services.subscription_scheduler import subscription_billing_loop
+from app.routes.admin_subscriptions import router as admin_subscriptions_router
 
 app = FastAPI(title="Project EX API", version="1.0.0")
 os.makedirs("uploads/products", exist_ok=True)
@@ -90,6 +90,7 @@ def startup():
     ensure_rls_policies()
     asyncio.create_task(sweep_worker_loop())
     asyncio.create_task(wire_order_expiry_loop())
+    asyncio.create_task(subscription_billing_loop()) 
     asyncio.create_task(bot_manager.start())
 
 
@@ -154,6 +155,7 @@ app.include_router(bot_context_router)
 app.include_router(admin_account_router)
 app.include_router(admin_platform_wallet_router)
 app.include_router(admin_master_messages_router)
+app.include_router(admin_subscriptions_router)
 
 # =========================
 # ROOT

@@ -5,10 +5,12 @@ import {
   ArrowLeftRight, FileText, AlertTriangle, Plus, Edit3, Trash2,
   Power, PowerOff, X, Save, RotateCw, GitCompare, Search, BarChart3,
   Activity, RefreshCw, CheckCircle2, XCircle, Clock, Filter, ChevronDown, Users,
+  ArrowUpDown, Wallet,
 } from "lucide-react";
 import AnalysisTab from "./AnalysisTab";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import HeroHub from "../components/HeroHub";
 
 const API = "http://127.0.0.1:8000";
 const api = axios.create({ baseURL: API });
@@ -245,59 +247,70 @@ function PairEditModal({ editPair, currencies, onSave, onClose }) {
   );
 }
 
-/* ─── PAIR ROW in sidebar ─── */
+/* ─── PAIR ROW in sidebar — pair/admin left, price/fee right ─── */
 function PairRow({ p, selected, onClick, showOwner }) {
   return (
     <div
       onClick={onClick}
       style={{
-        display:"flex", 
-        alignItems:"center", 
-        gap:10, 
-        padding:"9px 20px", 
-        borderRadius:9, 
+        display:"flex",
+        alignItems:"center",
+        gap:10,
+        padding:"9px 20px",
+        borderRadius:9,
         cursor:"pointer",
         border:`1px solid ${selected ? "rgba(59,130,246,.28)" : "transparent"}`,
         background: selected ? "rgba(59,130,246,.1)" : "transparent",
         transition:"all .15s", marginBottom:3,
       }}
     >
-      <span style={{ 
-        width:6, 
-        height:6, 
-        borderRadius:"50%", 
-        background:p.is_active ? "#22c55e" : "#374151", 
-        flexShrink:0, 
-        boxShadow:p.is_active ? "0 0 6px rgba(34,197,94,.4)" : "none", 
+      <span style={{
+        width:6,
+        height:6,
+        borderRadius:"50%",
+        background:p.is_active ? "#22c55e" : "#374151",
+        flexShrink:0,
+        boxShadow:p.is_active ? "0 0 6px rgba(34,197,94,.4)" : "none",
         display:"inline-block" }} />
-      <span style={{ 
-        fontSize:14, 
-        fontWeight:700, 
-        color:selected ? "white" : "#94a3b8", 
-        flex:1, whiteSpace:"nowrap", 
-        overflow:"hidden", 
-        textOverflow:"ellipsis" }}>
-        {p.from_currency?.symbol}→{p.to_currency?.symbol}
-      </span>
-      {showOwner && p.admin_id != null && (
+
+      {/* left: pair + admin */}
+      <div style={{ minWidth:0, flex:1, textAlign:"left" }}>
+        <div style={{
+          fontSize:14,
+          fontWeight:700,
+          color:selected ? "white" : "#94a3b8",
+          whiteSpace:"nowrap",
+          overflow:"hidden",
+          textOverflow:"ellipsis" }}>
+          {p.from_currency?.symbol}→{p.to_currency?.symbol}
+        </div>
+        {showOwner && p.admin_id != null && (
+          <span style={{
+            display:"inline-block", marginTop:2,
+            fontSize:10, fontWeight:700, color:"#a78bfa",
+            background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.25)",
+            borderRadius:999, padding:"2px 7px", whiteSpace:"nowrap",
+            maxWidth:120, overflow:"hidden", textOverflow:"ellipsis",
+          }}>
+            {p.admin_username || `#${p.admin_id}`}
+          </span>
+        )}
+      </div>
+
+      {/* right: price + fee */}
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, textAlign:"right" }}>
         <span style={{
-          fontSize:10, fontWeight:700, color:"#a78bfa",
-          background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.25)",
-          borderRadius:999, padding:"2px 7px", whiteSpace:"nowrap",
-          maxWidth:90, overflow:"hidden", textOverflow:"ellipsis",
-        }}>
-          {p.admin_username || `#${p.admin_id}`}
+          fontSize:14,
+          color:p.is_active ? "#3b82f6" : "#374151",
+          fontWeight:700,
+          whiteSpace:"nowrap"
+          }}>
+          {p.is_active ? fmt(p.rate, 4) : "—"}
         </span>
-      )}
-      <span style={{ 
-        fontSize:14, 
-        color:p.is_active ? "#3b82f6" : "#374151", 
-        fontWeight:700, 
-        paddingRight:20,
-        whiteSpace:"nowrap" 
-        }}>
-        {p.is_active ? fmt(p.rate, 4) : "—"}
-      </span>
+        <span style={{ fontSize:11, color:"#5f728eff", whiteSpace:"nowrap", marginTop:1 }}>
+          Fee {fmt(p.fee_percent, 2)}%
+        </span>
+      </div>
     </div>
   );
 }
@@ -642,29 +655,34 @@ export default function ExchangeDashboard() {
   const [loading,       setLoading]       = useState(false);
   const [editPair,      setEditPair]      = useState(null);
   const [selectedPair,  setSelectedPair]  = useState(null);
-  const [pairSearch,    setPairSearch]    = useState("");
 
   /* add-pair slide-in */
   const [addOpen,       setAddOpen]       = useState(false);
   const [addForm,       setAddForm]       = useState(emptyForm());
 
-  /* order filters */
-  const [orderSearch,   setOrderSearch]   = useState("");
-  const [orderStatus,   setOrderStatus]   = useState("");
-  const [dateRange, setDateRange] = useState([null, null]);
-  const [orderFrom, orderTo] = dateRange;
-
-  /* sweep filters */
-  const [sweepSearch,   setSweepSearch]   = useState("");
-  const [sweepResolved, setSweepResolved] = useState("false");
-
   const [failedSweeps,  setFailedSweeps]  = useState([]);
   const [retryingSweep, setRetryingSweep] = useState(null);
 
-  /* cross-admin filter */
+  /* cross-admin filter (master only) — drives backend load AND is the Hero "admin" dropdown */
   const [adminFilter,   setAdminFilter]   = useState("mine"); // "mine" | "all" | "<user_id>"
   const [filterAdmins,  setFilterAdmins]  = useState([]);
   const [canFilterAdmins, setCanFilterAdmins] = useState(false);
+
+  /* ── UNIFIED HERO FILTERS — shared across Pairs / Orders / Sweeps ── */
+  const [unifiedSearch,       setUnifiedSearch]       = useState("");
+  const [unifiedStatus,       setUnifiedStatus]       = useState("all");       // order status (completed/pending/failed)
+  const [unifiedFromCurrency, setUnifiedFromCurrency] = useState("all");     // from_currency symbol
+  const [unifiedDateRange,    setUnifiedDateRange]    = useState([null, null]);
+  const [unifiedStart, unifiedEnd] = unifiedDateRange;
+
+  /* pair sort — single-click cyclic: none → asc → desc → none */
+  const [pairSortField, setPairSortField] = useState(null); // "price" | "fee" | null
+  const [pairSortDir,   setPairSortDir]   = useState(null); // "asc" | "desc" | null
+  const togglePairSort = (field) => {
+    if (pairSortField !== field) { setPairSortField(field); setPairSortDir("asc"); }
+    else if (pairSortDir === "asc") { setPairSortDir("desc"); }
+    else { setPairSortField(null); setPairSortDir(null); }
+  };
 
   const token   = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
@@ -789,26 +807,58 @@ export default function ExchangeDashboard() {
   /* ── DERIVED ── */
   const activePairs = pairs.filter(p => p.is_active).length;
 
+  // "From Currency" options — restricted to currencies that actually exist as a from_currency on a pair
+  const currencyOptions = useMemo(() => {
+    const seen = new Map();
+    pairs.forEach(p => {
+      const sym = p.from_currency?.symbol;
+      if (sym && !seen.has(sym)) seen.set(sym, p.from_currency.id);
+    });
+    return [...seen.keys()].sort().map(sym => ({ label: sym, value: sym }));
+  }, [pairs]);
+
   const filteredPairs = useMemo(() => {
-    const q = pairSearch.toLowerCase();
-    return pairs.filter(p =>
-      p.from_currency?.symbol?.toLowerCase().includes(q) ||
-      p.to_currency?.symbol?.toLowerCase().includes(q) ||
-      (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
-    );
-  }, [pairs, pairSearch, showOwnerColumns]);
+    const q = unifiedSearch.toLowerCase().trim();
+    let list = pairs.filter(p => {
+      if (q) {
+        const hit =
+          p.from_currency?.symbol?.toLowerCase().includes(q) ||
+          p.to_currency?.symbol?.toLowerCase().includes(q) ||
+          (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)));
+        if (!hit) return false;
+      }
+      if (unifiedFromCurrency !== "all" && p.from_currency?.symbol !== unifiedFromCurrency) return false;
+      if (unifiedStart && p.created_at && new Date(p.created_at) < new Date(unifiedStart)) return false;
+      if (unifiedEnd && p.created_at) {
+        const end = new Date(unifiedEnd);
+        end.setHours(23, 59, 59, 999);
+        if (new Date(p.created_at) > end) return false;
+      }
+      return true;
+    });
+
+    if (pairSortField && pairSortDir) {
+      list = [...list].sort((a, b) => {
+        const av = pairSortField === "price" ? (Number(a.rate) || 0) : (Number(a.fee_percent) || 0);
+        const bv = pairSortField === "price" ? (Number(b.rate) || 0) : (Number(b.fee_percent) || 0);
+        return pairSortDir === "asc" ? av - bv : bv - av;
+      });
+    }
+    return list;
+  }, [pairs, unifiedSearch, unifiedFromCurrency, unifiedStart, unifiedEnd, showOwnerColumns, pairSortField, pairSortDir]);
 
   const filteredOrders = useMemo(() => {
-    const q = orderSearch.toLowerCase().trim();
+    const q = unifiedSearch.toLowerCase().trim();
 
     return orders.filter(o => {
-      if (orderStatus && o.status?.toLowerCase() !== orderStatus) return false;
+      if (unifiedStatus !== "all" && o.status?.toLowerCase() !== unifiedStatus) return false;
+      if (unifiedFromCurrency !== "all" && o.from_currency?.symbol !== unifiedFromCurrency) return false;
 
       // DATE RANGE
-      if (orderFrom && new Date(o.created_at) < new Date(orderFrom)) return false;
+      if (unifiedStart && new Date(o.created_at) < new Date(unifiedStart)) return false;
 
-      if (orderTo) {
-        const end = new Date(orderTo);
+      if (unifiedEnd) {
+        const end = new Date(unifiedEnd);
         end.setHours(23, 59, 59, 999);
         if (new Date(o.created_at) > end) return false;
       }
@@ -827,12 +877,18 @@ export default function ExchangeDashboard() {
 
       return true;
     });
-  }, [orders, orderSearch, orderStatus, orderFrom, orderTo, showOwnerColumns]);
+  }, [orders, unifiedSearch, unifiedStatus, unifiedFromCurrency, unifiedStart, unifiedEnd, showOwnerColumns]);
 
   const filteredSweeps = useMemo(() => {
-    const q = sweepSearch.toLowerCase().trim();
+    const q = unifiedSearch.toLowerCase().trim();
     return failedSweeps.filter(s => {
-      if (sweepResolved !== "" && String(s.resolved) !== sweepResolved) return false;
+      if (unifiedFromCurrency !== "all" && (s.currency || "").toLowerCase() !== unifiedFromCurrency.toLowerCase()) return false;
+      if (unifiedStart && s.created_at && new Date(s.created_at) < new Date(unifiedStart)) return false;
+      if (unifiedEnd && s.created_at) {
+        const end = new Date(unifiedEnd);
+        end.setHours(23, 59, 59, 999);
+        if (new Date(s.created_at) > end) return false;
+      }
       if (q) {
         const hit =
           String(s.user_id || "").includes(q) ||
@@ -845,9 +901,33 @@ export default function ExchangeDashboard() {
       }
       return true;
     });
-  }, [failedSweeps, sweepSearch, sweepResolved, showOwnerColumns]);
+  }, [failedSweeps, unifiedSearch, unifiedFromCurrency, unifiedStart, unifiedEnd, showOwnerColumns]);
 
   const unresolvedSweeps = failedSweeps.filter(s => !s.resolved).length;
+
+  // total value — sum of filtered orders' from_amount, scoped to a single from-currency
+  const { totalValue, totalValueCurrency } = useMemo(() => {
+    const formatSum = (sum, currency) => {
+      const fractionDigits = currency === "IRT" ? 0 : 1;
+      return sum.toLocaleString("en-US", {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      });
+    };
+
+    if (unifiedFromCurrency !== "all") {
+      const sum = filteredOrders.reduce((s, o) => s + (parseFloat(o.from_amount) || 0), 0);
+      return { totalValue: formatSum(sum, unifiedFromCurrency), totalValueCurrency: unifiedFromCurrency };
+    }
+
+    const distinctCurrencies = [...new Set(filteredOrders.map(o => o.from_currency?.symbol).filter(Boolean))];
+    if (distinctCurrencies.length === 1) {
+      const sum = filteredOrders.reduce((s, o) => s + (parseFloat(o.from_amount) || 0), 0);
+      return { totalValue: formatSum(sum, distinctCurrencies[0]), totalValueCurrency: distinctCurrencies[0] };
+    }
+
+    return { totalValue: null, totalValueCurrency: null };
+  }, [filteredOrders, unifiedFromCurrency]);
 
   /* ── TAB CONFIG ── */
   const TABS = [
@@ -887,31 +967,74 @@ export default function ExchangeDashboard() {
         fontFamily:"'Inter',system-ui,sans-serif", 
         color:"white" }}>
 
-      {/* ── HEADER ── */}
-        <div style={S.header}>
-          <div style={S.headerLeft}>
-            <div>
-              <div style={S.title}>Exchange Management</div>
-              <div style={S.subtitle}>Manage exchange pairs, orders and transactions</div>
-            </div>
-              <StatPill icon={GitCompare}    label="Active Pairs"   value={`${activePairs} / ${pairs.length}`} accent="#3b82f6" loading={loading} />
-              <StatPill icon={FileText}      label="Total Orders"   value={orders.length}                       accent="#10b981" loading={loading} />
-              <StatPill icon={AlertTriangle} label="Failed Sweeps"  value={unresolvedSweeps}                    accent="#f59e0b" loading={loading} />
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              onClick={loadAll}
-              style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.08)", color:"#6b7280", borderRadius:9, padding:"7px 13px", cursor:"pointer", fontWeight:600, fontSize:12 }}
-              disabled={loading}
-            >
-              <RefreshCw size={13} style={{animation:loading ? "spin .8s linear infinite" : "none" }} />
-              {loading ? "Loading…" : "Refresh"}
-            </button>
-          </div>
-        </div>
-
-
+      {/* ── HERO HUB — ONE fixed filter set, shared and applied across Pairs / Orders / Sweeps ── */}
+      <div style={{ padding: "0 0 10px", flexShrink: 0 }}>
+        <HeroHub
+          title="Exchange Management"
+          subtitle="Manage exchange pairs, orders and transactions"
+          search={{
+            visible: true,
+            value: unifiedSearch,
+            onChange: setUnifiedSearch,
+            placeholder: showOwnerColumns ? "Search pair, user, ID or admin…" : "Search pair, user or ID…",
+          }}
+          dropdowns={[
+            // from currency — filters pairs, orders and sweeps, and drives the "Total Value" stat
+            {
+              key: "fromCurrency", 
+              visible: true, 
+              label: "Currency",
+              value: unifiedFromCurrency, 
+              onChange: setUnifiedFromCurrency,
+              placeholder: "All",
+              options: currencyOptions,
+            },
+            // status — applies to orders (completed / pending / failed)
+            {
+              key: "status",
+              label: "Status",
+              visible: true, 
+              value: unifiedStatus, 
+              onChange: setUnifiedStatus,
+              placeholder: "All",
+              options: [
+                { label: "Completed", value: "completed" },
+                { label: "Pending",   value: "pending" },
+                { label: "Failed",    value: "failed" },
+              ],
+            },
+            // admin/owner — master only
+            canFilterAdmins && {
+              key: "admin", 
+              visible: true, 
+              label: "Admins",
+              value: adminFilter, 
+              onChange: setAdminFilter,
+              placeholder: "All",
+              options: [
+                { label: `${currentUsername}`, value: "mine" },
+                { label: "All", value: "all" },
+                ...filterAdmins.map(a => ({ label: a.username, value: String(a.user_id) })),
+              ],
+            },
+          ].filter(Boolean)}
+          datePicker={{
+            visible: true,
+            selectsRange: true,
+            startDate: unifiedStart,
+            endDate: unifiedEnd,
+            onChange: (update) => setUnifiedDateRange(update),
+            placeholderText: "Select date range",
+          }}
+          statPills={[
+            { key: "pairs",  icon: GitCompare, label: "Total Pairs",  value: filteredPairs.length, accent: "#3b82f6", loading },
+            { key: "orders", icon: FileText,   label: "Total Orders", value: filteredOrders.length, accent: "#10b981", loading },
+            { key: "value",  icon: Wallet,     label: "Total Value",  value: totalValue, meta: totalValueCurrency, accent: "#22d3ee", loading },
+          ]}
+          onRefresh={loadAll}
+          refreshing={loading}
+        />
+      </div>
 
         {/* ══ BODY ══ */}
         <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
@@ -967,14 +1090,6 @@ export default function ExchangeDashboard() {
                   </span>
                  </div> 
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {canFilterAdmins && (
-                  <AdminFilterDropdown
-                    value={adminFilter}
-                    onChange={setAdminFilter}
-                    adminList={filterAdmins}
-                    currentUsername={currentUsername}
-                  />
-                )}
                 <button
                   onClick={() => setAddOpen(true)}
                   style={{ 
@@ -993,16 +1108,28 @@ export default function ExchangeDashboard() {
                 </div>
              </div>
 
-              {/* search */}
+              {/* sort (2 single-click cyclic buttons: none → asc → desc → none) */}
               <div style={{ padding:"7px 10px", borderBottom:"1px solid rgba(255,255,255,.04)", flexShrink:0 }}>
-                <div style={{ background:"#060c18", border:"1px solid rgba(255,255,255,.07)", borderRadius:7, padding:"5px 9px", display:"flex", alignItems:"center", gap:6 }}>
-                  <Search size={12} color="#515c6dff" />
-                  <input
-                    placeholder={showOwnerColumns ? "Search pair or admin…" : "Search pair…"}
-                    value={pairSearch}
-                    onChange={e => setPairSearch(e.target.value)}
-                    style={{ background:"transparent", border:"none", outline:"none", color:"white", fontSize:11, width:"100%" }}
-                  />
+                <div style={{ display:"flex", gap:6 }}>
+                  {[{ field: "price", label: "Price" }, { field: "fee", label: "Fee" }].map(({ field, label }) => {
+                    const active = pairSortField === field;
+                    const arrow = active ? (pairSortDir === "asc" ? "↑" : "↓") : "";
+                    return (
+                      <button
+                        key={field}
+                        onClick={() => togglePairSort(field)}
+                        style={{
+                          flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5,
+                          background: active ? "rgba(59,130,246,.16)" : "#060c18",
+                          border:`1px solid ${active ? "rgba(59,130,246,.4)" : "rgba(255,255,255,.07)"}`,
+                          color: active ? "#60a5fa" : "#94a3b8",
+                          borderRadius:7, padding:"6px 0", fontSize:11, fontWeight:700, cursor:"pointer",
+                        }}
+                      >
+                        <ArrowUpDown size={11} />{label}{arrow && <span style={{ fontSize:12 }}>{arrow}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1175,40 +1302,6 @@ export default function ExchangeDashboard() {
               {/* ORDERS */}
               {rightTab === RIGHT_TABS.ORDERS && (
               <div style={{ display:"flex", flexDirection:"column", gap:10, height:"100%" }}>
-                {/* order filters */}
-                <div style={S.filtersContainer}>
-                <div style={{ display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
-                  <div style={{ position:"relative", flex:"1 1 160px", minWidth:0 }}>
-                    <Search size={12} style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", color:"#677285ff", pointerEvents:"none" }} />
-                    <input
-                      placeholder={showOwnerColumns ? "Search user, ID, pair or admin…" : "Search user, ID or pair…"}
-                      value={orderSearch}
-                      onChange={e => setOrderSearch(e.target.value)}
-                      style={{ ...S.filterInput, paddingLeft:28, width:"100%", boxSizing:"border-box" }}
-                    />
-                  </div>
-                  <select value={orderStatus} onChange={e => setOrderStatus(e.target.value)} style={S.filterInput}>
-                    <option value="">All status</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                     <DatePicker
-                                selectsRange
-                                startDate={orderFrom}
-                                endDate={orderTo}
-                                onChange={(update) => setDateRange(update)}
-                                isClearable
-                                placeholderText="Select date range"
-                                customInput={<input style={S.filterInput} />}
-                          />
-
-                  <button onClick={() => { setOrderSearch(""); setOrderStatus(""); setDateRange([null, null]); }} style={S.refreshBtn} title="Clear">
-                    Clear
-                  </button>
-                </div>
-                </div>
-
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                   {filteredOrders.length === 0
                     ? <EmptyState icon={FileText} title="No orders found" sub="Try adjusting your filters" />
@@ -1226,27 +1319,6 @@ export default function ExchangeDashboard() {
                {rightTab === RIGHT_TABS.FAILED_SWEEPS && (
                 
               <div style={{ display:"flex", flexDirection:"column", gap:10, height:"100%" }}>
-                  <div style={S.filtersContainer}>
-                    <div style={{ display:"flex", gap:7, flexWrap:"wrap", alignItems:"center" }}>
-                      <div style={{ position:"relative", flex:"1 1 160px", minWidth:0 }}>
-                        <Search size={11} style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", color:"#374151", pointerEvents:"none" }} />
-                        <input
-                          placeholder={showOwnerColumns ? "Search user, currency, network or admin…" : "Search user, currency, network…"}
-                          value={sweepSearch}
-                          onChange={e => setSweepSearch(e.target.value)}
-                          style={{ ...S.filterInput, paddingLeft:28, width:"100%", boxSizing:"border-box" }}
-                        />
-                      </div>
-                      <select value={sweepResolved} onChange={e => setSweepResolved(e.target.value)} style={S.filterInput}>
-                        <option value="">All</option>
-                        <option value="false">Unresolved</option>
-                        <option value="true">Resolved</option>
-                      </select>
-                      <button onClick={() => { setSweepSearch(""); setSweepResolved("false"); }} style={S.refreshBtn} title="Clear">
-                        Clear
-                      </button>
-                  </div>
-                  </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                     {filteredSweeps.length === 0
                       ? <EmptyState icon={AlertTriangle} title="No sweeps found" sub="All clear — no failed sweeps matching your filter" />
@@ -1287,7 +1359,6 @@ const S = {
     flexDirection: "column",
     overflow: "hidden",
     color: "white",
-    padding: "5px",
     boxSizing: "border-box",
   },
   closeIconBtn: {

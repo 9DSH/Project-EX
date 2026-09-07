@@ -80,6 +80,33 @@ select {
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 12px;
+
+  /* let the browser render the option list using a dark UA theme,
+     matching the datepicker's dark panel instead of a white default */
+  color-scheme: dark;
+}
+
+/* ---------------- SELECT DROPDOWN (OPTION LIST) THEME ----------------
+   Matches the .react-datepicker panel theme (#152542 bg, #1e293b header,
+   #3b82f6 selected accent) so both popups feel like the same component.
+   Native <option> styling support is limited/inconsistent across
+   browsers (best in Chromium-based ones), so color-scheme: dark above
+   is the reliable fallback everywhere else. */
+option {
+  background-color: #152542;
+  color: #e2e8f0;
+  padding: 8px 12px;
+}
+
+option:checked,
+option:hover,
+option:focus {
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+option:disabled {
+  color: #64748b;
 }
 /* ---------------- TABLE FIX (IMPORTANT) ---------------- */
 
@@ -222,4 +249,3 @@ th, td {
 .no-spinner {
   -moz-appearance: textfield;
 }
-

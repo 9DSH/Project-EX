@@ -1,49 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import UserSidebar from "../components/UserSidebar";
+import HeroHub from "../components/HeroHub";
 import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../constants/AccessPoints"
 import { API_URL } from "../config";
-import { Users as UsersIcon, X, UserPlus, RefreshCcw, Search, Shield, User } from "lucide-react";
+import { Users as UsersIcon, X, UserPlus, Shield, User } from "lucide-react";
 import { hasPermission } from "../utils/permissions";
-
-
-
-// ── Skeleton ──────────────────────────────────────────────────
-function Sk({ w = "100%", h = 16, r = 6 }) {
-  return (
-    <div style={{ width: w, height: h, borderRadius: r, background: "linear-gradient(90deg,#151f30 25%,#1e2d44 50%,#151f30 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
-  );
-}
-
-// ── Stat pill ─────────────────────────────────────────────────
-function StatPill({ icon: Icon, label, value, accent, loading }) {
-  return (
-        <div style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", borderRadius:12, padding:"10px 14px" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: accent + "18", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Icon size={17} />
-      </div>
-      <div>
-        <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 0.6, marginBottom: 3 }}>{label}</div>
-        {loading ? <Sk w={56} h={22} /> : <div style={{ fontSize: 16, fontWeight: 800, color: accent, letterSpacing: -0.5 }}>{value ?? "—"}</div>}
-      </div>
-    </div>
-  );
-}
+import "./Users.css";
 
 // ── Field wrapper (matches Products style) ────────────────────
 const Field = ({ label, children }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <label style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</label>
+  <div className="users-field">
+    <label className="users-field-label">{label}</label>
     {children}
   </div>
 );
 
 // ── Toggle (matches Products style) ───────────────────────────
 const Toggle = ({ checked, onChange, label, color = "#3b82f6" }) => (
-  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
-    <div onClick={() => onChange(!checked)} style={{ position: "relative", width: 44, height: 24, borderRadius: 12, background: checked ? color : "#1e293b", border: `1px solid ${checked ? color : "#334155"}`, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", flexShrink: 0 }}>
-      <div style={{ position: "absolute", top: 2, left: checked ? 22 : 2, width: 18, height: 18, borderRadius: "50%", background: checked ? "white" : "#475569", transition: "left 0.25s cubic-bezier(0.4,0,0.2,1)", boxShadow: checked ? "0 2px 6px rgba(0,0,0,0.4)" : "none" }} />
+  <label className="users-toggle-label">
+    <div
+      onClick={() => onChange(!checked)}
+      className={`users-toggle-track${checked ? " is-checked" : ""}`}
+      style={{ "--toggle-color": color }}
+    >
+      <div className={`users-toggle-thumb${checked ? " is-checked" : ""}`} />
     </div>
-    {label && <span style={{ color: checked ? "#e2e8f0" : "#64748b", fontSize: 13, fontWeight: 500, transition: "color 0.2s" }}>{label}</span>}
+    {label && <span className={`users-toggle-text${checked ? " is-checked" : ""}`}>{label}</span>}
   </label>
 );
 
@@ -80,11 +62,23 @@ export default function Users() {
   const [addError, setAddError] = useState("");
 
 
+
  
   const currentUser = {
         role: localStorage.getItem("role"),
         access_points: JSON.parse(localStorage.getItem("access_points") || "[]")
       };
+
+  // ── Permission gates for the HeroHub "users" filter ────────
+  const isMaster = currentUser.role === "master";
+  const canViewAllUsers = isMaster || hasPermission(currentUser, "users.view");
+  const canViewAdmins = isMaster || hasPermission(currentUser, "admins.view");
+
+  // Admins without users.view access only ever see their own users —
+  // keep viewMode pinned there so the (hidden) filter can't drift.
+  useEffect(() => {
+    if (!canViewAllUsers && viewMode !== "myUsers") setViewMode("myUsers");
+  }, [canViewAllUsers, viewMode]);
   
 
   // ── LOAD ALL DATA ONCE ────────────────────────────────────
@@ -257,763 +251,350 @@ export default function Users() {
   const HEAD_COLS = "5% 8% 10% 7% 10% minmax(180px, 1fr)";
 
   return (
-    <>
-      <style>{`
-        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        * { box-sizing: border-box; }
-        button, input, select { font-family: inherit; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #060b16; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #334155; }
-        ::-webkit-scrollbar-corner { background: transparent; }
+    <div className="users-page">
 
-        /* balances row horizontal scroll — force narrow custom bar */
-        .balances-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: #1e293b #060b16;
-        }
-        .balances-scroll::-webkit-scrollbar {
-          width: 4px;
-          height: 4px;
-        }
-        .balances-scroll::-webkit-scrollbar-track {
-          background: #060b16;
-          border-radius: 4px;
-        }
-        .balances-scroll::-webkit-scrollbar-thumb {
-          background: #1e293b;
-          border-radius: 4px;
-        }
-        .balances-scroll::-webkit-scrollbar-thumb:hover {
-          background: #334155;
-        }
-      `}</style>
+      {/* ══ MAIN CONTENT ══ */}
+      <div className="users-main">
 
-      <div style={{ 
-        display: "flex", 
-        height: "100vh", 
-        background: "#060b16", 
-        overflow: "hidden", 
-        padding:"5px",
-        fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
-
-        {/* ══ LEFT PANEL — Add User (mirrors Products sidebar) ══ */}
-        <div
-          style={{
-            width: panelOpen ? 360 : 0,
-            minWidth: panelOpen ? 360 : 0,
-            transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
-            overflow: "hidden",
-            borderRight: panelOpen ? "1px solid #0f172a" : "none",
-            background: "#080e1a",
-            display: "flex",
-            flexDirection: "column",
-            flexShrink: 0,
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: 360,
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              padding: 24,
-              boxSizing: "border-box",
+        {/* ── HERO HUB (title/subtitle + users filter + search + stat pill) ── */}
+        <div className="users-hero-wrap">
+          <HeroHub
+            title="Users"
+            subtitle="Manage users, balances, messages & orders"
+            search={{
+              visible: true,
+              value: searchInput,
+              onChange: setSearchInput,
+              placeholder: "Search users…",
             }}
-          >
-            {/* Panel header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 28,
-              }}
-            >
-              <div>
-                <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
-                  New User
-                </div>
-                <div style={{ color: "#63748dff", fontSize: 14, marginTop: 3 }}>
-                  Fill in the details below
-                </div>
-              </div>
-
-              <button onClick={() => setPanelOpen(false)} style={S.closeIconBtn}>
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Role selector pills */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
-              {[
-                { val: "user", label: "User", icon: User },
-
-                ...(hasPermission(currentUser, "users.create")
-                  ? [{ val: "admin", label: "Admin", icon: Shield }]
-                  : []),
-              ].map(({ val, label, icon: Icon }) => (
-                <button
-                  key={val}
-                  onClick={() => setNewRole(val)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "7px 16px",
-                    borderRadius: 20,
-                    fontSize: 13,
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    border: "1px solid",
-                    background:
-                      newRole === val
-                        ? val === "admin"
-                          ? "rgba(239,68,68,0.2)"
-                          : "rgba(59,130,246,0.2)"
-                        : "transparent",
-                    borderColor:
-                      newRole === val
-                        ? val === "admin"
-                          ? "#ef4444"
-                          : "#3b82f6"
-                        : "#313d58ff",
-                    color:
-                      newRole === val
-                        ? val === "admin"
-                          ? "#fca5a5"
-                          : "#60a5fa"
-                        : "#5f6e83ff",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <Icon size={13} />
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Form fields */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-              <Field label="Username">
-                <input
-                  style={S.input}
-                  placeholder="e.g. john_doe"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addUser()}
-                  autoComplete="off"
-                />
-              </Field>
-
-              <Field label="Password">
-                <input
-                  type="password"
-                  style={S.input}
-                  placeholder="Set a secure password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addUser()}
-                />
-              </Field>
-
-              {/* Toggles */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  padding: "14px 16px",
-                  background: "#050a1405",
-                  borderRadius: 12,
-                }}
-              >
-                <Toggle
-                  checked={isActive}
-                  onChange={setIsActive}
-                  label="Active on creation"
-                  color="#22c55e"
-                />
-
-                {hasPermission("users.create") && (
-                  <Toggle
-                    checked={newRole === "master"}
-                    onChange={(v) => {
-                      if (v) {
-                        setNewRole("master");
-                        setAccessPoints(ACCESS_OPTIONS.map((a) => a.key));
-                      } else {
-                        setNewRole("user");
-                        setAccessPoints([]);
-                      }
-                    }}
-                    label="Grant Master access (Full Control)"
-                    color="#f59e0b"
-                  />
-                )}
-              </div>
-
-
-{/* ══ PERMISSION TABS SYSTEM (fitted to 360px sidebar) ══ */}
-{hasPermission(currentUser, "users.create") && newRole === "admin" && (
-  <div
-    style={{
-      background: "linear-gradient(180deg,#111827 0%, #0a1226 100%)",
-      border: "1px solid #1e293b",
-      borderRadius: 16,
-      padding: 14,
-      width: "100%",
-      boxSizing: "border-box",
-    }}
-  >
-    {/* Header */}
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        marginBottom: 14,
-      }}
-    >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          background: "rgba(99,102,241,0.12)",
-          color: "#818cf8",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-        </svg>
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>
-          Admin permissions
-        </div>
-        <div style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>
-          Choose what this admin can access
-        </div>
-      </div>
-    </div>
-
-    {/* Tabs — wrap instead of horizontal-scroll to fit narrow width */}
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 5,
-        marginBottom: 12,
-        width: "100%",
-      }}
-    >
-      {Object.keys(ACCESS_GROUPS).map((key) => (
-        <button
-          key={key}
-          onClick={() => setPermissionTab(key)}
-          style={{
-            padding: "5px 6px",
-            borderRadius: 10,
-            fontSize: 11,
-            fontWeight: 500,
-            background:
-              permissionTab === key ? "rgba(99,102,241,0.15)" : "transparent",
-            border: `1px solid ${permissionTab === key ? "#6366f1" : "#26324a"}`,
-            color: permissionTab === key ? "#a5b4fc" : "#64748b",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()}
-        </button>
-      ))}
-    </div>
-
-    {/* Permissions — single column, full width, fixed min-height so tabs don't jump */}
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        minHeight: 180,
-        alignContent: "flex-start",
-        width: "100%",
-      }}
-    >
-      {ACCESS_GROUPS[permissionTab].map((item) => (
-        <div
-          key={item.key}
-          style={{
-            background: "#0b1220",
-            border: "1px solid #1c2333",
-            borderRadius: 10,
-            padding: "10px 12px",
-            width: "100%",
-            boxSizing: "border-box",
-          }}
-        >
-          <Toggle
-            checked={accessPoints.includes(item.key)}
-            onChange={() => toggleAccess(item.key)}
-            label={item.label}
-            color="#6366f1"
+            dropdowns={[
+              {
+                key: "viewMode",
+                label: "Users", 
+                // only master / admins with "users.view" get to switch between
+                // All Users, My Users and Admins — everyone else is pinned to
+                // their own users and never sees this filter at all.
+                visible: canViewAllUsers,
+                value: viewMode,
+                onChange: setViewMode,
+                options: [
+                  { label: "All", value: "users" },
+                  { label: myUsersLabel, value: "myUsers" },
+                  ...(canViewAdmins ? [{ label: "Admins", value: "admins" }] : []),
+                ],
+              },
+            ]}
+            statPills={[
+              {
+                key: "totalUsers",
+                icon: UsersIcon,
+                // for master / users.view admins this reflects whichever
+                // filter is selected (all / my / admins); everyone else
+                // just sees their own users total.
+                label: "Total Users",
+                value: activeUsers.length,
+                accent: "#3b82f6",
+                loading,
+              },
+            ]}
+            onRefresh={loadAll}
+            refreshing={loading}
+            actions={[
+              {
+                key: "addUser",
+                visible: hasPermission(currentUser, "users.create"),
+                label: "Add User",
+                icon: UserPlus,
+                active: panelOpen,
+                onClick: () => setPanelOpen((p) => !p),
+              },
+            ]}
           />
         </div>
-      ))}
-    </div>
-  </div>
-)}
 
-              {/* Error */}
-              {addError && (
-                <div
-                  style={{
-                    background: "rgba(239,68,68,.08)",
-                    border: "1px solid rgba(239,68,68,.2)",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    fontSize: 12,
-                    color: "#fca5a5",
-                  }}
-                >
-                  {addError}
+        {/* ── row below the hub: Add User panel (left) + user list (right) ── */}
+        <div className="users-body-row">
+          {/* ══ LEFT PANEL — Add User (mirrors Products sidebar) ══ */}
+          <div className={`users-panel${panelOpen ? " is-open" : ""}`}>
+            <div className="users-panel-inner">
+              {/* Panel header */}
+              <div className="users-panel-header">
+                <div>
+                  <div className="users-panel-title">New User</div>
+                  <div className="users-panel-subtitle">Fill in the details below</div>
                 </div>
-              )}
-            </div>
 
-            {/* Footer buttons */}
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 24,
-                paddingTop: 16,
-                borderTop: "1px solid #0f172a",
-              }}
-            >
-              <button style={S.cancelBtn} onClick={() => setPanelOpen(false)}>
-                Cancel
-              </button>
-
-              <button
-                style={{ ...S.submitBtn, opacity: adding ? 0.6 : 1 }}
-                onClick={addUser}
-                disabled={adding}
-              >
-                {adding ? "Creating…" : "Create User"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ══ MAIN CONTENT ══ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", color: "white" }}>
-
-          {/* Top bar */}
-          <div style={S.header}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                           <div>
-            <div style={S.title}>Users</div>
-            <div style={S.subtitle}>Manage users, balances, messages &amp; orders</div>
-          </div>
-              <StatPill icon={UsersIcon} label="Active Users" value={`${allUsers.filter((u) => u.status === "active").length} / ${allUsers.length}`} accent="#3b82f6" loading={loading} />
-            {hasPermission(currentUser, "admins.view") && (
-              <StatPill
-                icon={Shield}
-                label="Total Admins"
-                value={`${admins.length}`}
-                accent="#f59e0b"
-                loading={loading}
-              />
-            )}
-            </div>
-
-         
-          </div>
-
-        {/* ── Buttons and Refresh ─────── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            width: "100%",
-          }}
-        >
-
-          
-            <div style={{ display: "flex", gap: 8, marginLeft: 25}}>
-
-              {/* All Users (both admin + master) */}
-              {hasPermission(currentUser,"users.view") && (
-              <button
-                onClick={() => setViewMode("users")}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  border: `1px solid ${
-                    viewMode === "users"
-                      ? "#3b82f6"
-                      : "rgba(59,130,246,0.3)"
-                  }`,
-                  background: viewMode === "users"    ? "rgba(3, 89, 227, 0.48)"
-                      : "rgba(59,130,246,0.12)",
-                  color: viewMode === "users" ? "white" : "#64748b",
-                }}
-              >
-                All Users
-              </button>
-              )}
-
-              {/* My Users (both admin + master) */}
-              <button
-                onClick={() => setViewMode("myUsers")}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  border: `1px solid ${
-                    viewMode === "myUsers"
-                      ? "#3b82f6"
-                      : "rgba(59,130,246,0.3)"
-                  }`,
-                  background:
-                    viewMode === "myUsers"
-                      ? "rgba(3, 89, 227, 0.48)"
-                      : "rgba(59,130,246,0.12)",
-                  color: viewMode === "myUsers" ? "white" : "#64748b",
-                }}
-              >
-                {myUsersLabel}
-              </button>
-
-              {/* ONLY MASTER */}
-              {hasPermission(currentUser,"admins.view") && (
-                <button
-                  onClick={() => setViewMode("admins")}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    border: viewMode === "admins" ? "1px solid #8f9aabff" :"1px solid #f59f0b5e",
-                    background: viewMode === "admins" ? "#f59f0b5e" : "rgba(59,130,246,0.12)",
-                    color: viewMode === "admins" ? "white" : "#64748b",
-                  }}
-                >
-                  Admins
+                <button onClick={() => setPanelOpen(false)} className="users-close-btn">
+                  <X size={16} />
                 </button>
-              )}
-
-            </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginLeft: "auto",
-            gap: 10,
-            marginRight: 30,
-          }}
-        >
-
-          {/* Search */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Search */}
-              <div style={{ position: "relative" }}>
-                <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#334155" }} />
-                <input
-                  placeholder="Search users…"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  style={{ ...S.input, width: 220, paddingLeft: 34, height: 38, fontSize: 13 }}
-                />
               </div>
 
-              <button onClick={loadAll} disabled={loading} style={S.refreshBtn}>
-                <RefreshCcw size={13} style={{ marginRight: 6, opacity: loading ? 0.5 : 1, animation: loading ? "spin 1s linear infinite" : "none" }} />
-                {loading ? "…" : "Refresh"}
-              </button>
+              {/* Role selector pills */}
+              <div className="users-role-row">
+                {[
+                  { val: "user", label: "User", icon: User },
 
-
-
-            </div>
-
-              {/* Add User — same style as Products "Add Product" button */}
-              {hasPermission(currentUser, "users.create") && (
-              <button
-                onClick={() => setPanelOpen((p) => !p)}
-                style={{
-                  display: "flex", alignItems: "center",
-                  border: "1px solid",
-                  borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 13,
-                  background: panelOpen ? "rgba(59,130,246,0.25)" : "rgba(59,130,246,0.12)",
-                  borderColor: panelOpen ? "#3b82f6" : "rgba(59,130,246,0.3)",
-                  color: panelOpen ? "white" : "#60a5fa",
-                  transition: "all 0.2s",
-                }}
-              >
-                <UserPlus size={14} style={{ marginRight: 7 }} />
-                Add User
-              </button>
-              )}
-              </div>
-        </div>
-
-          {/* Table header */}
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: HEAD_COLS, 
-            gap: 12, 
-            marginLeft: 12, 
-            padding: "8px 28px", 
-            color: "#475569", 
-            fontSize: 11, 
-            letterSpacing: "0.04em", 
-            borderBottom: "1px solid #1e293b", 
-            marginBottom: 0, 
-            flexShrink: 0 
-            }}
-            >
-            <div onClick={() => handleSort("user_id")} style={S.sortable}>ID {sortKey === "user_id" ? (sortDir === "asc" ? "↑" : "↓") : ""}</div>
-            <div onClick={() => handleSort("username")} style={S.sortable}>User {sortKey === "username" ? (sortDir === "asc" ? "↑" : "↓") : ""}</div>
-            <div onClick={() => handleSort("status")} style={S.sortable}>
-                                Status {sortKey === "status" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                              </div>
-            <div onClick={() => handleSort("activity")} style={S.sortable}>
-                              Activity {sortKey === "activity" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                            </div>
-            <div />
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                onClick={() => handleSort("balance")}
-                style={{ ...S.sortable }}
-              >
-                Balances {sortKey === "balance" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-              </span>
-
-              {/* currency selector pills */}
-              <div style={{ display: "flex", gap: 6, marginLeft: 10 }}>
-                {[...new Set(activeUsers.flatMap(u => u.balances?.map(b => b.currency) || []))].map(cur => (
-                  <span
-                    key={cur}
-                    onClick={() => {
-                      setBalanceCurrency(cur);
-                      setSortKey("balance");
-                    }}
-                    style={{
-                      padding: "3px 8px",
-                      fontSize: 10,
-                      borderRadius: 999,
-                      cursor: "pointer",
-                      border: balanceCurrency === cur ? "1px solid #3b82f6" : "1px solid #1e293b",
-                      background: balanceCurrency === cur ? "rgba(59,130,246,0.15)" : "transparent",
-                      color: balanceCurrency === cur ? "#60a5fa" : "#64748b",
-                    }}
+                  ...(hasPermission(currentUser, "users.create")
+                    ? [{ val: "admin", label: "Admin", icon: Shield }]
+                    : []),
+                ].map(({ val, label, icon: Icon }) => (
+                  <button
+                    key={val}
+                    onClick={() => setNewRole(val)}
+                    className={`users-role-pill${
+                      newRole === val ? (val === "admin" ? " is-selected-admin" : " is-selected-user") : ""
+                    }`}
                   >
-                    {cur}
-                  </span>
+                    <Icon size={13} />
+                    {label}
+                  </button>
                 ))}
               </div>
+
+              {/* Form fields */}
+              <div className="users-form-fields">
+                <Field label="Username">
+                  <input
+                    className="users-input"
+                    placeholder="e.g. john_doe"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addUser()}
+                    autoComplete="off"
+                  />
+                </Field>
+
+                <Field label="Password">
+                  <input
+                    type="password"
+                    className="users-input"
+                    placeholder="Set a secure password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addUser()}
+                  />
+                </Field>
+
+                {/* Toggles */}
+                <div className="users-toggles-box">
+                  <Toggle
+                    checked={isActive}
+                    onChange={setIsActive}
+                    label="Active on creation"
+                    color="#22c55e"
+                  />
+
+                  {hasPermission("users.create") && (
+                    <Toggle
+                      checked={newRole === "master"}
+                      onChange={(v) => {
+                        if (v) {
+                          setNewRole("master");
+                          setAccessPoints(ACCESS_OPTIONS.map((a) => a.key));
+                        } else {
+                          setNewRole("user");
+                          setAccessPoints([]);
+                        }
+                      }}
+                      label="Grant Master access (Full Control)"
+                      color="#f59e0b"
+                    />
+                  )}
+                </div>
+
+                {/* ══ PERMISSION TABS SYSTEM (fitted to 360px sidebar) ══ */}
+                {hasPermission(currentUser, "users.create") && newRole === "admin" && (
+                  <div className="users-permbox">
+                    {/* Header */}
+                    <div className="users-permbox-header">
+                      <div className="users-permbox-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                        </svg>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="users-permbox-title">Admin permissions</div>
+                        <div className="users-permbox-subtitle">Choose what this admin can access</div>
+                      </div>
+                    </div>
+
+                    {/* Tabs — wrap instead of horizontal-scroll to fit narrow width */}
+                    <div className="users-permtabs">
+                      {Object.keys(ACCESS_GROUPS).map((key) => (
+                        <button
+                          key={key}
+                          onClick={() => setPermissionTab(key)}
+                          className={`users-permtab${permissionTab === key ? " is-active" : ""}`}
+                        >
+                          {key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Permissions — single column, full width, scrolls internally so the
+                        modal itself never needs to scroll to reach the Create/Cancel buttons */}
+                    <div className="users-permlist balances-scroll">
+                      {ACCESS_GROUPS[permissionTab].map((item) => (
+                        <div key={item.key} className="users-permitem">
+                          <Toggle
+                            checked={accessPoints.includes(item.key)}
+                            onChange={() => toggleAccess(item.key)}
+                            label={item.label}
+                            color="#6366f1"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Error */}
+                {addError && <div className="users-error-box">{addError}</div>}
+              </div>
+
+              {/* Footer buttons */}
+              <div className="users-panel-footer">
+                <button className="users-btn-cancel" onClick={() => setPanelOpen(false)}>
+                  Cancel
+                </button>
+
+                <button
+                  className={`users-btn-submit${adding ? " is-disabled" : ""}`}
+                  onClick={addUser}
+                  disabled={adding}
+                >
+                  {adding ? "Creating…" : "Create User"}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Table rows */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 28px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
-            {filteredUsers.map((u) => (
-                <div
-                  key={u.user_id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: COLS,
-                    gap: 12,
-                    alignItems: "center",
-                    padding: "12px 14px",
-                    background: "#0d1526",
-                    border: "1px solid #1a2540",
-                    borderRadius: 14,
-                    cursor: "pointer",
-                    transition: "border-color 0.15s ease",
-                    height: 104,
-                    minHeight: 104,
-                    maxHeight: 104,
-                    overflow: "hidden",
-                  }}
-                  onClick={() => openUser(u)}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2a3a5c")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1a2540")}
-                >
-                <div style={{ color: "#475569", fontSize: 12, fontWeight: 600 }}>#{u.user_id}</div>
+          <div className="users-table-area">
+            {/* Table header */}
+            <div className="users-table-head" style={{ gridTemplateColumns: HEAD_COLS }}>
+              <div onClick={() => handleSort("user_id")} className="users-sortable">ID {sortKey === "user_id" ? (sortDir === "asc" ? "↑" : "↓") : ""}</div>
+              <div onClick={() => handleSort("username")} className="users-sortable">User {sortKey === "username" ? (sortDir === "asc" ? "↑" : "↓") : ""}</div>
+              <div onClick={() => handleSort("status")} className="users-sortable">
+                Status {sortKey === "status" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              </div>
+              <div onClick={() => handleSort("activity")} className="users-sortable">
+                Activity {sortKey === "activity" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              </div>
+              <div />
+              <div className="users-balance-head">
+                <span onClick={() => handleSort("balance")} className="users-sortable">
+                  Balances {sortKey === "balance" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                </span>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#1d4fd871", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                    {u.username?.[0]?.toUpperCase()}
-                  </div>
-                  <div style={{ minWidth: 200 }}>
-                    <div style={{ 
-                      fontWeight: 700, 
-                      fontSize: 13, 
-                      whiteSpace: "nowrap", 
-                      overflow: "hidden", 
-                      textOverflow: "ellipsis" }}>{u.username}</div>
-                    <div style={{ fontSize: 11, color: "#475569" }}>{u.role}</div>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <span style={{ padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, ...(u.status === "active" ? { background: "rgba(34,197,94,0.12)", color: "#22c55e" } : { background: "rgba(239,68,68,0.12)", color: "#ef4444" }) }}>
-                    {u.status}
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <div style={{ display: "flex", gap: 7 }}>
-                    {[
-                      ["💬", u.unread_messages, "#ef4444"],
-                      ["📦", (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
-                      ["🏦", u.pending_wire_transfers || 0, "#3b82f6"],
-                      ["💵", u.pending_withdrawals || 0, "#a855f7"],
-                    ].map(([icon, count, color], i) => (
-                      <div key={i} style={{ width: 34, height: 34, borderRadius: 9, background: "#0b1220", border: "1px solid #1a2540", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, position: "relative" }}>
-                        {icon}
-                        {count > 0 && (
-                          <span style={{ position: "absolute", top: -4, right: -4, fontSize: 10, fontWeight: 700, padding: "1px 4px", borderRadius: 999, color: "black", lineHeight: 1.4, background: color }}>{count}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div />
-
-                    <div
-                      className="balances-scroll"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "nowrap",
-                        overflowX: "auto",
-                        overflowY: "hidden",
-                        minWidth: 0,
-                        maxWidth: "100%",
-                        height: "100%",
-                        paddingBottom: 2,
+                {/* currency selector pills */}
+                <div className="users-currency-pills">
+                  {[...new Set(activeUsers.flatMap(u => u.balances?.map(b => b.currency) || []))].map(cur => (
+                    <span
+                      key={cur}
+                      onClick={() => {
+                        setBalanceCurrency(cur);
+                        setSortKey("balance");
                       }}
+                      className={`users-currency-pill${balanceCurrency === cur ? " is-active" : ""}`}
                     >
-                  {u.balances?.length > 0 ? u.balances.map((b, idx) => {
-                    const available = Number(b.available || 0);
-                    const frozen = Number(b.frozen || 0);
-                    return (
-                        <div
-                                key={idx}
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: 8,
-                                  padding: "8px 10px",
-                                  borderRadius: 12,
-                                  background: "#0b1220",
-                                  border: "1px solid #1a2540",
-                                  minWidth: 170,
-                                  flexShrink: 0,
-                                }}
-                              >
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ padding: "3px 8px", borderRadius: 999, background: "rgba(96,165,250,0.12)", color: "#bfdbfe", fontSize: 11, fontWeight: 700, border: "1px solid rgba(96,165,250,0.14)" }}>{b.currency}</span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              padding: "2px 7px",
-                              borderRadius: 999,
-                              background: b.network ? "rgba(56,189,248,0.10)" : "transparent",
-                              color: b.network ? "#7dd3fc" : "transparent",
-                              border: b.network ? "1px solid rgba(56,189,248,0.12)" : "1px solid transparent",
-                            }}
-                          >
-                            {b.network || "—"}
-                          </span>
-                          </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8 }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center" }}>Available</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "#22c55e", textAlign: "center" }}>{available.toLocaleString()}</span>
-                          </div>
-                          <div style={{ width: 1, height: 24, background: "rgba(148,163,184,0.12)" }} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center" }}>Frozen</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: frozen > 0 ? "#f59e0b" : "#334155", textAlign: "center" }}>{frozen.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }) : <span style={{ fontSize: 12, color: "#475569" }}>No balances</span>}
+                      {cur}
+                    </span>
+                  ))}
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Table rows */}
+            <div className="users-table-body">
+              {filteredUsers.map((u) => (
+                <div
+                  key={u.user_id}
+                  className="users-row"
+                  style={{ gridTemplateColumns: COLS }}
+                  onClick={() => openUser(u)}
+                >
+                  <div className="users-row-id">#{u.user_id}</div>
+
+                  <div className="users-row-user">
+                    <div className="users-avatar">{u.username?.[0]?.toUpperCase()}</div>
+                    <div className="users-username-wrap">
+                      <div className="users-username">{u.username}</div>
+                      <div className="users-role-text">{u.role}</div>
+                    </div>
+                  </div>
+
+                  <div className="users-status-cell">
+                    <span className={`users-status-badge${u.status === "active" ? " is-active" : " is-inactive"}`}>
+                      {u.status}
+                    </span>
+                  </div>
+
+                  <div className="users-activity-cell">
+                    <div className="users-activity-icons">
+                      {[
+                        ["💬", u.unread_messages, "#ef4444"],
+                        ["📦", (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
+                        ["🏦", u.pending_wire_transfers || 0, "#3b82f6"],
+                        ["💵", u.pending_withdrawals || 0, "#a855f7"],
+                      ].map(([icon, count, color], i) => (
+                        <div key={i} className="users-activity-icon">
+                          {icon}
+                          {count > 0 && (
+                            <span className="users-activity-count" style={{ "--count-color": color }}>{count}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div />
+
+                  <div className="users-balances-row balances-scroll">
+                    {u.balances?.length > 0 ? u.balances.map((b, idx) => {
+                      const available = Number(b.available || 0);
+                      const frozen = Number(b.frozen || 0);
+                      return (
+                        <div key={idx} className="users-balance-card">
+                          <div className="users-balance-card-head">
+                            <span className="users-balance-currency">{b.currency}</span>
+                            <span className={`users-balance-network${b.network ? " is-set" : ""}`}>
+                              {b.network || "—"}
+                            </span>
+                          </div>
+                          <div className="users-balance-grid">
+                            <div className="users-balance-stat">
+                              <span className="users-balance-stat-label">Available</span>
+                              <span className="users-balance-available">{available.toLocaleString()}</span>
+                            </div>
+                            <div className="users-balance-divider" />
+                            <div className="users-balance-stat">
+                              <span className="users-balance-stat-label">Frozen</span>
+                              <span className={`users-balance-frozen${frozen > 0 ? " is-frozen" : ""}`}>{frozen.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }) : <span className="users-no-balances">No balances</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-
-        {/* ══ USER DETAIL SIDEBAR ══ */}
-        <div style={{ width: 0 }}>
-          {selectedUser && (
-            <UserSidebar
-              user={selectedUser}
-              orders={orders}
-              transactions={transactions}
-              onClose={() => setSelectedUser(null)}
-              onRefresh={loadAll}
-            />
-          )}
-        </div>
       </div>
-    </>
+
+      {/* ══ USER DETAIL SIDEBAR ══ */}
+      <div className="users-sidebar-wrap">
+        {selectedUser && (
+          <UserSidebar
+            user={selectedUser}
+            orders={orders}
+            transactions={transactions}
+            onClose={() => setSelectedUser(null)}
+            onRefresh={loadAll}
+          />
+        )}
+      </div>
+    </div>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────
-const S = {
-  input: {
-    background: "#060d1a", border: "1px solid #313d58ff", color: "white",
-    padding: "10px 13px", borderRadius: 10, outline: "none", fontSize: 13,
-    width: "100%", boxSizing: "border-box", transition: "border-color 0.15s",
-  },
-  closeIconBtn: {
-    background: "#0b1525", border: "1px solid #313d58ff", color: "#475569",
-    width: 32, height: 32, borderRadius: 8, cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  submitBtn: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flex: 1, background: "rgba(59,130,246,0.2)", border: "1px solid rgba(59,130,246,0.35)",
-    color: "#60a5fa", padding: "10px 20px", borderRadius: 10,
-    cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.15s",
-  },
-  cancelBtn: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    background: "transparent", border: "1px solid #313d58ff",
-    color: "#475569", padding: "10px 16px", borderRadius: 10,
-    cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap",
-  },
-  refreshBtn: {
-    display: "flex", alignItems: "center",
-    background: "transparent", border: "1px solid #313d58ff",
-    borderRadius: 10, padding: "8px 14px", color: "#6c798dff",
-    cursor: "pointer", fontWeight: 600, fontSize: 13,
-  },
-  sortable: { cursor: "pointer", userSelect: "none" },
-    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
-  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
-  header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
-  },
-};

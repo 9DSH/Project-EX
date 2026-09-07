@@ -8,6 +8,9 @@ import {
   ShoppingCart,
   ArrowLeftRight,
   Boxes,
+  Layers,
+  Bot,
+  Link2,
   CreditCard,
   Wallet,
   MessageSquare,
@@ -20,7 +23,7 @@ import { TOPBAR_HEIGHT, COLLAPSED_WIDTH, EXPANDED_WIDTH } from "./AdminLayout";
 export default function Menu({ pinned, setPinned }) {
   const location = useLocation();
   const [hovered, setHovered] = useState(false);
-  const [open, setOpen] = useState({ products: false });
+  const [open, setOpen] = useState({ platforms: false });
 
   const expanded = pinned || hovered;
   const width = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
@@ -160,50 +163,56 @@ export default function Menu({ pinned, setPinned }) {
         {label("My Account")}
       </Link> 
 
-      <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))} title="Telegram Management">
-        <Shield size={17} style={{ flexShrink: 0 }} />
-        {label("Telegram Management")}
-      </Link>
-
       <Link to="/users" style={linkStyle(isActive("/users"))} title="Users">
         <Users size={17} style={{ flexShrink: 0 }} />
         {label("Users")}
       </Link>
 
-    <div style={sectionTitleWrap}>
-      <div style={sectionTitle}>SERVICES</div>
-      <div style={sectionDivider} />
-    </div>
-      {hasPermission(user, "products.view") && (
-        <div>
+        <div style={sectionTitleWrap}>
+          <div style={sectionTitle}>PLATFORMS</div>
+          <div style={sectionDivider} />
+        </div>
+
+
+          <div>
           <div
-            onClick={() => expanded && toggle("products")}
-            style={{ ...linkStyle(!expanded && isGroupActive(["/ProductsManagement", "/OrdersManagement"])), cursor: "pointer" }}
-            title="Products"
+            onClick={() => expanded && toggle("platforms")}
+            style={{ ...linkStyle(!expanded && isGroupActive(["/telegram_management", "/website_management"])), cursor: "pointer" }}
+            title="Platforms"
           >
-            <Package size={17} style={{ flexShrink: 0 }} />
-            {label("Products")}
-            {arrow(open.products)}
+            <Layers size={17} style={{ flexShrink: 0 }} />
+            {label("Platforms")}
+            {arrow(open.platforms)}
           </div>
 
 
-  
-
-          <div style={submenu(expanded && open.products)}>
-            {hasPermission(user, "products.manage") && (
-              <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))}>
-                <Boxes size={14} style={{ flexShrink: 0 }} />
-                {label("Product Management")}
+          <div style={submenu(expanded && open.platforms)}>
+            {hasPermission(user, "telegram_personal_bot") && (
+              <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))}>
+                <Bot size={14} style={{ flexShrink: 0 }} />
+                {label("Telegram Management")}
               </Link>
             )}
-            {hasPermission(user, "orders.view") && (
-              <Link to="/OrdersManagement" style={linkStyle(isActive("/OrdersManagement"))}>
-                <ShoppingCart size={14} style={{ flexShrink: 0 }} />
-                {label("Orders & Analysis")}
+            {hasPermission(user, "website_personal") && (
+              <Link to="/website_management" style={linkStyle(isActive("/website_management"))}>
+                <Link2 size={14} style={{ flexShrink: 0 }} />
+                {label("Website Management")}
               </Link>
             )}
           </div>
         </div>
+
+    <div style={sectionTitleWrap}>
+      <div style={sectionTitle}>SERVICES</div>
+      <div style={sectionDivider} />
+    </div>
+
+
+            {hasPermission(user, "products.manage")  && (
+        <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))} title="Products">
+          <Package size={17} style={{ flexShrink: 0 }} />
+          {label("Products")}
+        </Link>
       )}
 
       {hasPermission(user, "exchange.view") && hasPermission(user, "exchange.manage") && (

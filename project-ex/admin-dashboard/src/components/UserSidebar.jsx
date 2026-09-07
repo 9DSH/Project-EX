@@ -136,7 +136,6 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
   // STATES
   // =====================================================
   const [tab, setTab] = useState("profile");
-  const [adminUsername, setAdminUsername] = useState("");
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState("active");
   const [role, setRole] = useState("user");
@@ -240,23 +239,8 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     canEditUser: hasPermission(currentUser, "users.edit"),
   }), [currentUser]);
 
- 
-  // Get USERNAME by ID
-  async function getUsernameById(userId) {
-    if (!userId) return "";
-    const res = await fetch(`${API_URL}/admin/users/username/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return "";
-    const data = await res.json();
-    return data.username || "";
-  }
 
-  // usage of UsernameByID
-  useEffect(() => {
-    if (user?.admin_id) getUsernameById(user.admin_id).then(setAdminUsername);
-    else setAdminUsername("");
-  }, [user?.admin_id]);
+
 
   // =====================================================
   // INIT
@@ -1124,7 +1108,6 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
   // =====================================================
   if (!user) return null;
 
-  console.log("user", user)
 
   // =====================================================
   // DERIVED — transfer currency symbol for display
@@ -1145,7 +1128,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
           <div>
             <div style={styles.userTitle}>{user.username}</div>
               <div style={styles.userSub}>
-              USER #{user.user_id} - Created by #{user.admin_id} {adminUsername ?? "—"} -  {" "}
+              USER #{user.user_id} - Created by #{user.admin_id} {user.admin_username ?? "—"} -  {" "}
               {new Date(user.created_date).toLocaleString("en-GB", {
                 day: "2-digit",
                 month: "short",
@@ -1356,7 +1339,6 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
                         fromNetworkRequired={fromNetworkRequired}
                         setCreateOrderOpen={setCreateOrderOpen}
                         formatRate={formatRate}
-                        providerName = {adminUsername ?? "—"}
                       />
                     )}
        

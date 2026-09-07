@@ -589,6 +589,7 @@ def ensure_schema():
 
         _migrate_exchange_rate_history_changed_by(conn)
         _migrate_conversations_kind(conn)
+        _migrate_subscription_columns(conn)
 
 def _rls_enabled(conn, table_name: str) -> bool:
     return bool(
@@ -784,3 +785,43 @@ def _recompute_wire_order_admin_from_pair(conn) -> None:
             """
         )
     )
+
+def _migrate_subscription_columns(conn) -> None:
+    """
+    Adds the v2 subscription columns (required_plan_id on the access point
+    catalog, discount_percent on both price tables, duration_days on
+    plans) to tables that may already exist from an earlier deployment of
+    this feature, without touching any existing rows/history.
+    """
+    targets = [
+        ("access_point_catalog", "required_plan_id", "INTEGER"),
+        ("access_point_prices", "discount_percent", "NUMERIC(5,2) DEFAULT 0"),
+        ("plans", "duration_days", "INTEGER DEFAULT 30"),
+        ("plan_prices", "discount_percent", "NUMERIC(5,2) DEFAULT 0"),
+        ("subscription_invoices", "discount_percent", "NUMERIC(5,2) DEFAULT 0"),
+    ]
+
+    for table_name, column_name, column_type in targets:
+        if not _table_exists(conn, table_name):
+            print(f"[ensure_schema] skip {table_name}.{column_name}: table does not exist")
+            continue
+        if _column_exists(conn, table_name, column_name):
+            continue
+        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
+
+    if _table_exists(conn, "access_point_catalog") and _column_exists(conn, "access_point_catalog", "required_plan_id"):
+        fk_name = "fk_access_point_catalog_required_plan"
+        if not _constraint_exists(conn, fk_name) and _table_exists(conn, "plans"):
+            conn.execute(text(f"SAVEPOINT sp_{fk_name}"))
+            try:
+                conn.execute(
+                    text(
+                        "ALTER TABLE access_point_catalog "
+                        f"ADD CONSTRAINT {fk_name} "
+                        "FOREIGN KEY (required_plan_id) REFERENCES plans(id)"
+                    )
+                )
+                conn.execute(text(f"RELEASE SAVEPOINT sp_{fk_name}"))
+            except Exception as e:
+                conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_{fk_name}"))
+                print(f"[ensure_schema] skip FK {fk_name}: {e}")

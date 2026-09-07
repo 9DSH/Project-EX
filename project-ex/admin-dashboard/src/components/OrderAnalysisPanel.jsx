@@ -145,7 +145,7 @@ function MetaCard({ icon: Icon, label, line1, line2, line3, accent, loading }) {
 
 // ── Vertical column chart ────────────────────────────────────────
 function ColumnChart({ data, metric, loading }) {
-  const CHART_HEIGHT = 220;
+  const CHART_HEIGHT = 300;
   const TOP_PADDING = 60;
   const LABEL_AREA = 33;
   const [tooltip, setTooltip] = useState(null);
@@ -329,17 +329,56 @@ function ColumnChart({ data, metric, loading }) {
 }
 
 // ── Main panel ──────────────────────────────────────────────────
-export default function OrderAnalysisPanel({ visible, onClose, isMaster = false }) {
+// All filter state is controllable from a parent (e.g. a shared HeroHub) via the
+// `search` / `dateRange` / `selectedAdmin` / `selectedCategory` / `metric` / `viewMode`
+// props + their matching `on*Change` callbacks. When a prop is omitted the panel
+// falls back to its own internal state, so it keeps working standalone (e.g. as a
+// slide-in panel) exactly as before. Pass `hideFilters` to hide the panel's own
+// header toggle/filter row when a parent (like a Hero) already renders those controls.
+export default function OrderAnalysisPanel({
+  visible, onClose, isMaster = false, hideFilters = false, fullWidth = false,
+  search: searchProp, onSearchChange,
+  dateRange: dateRangeProp, onDateRangeChange,
+  selectedAdmin: selectedAdminProp, onAdminChange,
+  selectedCategory: selectedCategoryProp, onCategoryChange,
+  currency: currencyProp, onCurrencyChange,
+  productType: productTypeProp, onProductTypeChange,
+  metric: metricProp, onMetricChange,
+  viewMode: viewModeProp, onViewModeChange,
+}) {
   const [data, setData] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [metric, setMetric] = useState("sold");
-  const [selectedAdmin, setSelectedAdmin] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState("products");
-  const [dateRange, setDateRange] = useState([null, null]);
-  const [startDate, endDate] = dateRange;
+
+  const [internalMetric, setInternalMetric] = useState("sold");
+  const [internalSelectedAdmin, setInternalSelectedAdmin] = useState("all");
+  const [internalSelectedCategory, setInternalSelectedCategory] = useState("all");
+  const [internalCurrency, setInternalCurrency] = useState("all");
+  const [internalProductType, setInternalProductType] = useState("all");
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalViewMode, setInternalViewMode] = useState("products");
+  const [internalDateRange, setInternalDateRange] = useState([null, null]);
+
+  // controlled-if-provided, uncontrolled otherwise
+  const metric = metricProp !== undefined ? metricProp : internalMetric;
+  const setMetric = onMetricChange || setInternalMetric;
+  const rawSelectedAdmin = selectedAdminProp !== undefined ? selectedAdminProp : internalSelectedAdmin;
+  // normalize away null/undefined/"undefined" so a bad or not-yet-loaded value never shows up as "Admin #undefined"
+  const selectedAdmin = (rawSelectedAdmin == null || rawSelectedAdmin === "undefined") ? "all" : rawSelectedAdmin;
+  const setSelectedAdmin = onAdminChange || setInternalSelectedAdmin;
+  const selectedCategory = selectedCategoryProp !== undefined ? selectedCategoryProp : internalSelectedCategory;
+  const setSelectedCategory = onCategoryChange || setInternalSelectedCategory;
+  const currency = currencyProp !== undefined ? currencyProp : internalCurrency;
+  const setCurrency = onCurrencyChange || setInternalCurrency;
+  const productType = productTypeProp !== undefined ? productTypeProp : internalProductType;
+  const setProductType = onProductTypeChange || setInternalProductType;
+  const search = searchProp !== undefined ? searchProp : internalSearch;
+  const setSearch = onSearchChange || setInternalSearch;
+  const viewMode = viewModeProp !== undefined ? viewModeProp : internalViewMode;
+  const setViewMode = onViewModeChange || setInternalViewMode;
+  const dateRange = dateRangeProp !== undefined ? dateRangeProp : internalDateRange;
+  const setDateRange = onDateRangeChange || setInternalDateRange;
+  const [startDate, endDate] = dateRange || [null, null];
 
   useEffect(() => {
     if (!visible) return;
@@ -389,6 +428,8 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
   let filtered = [...data];
   if (selectedAdmin !== "all") filtered = filtered.filter(d => String(d.admin_id) === String(selectedAdmin));
   if (selectedCategory !== "all") filtered = filtered.filter(d => d.category_name === selectedCategory);
+  if (currency !== "all") filtered = filtered.filter(d => d.currency == null || d.currency === currency);
+  if (productType !== "all") filtered = filtered.filter(d => d.product_type == null || d.product_type === productType);
   if (search.trim()) {
     const q = search.toLowerCase();
     filtered = filtered.filter(d =>
@@ -540,14 +581,14 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
 
   return (
     <div style={{
-      width: visible ? "50%" : "0%",
+      width: !visible ? "0%" : fullWidth ? "100%" : "50%",
       minWidth: visible ? 320 : 0,
       overflow: "hidden",
       transition: "width 0.35s cubic-bezier(0.4,0,0.2,1), min-width 0.35s cubic-bezier(0.4,0,0.2,1)",
       flexShrink: 0,
       display: "flex",
       flexDirection: "column",
-      borderLeft: visible ? "1px solid #1a2540" : "none",
+      borderLeft: visible && !fullWidth ? "1px solid #1a2540" : "none",
       background: "#060d1a",
       padding: visible ? 20 : 0,
       border: visible ? "1px solid #203f5db6" : "none",
@@ -556,7 +597,8 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
       {visible && (
         <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 320 }}>
 
-          {/* ── Header: title + toggles ── */}
+          {/* ── Header: title + toggles (hidden when a parent Hero already shows these) ── */}
+          {!hideFilters && (
           <div style={{
             padding: "12px 14px 10px",
             borderBottom: "1px solid #1a2540",
@@ -689,22 +731,63 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
               </div>
             </div>
           </div>
+          )}
 
-          {/* ── Summary pills ── */}
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #0f1a2e", flexShrink: 0 }}>
-            <div style={{ display: "flex", gap: 7 }}>
-              <SummaryPill icon={Package} label="TOTAL SOLD" value={totalSold.toLocaleString()} accent="#3b82f6" />
-              <SummaryPill icon={DollarSign} label="TOTAL INCOME"
-                value={`$${totalIncome.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-                accent="#10b981" />
-              <SummaryPill
-                icon={viewMode === "categories" ? LayoutGrid : Package}
-                label={viewMode === "categories" ? "CATEGORIES" : "PRODUCTS"}
-                value={uniqueCount}
-                accent="#8b5cf6"
-              />
+          {hideFilters && (
+            <div style={{
+              padding: "12px 14px", borderBottom: "1px solid #1a2540",
+              background: "#07101d", flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <BarChart3 size={15} color="#3b82f6" />
+              <span style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>Product Analytics</span>
+
+              {/* Metric toggle — restored here exactly as in the original panel */}
+              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+                {[
+                  { key: "sold", label: "Sold", icon: Package },
+                  { key: "income", label: "Income", icon: DollarSign },
+                ].map(({ key, label, icon: Icon }) => (
+                  <button key={key} onClick={() => setMetric(key)} style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
+                    fontSize: 11, fontWeight: 700,
+                    background: metric === key ? "rgba(59,130,246,0.2)" : "transparent",
+                    color: metric === key ? "#60a5fa" : "#475569",
+                    transition: "all 0.15s",
+                  }}>
+                    <Icon size={11} />{label}
+                  </button>
+                ))}
+              </div>
+
+              {/* View mode toggle — kept here exactly as in the original panel, since "group by" only ever applies to Analysis */}
+              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+                {[
+                  { key: "products", label: "Products" },
+                  { key: "categories", label: "Categories" },
+                ].map(({ key, label }) => (
+                  <button key={key} onClick={() => setViewMode(key)} style={{
+                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
+                    fontSize: 11, fontWeight: 700,
+                    background: viewMode === key ? "rgba(139,92,246,0.2)" : "transparent",
+                    color: viewMode === key ? "#a78bfa" : "#475569",
+                    transition: "all 0.15s",
+                  }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+            {/* ── Meta footer ── */}
+            {!loading && (
+              <div style={{ marginTop: 10, display: "flex", gap: 9 }}>
+                <MetaCard {...card1} loading={loading} />
+                <MetaCard {...card2} loading={loading} />
+              </div>
+            )}
+
 
           {/* ── Chart area ── */}
           <div style={{
@@ -713,7 +796,7 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
             overflowY: "auto", overflowX: "hidden",
             padding: "14px 16px",
             scrollbarWidth: "thin", scrollbarColor: "#1e293b #060d1a",
-            marginTop: 10,
+            marginTop: 20,
           }}>
             <div style={{ alignContent: "center", fontSize: 10, fontWeight: 700, color: "#8294aeff", letterSpacing: 1, marginBottom: 14 }}>
               {metric === "sold" ? "UNITS SOLD" : "INCOME"} BY {viewMode === "categories" ? "CATEGORY" : "PRODUCT"}
@@ -732,13 +815,7 @@ export default function OrderAnalysisPanel({ visible, onClose, isMaster = false 
             </div>
             <ColumnChart data={displayData} metric={metric} loading={loading} />
 
-            {/* ── Meta footer ── */}
-            {!loading && (
-              <div style={{ marginTop: 50, display: "flex", gap: 9 }}>
-                <MetaCard {...card1} loading={loading} />
-                <MetaCard {...card2} loading={loading} />
-              </div>
-            )}
+
           </div>
 
         </div>

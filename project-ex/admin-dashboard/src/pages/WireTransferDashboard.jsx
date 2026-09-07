@@ -5,7 +5,9 @@ import {
   Landmark, Plus, Edit3, Trash2, Power, PowerOff, X, Save,
   CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown,
   ChevronUp, Send, Ban, RefreshCw, Timer, GitCompare, FileText, Search, Users,
+  ArrowUpDown, Wallet,
 } from "lucide-react";
+import HeroHub from "../components/HeroHub";
 
 const API = "http://127.0.0.1:8000";
 const token = () => localStorage.getItem("token");
@@ -209,7 +211,7 @@ function AdminFilterDropdown({ value, onChange, adminList, currentUsername }) {
 
   const currentLabel =
     value === "all" ? "All Admins" :
-    value === "mine" ? `My Rates (${currentUsername})` :
+    value === "mine" ? `${currentUsername}` :
     adminList.find(a => String(a.user_id) === String(value))?.username
       ? `Admin: ${adminList.find(a => String(a.user_id) === String(value)).username}`
       : "My Rates";
@@ -944,22 +946,58 @@ function Row({ k, v, accent }) {
 }
 
 // ─── PAIR ROW ─────────────────────────────────────────────────
+const pairFee = (p) => {
+  const methods = p.receiver_methods || [];
+  if (!methods.length) return null;
+  const sum = methods.reduce((s, m) => s + (Number(m.fee_percent) || 0), 0);
+  return sum / methods.length;
+};
+
 function PairRow({ p, selected, onClick, showOwner }) {
+  const fee = pairFee(p);
   return (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 16px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selected ? "rgba(59,130,246,.3)" : "transparent"}`, background: selected ? "rgba(59,130,246,.08)" : "transparent", transition: "all .15s", marginBottom: 3 }}>
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "9px 16px", borderRadius: 9, cursor: "pointer",
+        border: `1px solid ${selected ? "rgba(59,130,246,.3)" : "transparent"}`,
+        background: selected ? "rgba(59,130,246,.08)" : "transparent",
+        transition: "all .15s", marginBottom: 3,
+      }}
+    >
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: p.is_active ? "#22c55e" : "#374151", flexShrink: 0, boxShadow: p.is_active ? "0 0 6px rgba(34,197,94,.4)" : "none" }} />
-      <span style={{ fontSize: 14, fontWeight: 700, color: selected ? "white" : "#94a3b8", flex: 1 }}>{p.from_currency?.symbol} → {p.to_currency?.symbol}</span>
-      {showOwner && p.admin_id != null && (
-        <span style={{
-          fontSize: 10, fontWeight: 700, color: "#a78bfa",
-          background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.25)",
-          borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap",
-          maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis",
+
+      {/* left: pair + admin */}
+      <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+        <div style={{
+          fontSize: 14, fontWeight: 700, color: selected ? "white" : "#94a3b8",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
-          {p.admin_username || `#${p.admin_id}`}
+          {p.from_currency?.symbol} → {p.to_currency?.symbol}
+        </div>
+        {showOwner && p.admin_id != null && (
+          <span style={{
+            display: "inline-block", marginTop: 2,
+            fontSize: 10, fontWeight: 700, color: "#a78bfa",
+            background: "rgba(139,92,246,.12)", border: "1px solid rgba(139,92,246,.25)",
+            borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap",
+            maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {p.admin_username || `#${p.admin_id}`}
+          </span>
+        )}
+      </div>
+
+      {/* right: rate + fee */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, textAlign: "right" }}>
+        <span style={{ fontSize: 14, color: p.is_active ? "#3b82f6" : "#374151", fontWeight: 700, whiteSpace: "nowrap" }}>
+          {p.is_active ? fmt(p.rate, 4) : "—"}
         </span>
-      )}
-      <span style={{ fontSize: 13, color: "#3b82f6", fontWeight: 700 }}>{p.is_active ? fmt(p.rate, 4) : "—"}</span>
+        <span style={{ fontSize: 11, color: "#5f728eff", whiteSpace: "nowrap", marginTop: 1 }}>
+          Fee {fee != null ? fmt(fee, 2) : "—"}%
+        </span>
+      </div>
     </div>
   );
 }
@@ -1058,37 +1096,15 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
 
 // ─── ORDERS TABLE ─────────────────────────────────────────────
 function OrdersTable({ orders, onSelectOrder, loading, showOwner }) {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  const filtered = orders.filter(o => {
-    const matchStatus = statusFilter === "all" || o.status === statusFilter;
-    const q = search.toLowerCase();
-    const matchSearch = !q
-      || (o.username || "").toLowerCase().includes(q)
-      || String(o.id).includes(q)
-      || (showOwner && ((o.admin_username || "").toLowerCase().includes(q) || String(o.admin_id || "").includes(q)));
-    return matchStatus && matchSearch;
-  });
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* toolbar */}
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-        <input style={{ ...S.input, flex: 1, minWidth: 140, padding: "7px 11px", fontSize: 12 }} placeholder={showOwner ? "Search by user, order ID or admin…" : "Search by user or order ID…"} value={search} onChange={e => setSearch(e.target.value)} />
-        <select style={{ ...S.input, width: "auto", padding: "7px 11px", fontSize: 12 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="all">All status</option>
-          {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-      </div>
-
       {/* list */}
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
         {loading ? (
           <div style={{ color: "#475569", textAlign: "center", paddingTop: 40 }}>Loading…</div>
-        ) : filtered.length === 0 ? (
+        ) : orders.length === 0 ? (
           <div style={{ color: "#475569", textAlign: "center", paddingTop: 40 }}>No orders found.</div>
-        ) : filtered.map(o => {
+        ) : orders.map(o => {
           const inputData = o.input_data || {};
           const fieldEntries = Object.entries(inputData);
           return (
@@ -1180,10 +1196,26 @@ export default function WireTransferDashboard() {
   // pairs search
   const [pairSearch, setPairSearch] = useState("");
 
+  // pair sort — single-click cyclic: none → asc → desc → none
+  const [pairSortField, setPairSortField] = useState(null); // "rate" | "fee" | null
+  const [pairSortDir,   setPairSortDir]   = useState(null); // "asc" | "desc" | null
+  const togglePairSort = (field) => {
+    if (pairSortField !== field) { setPairSortField(field); setPairSortDir("asc"); }
+    else if (pairSortDir === "asc") { setPairSortDir("desc"); }
+    else { setPairSortField(null); setPairSortDir(null); }
+  };
+
   // cross-admin filter
   const [adminFilter, setAdminFilter] = useState("mine"); // "mine" | "all" | "<user_id>"
   const [filterAdmins, setFilterAdmins] = useState([]);
   const [canFilterAdmins, setCanFilterAdmins] = useState(false);
+
+  /* ── UNIFIED HERO FILTERS — applied to Orders ── */
+  const [unifiedSearch,       setUnifiedSearch]       = useState("");
+  const [unifiedStatus,       setUnifiedStatus]       = useState("all");    // pending/approved/delivered/rejected/failed/expired
+  const [unifiedFromCurrency, setUnifiedFromCurrency] = useState("all");    // from_currency symbol
+  const [unifiedDateRange,    setUnifiedDateRange]    = useState([null, null]);
+  const [unifiedStart, unifiedEnd] = unifiedDateRange;
 
   const currentUsername = localStorage.getItem("username") || "Me";
   const showOwnerColumns = canFilterAdmins && adminFilter !== "mine";
@@ -1345,19 +1377,84 @@ export default function WireTransferDashboard() {
 
   const filteredPairs = useMemo(() => {
     const q = pairSearch.toLowerCase();
-    if (!q) return pairs;
-    return pairs.filter(p =>
+    let list = !q ? pairs : pairs.filter(p =>
       p.from_currency?.symbol?.toLowerCase().includes(q) ||
       p.to_currency?.symbol?.toLowerCase().includes(q) ||
       (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
     );
-  }, [pairs, pairSearch, showOwnerColumns]);
 
-  // ── header stats ───────────────────────────────────────────
-  const activePairs   = pairs.filter(p => p.is_active).length;
-  const pendingCount  = orders.filter(o => o.status === "pending").length;
-  const approvedCount = orders.filter(o => o.status === "approved").length;
-  const deliveredCount= orders.filter(o => o.status === "delivered").length;
+    if (pairSortField && pairSortDir) {
+      list = [...list].sort((a, b) => {
+        const av = pairSortField === "rate" ? (Number(a.rate) || 0) : (pairFee(a) ?? 0);
+        const bv = pairSortField === "rate" ? (Number(b.rate) || 0) : (pairFee(b) ?? 0);
+        return pairSortDir === "asc" ? av - bv : bv - av;
+      });
+    }
+    return list;
+  }, [pairs, pairSearch, showOwnerColumns, pairSortField, pairSortDir]);
+
+  // "From Currency" options — restricted to currencies that actually exist as a from_currency on a pair
+  const currencyOptions = useMemo(() => {
+    const seen = new Set();
+    pairs.forEach(p => { const sym = p.from_currency?.symbol; if (sym) seen.add(sym); });
+    return [...seen].sort().map(sym => ({ label: sym, value: sym }));
+  }, [pairs]);
+
+  const filteredOrders = useMemo(() => {
+    const q = unifiedSearch.toLowerCase().trim();
+    return orders.filter(o => {
+      if (unifiedStatus !== "all" && o.status !== unifiedStatus) return false;
+      if (unifiedFromCurrency !== "all" && o.from_currency?.symbol !== unifiedFromCurrency) return false;
+
+      if (unifiedStart && new Date(o.created_at) < new Date(unifiedStart)) return false;
+      if (unifiedEnd) {
+        const end = new Date(unifiedEnd);
+        end.setHours(23, 59, 59, 999);
+        if (new Date(o.created_at) > end) return false;
+      }
+
+      if (q) {
+        const hit =
+          (o.username || "").toLowerCase().includes(q) ||
+          String(o.id).includes(q) ||
+          (showOwnerColumns && ((o.admin_username || "").toLowerCase().includes(q) || String(o.admin_id || "").includes(q)));
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }, [orders, unifiedSearch, unifiedStatus, unifiedFromCurrency, unifiedStart, unifiedEnd, showOwnerColumns]);
+
+  const filteredActivePairs = useMemo(
+    () => filteredPairs.filter(p => p.is_active).length,
+    [filteredPairs]
+  );
+
+  // total value — sum of filtered orders' from_amount, scoped to a single from-currency
+  const { totalValue, totalValueCurrency } = useMemo(() => {
+    const formatSum = (sum, currency) => {
+      const fractionDigits = currency === "IRT" ? 0 : 1;
+      return sum.toLocaleString("en-US", {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      });
+    };
+
+    if (unifiedFromCurrency !== "all") {
+      const sum = filteredOrders.reduce((s, o) => s + (parseFloat(o.from_amount) || 0), 0);
+      return { totalValue: formatSum(sum, unifiedFromCurrency), totalValueCurrency: unifiedFromCurrency };
+    }
+
+    const distinctCurrencies = [...new Set(filteredOrders.map(o => o.from_currency?.symbol).filter(Boolean))];
+    if (distinctCurrencies.length === 1) {
+      const sum = filteredOrders.reduce((s, o) => s + (parseFloat(o.from_amount) || 0), 0);
+      return { totalValue: formatSum(sum, distinctCurrencies[0]), totalValueCurrency: distinctCurrencies[0] };
+    }
+
+    return { totalValue: null, totalValueCurrency: null };
+  }, [filteredOrders, unifiedFromCurrency]);
+
+  // ── header stats (scoped to the filtered set) ─────────
+  const activePairs = pairs.filter(p => p.is_active).length;
   
   // ── layout ─────────────────────────────────────────────────
   return (
@@ -1366,7 +1463,6 @@ export default function WireTransferDashboard() {
       flexDirection: "column", 
       height: "100vh", 
       background: "#060d18", 
-      padding: "5px",
       color: "white", 
       fontFamily: "'Inter', sans-serif", 
       overflow: "hidden" }}>
@@ -1380,27 +1476,58 @@ export default function WireTransferDashboard() {
         />
       )}
 
-      {/* ── HEADER ── */}
-      <div style={S.header}>
-        <div style={S.headerLeft}>
-           <div>
-            <div style={S.title}>Transfer Management</div>
-            <div style={S.subtitle}>Manage wire transfer pairs, rates and orders</div>
-          </div>
-          <StatPill icon={GitCompare}   label="Active Pairs"  value={`${activePairs} / ${pairs.length}`} accent="#3b82f6" loading={pairsLoading} />
-          <StatPill icon={Clock}        label="Pending"       value={pendingCount}   accent="#fbbf24" loading={ordersLoading} />
-          <StatPill icon={CheckCircle2} label="Approved"      value={approvedCount}  accent="#60a5fa" loading={ordersLoading} />
-          <StatPill icon={FileText}     label="Delivered"     value={deliveredCount} accent="#4ade80" loading={ordersLoading} />
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginRight: 20 }}>
-          <button
-            onClick={() => { fetchPairs(); fetchOrders(); }}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", color: "#6b7280", borderRadius: 9, padding: "7px 13px", cursor: "pointer", fontWeight: 600, fontSize: 12 }}
-          >
-            <RefreshCw size={13} style={{ animation: (pairsLoading || ordersLoading) ? "spin .8s linear infinite" : "none" }} />
-            {(pairsLoading || ordersLoading) ? "Loading…" : "Refresh"}
-          </button>
-        </div>
+      {/* ── HERO HUB ── */}
+      <div style={{ padding: "0 0 10px", flexShrink: 0 }}>
+        <HeroHub
+          title="Transfer Management"
+          subtitle="Manage wire transfer pairs, rates and orders"
+          search={{
+            visible: true,
+            value: unifiedSearch,
+            onChange: setUnifiedSearch,
+            placeholder: showOwnerColumns ? "Search user, order ID or admin…" : "Search user or order ID…",
+          }}
+          dropdowns={[
+            {
+              key: "fromCurrency",
+              label: "Currecny", 
+              visible: true, 
+              value: unifiedFromCurrency, onChange: setUnifiedFromCurrency,
+              placeholder: "All",
+              options: currencyOptions,
+            },
+            {
+              key: "status",label: "Status", 
+               visible: true, value: unifiedStatus, onChange: setUnifiedStatus,
+              placeholder: "All",
+              options: Object.entries(STATUS_CFG).map(([k, v]) => ({ label: v.label, value: k })),
+            },
+            canFilterAdmins && {
+              key: "admin", label: "Admins", visible: true, value: adminFilter, onChange: setAdminFilter,
+              placeholder: "My Rates",
+              options: [
+                { label: `${currentUsername}`, value: "mine" },
+                { label: "All", value: "all" },
+                ...filterAdmins.map(a => ({ label: a.username, value: String(a.user_id) })),
+              ],
+            },
+          ].filter(Boolean)}
+          datePicker={{
+            visible: true,
+            selectsRange: true,
+            startDate: unifiedStart,
+            endDate: unifiedEnd,
+            onChange: (update) => setUnifiedDateRange(update),
+            placeholderText: "Select date range",
+          }}
+          statPills={[
+            { key: "pairs",  icon: GitCompare, label: "Total Pairs",  value: filteredActivePairs, accent: "#3b82f6", loading: pairsLoading },
+            { key: "orders", icon: FileText,   label: "Total Orders", value: filteredOrders.length, accent: "#10b981", loading: ordersLoading },
+            { key: "value",  icon: Wallet,     label: "Total Value",  value: totalValue, meta: totalValueCurrency, accent: "#22d3ee", loading: ordersLoading },
+          ]}
+          onRefresh={() => { fetchPairs(); fetchOrders(); }}
+          refreshing={pairsLoading || ordersLoading}
+        />
       </div>
 
       {/* ══ BODY ══ */}
@@ -1424,14 +1551,6 @@ export default function WireTransferDashboard() {
                 <span style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa", borderRadius: 20, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{filteredPairs.length}</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {canFilterAdmins && (
-                  <AdminFilterDropdown
-                    value={adminFilter}
-                    onChange={setAdminFilter}
-                    adminList={filterAdmins}
-                    currentUsername={currentUsername}
-                  />
-                )}
                 <button
                   onClick={() => setAddOpen(true)}
                   style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,.14)", border: "1px solid rgba(59,130,246,.28)", color: "#93c5fd", borderRadius: 7, padding: "7px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
@@ -1441,16 +1560,28 @@ export default function WireTransferDashboard() {
               </div>
             </div>
 
-            {/* search */}
+            {/* sort (2 single-click cyclic buttons: none → asc → desc → none) */}
             <div style={{ padding: "7px 10px", borderBottom: "1px solid rgba(255,255,255,.04)", flexShrink: 0 }}>
-              <div style={{ background: "#060c18", border: "1px solid rgba(255,255,255,.07)", borderRadius: 7, padding: "5px 9px", display: "flex", alignItems: "center", gap: 6 }}>
-                <Search size={12} color="#515c6dff" />
-                <input
-                  placeholder={showOwnerColumns ? "Search pair or admin…" : "Search pair…"}
-                  value={pairSearch}
-                  onChange={e => setPairSearch(e.target.value)}
-                  style={{ background: "transparent", border: "none", outline: "none", color: "white", fontSize: 11, width: "100%" }}
-                />
+              <div style={{ display: "flex", gap: 6 }}>
+                {[{ field: "rate", label: "Rate" }, { field: "fee", label: "Fee" }].map(({ field, label }) => {
+                  const active = pairSortField === field;
+                  const arrow = active ? (pairSortDir === "asc" ? "↑" : "↓") : "";
+                  return (
+                    <button
+                      key={field}
+                      onClick={() => togglePairSort(field)}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                        background: active ? "rgba(59,130,246,.16)" : "#060c18",
+                        border: `1px solid ${active ? "rgba(59,130,246,.4)" : "rgba(255,255,255,.07)"}`,
+                        color: active ? "#60a5fa" : "#94a3b8",
+                        borderRadius: 7, padding: "6px 0", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      <ArrowUpDown size={11} />{label}{arrow && <span style={{ fontSize: 12 }}>{arrow}</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1523,14 +1654,23 @@ export default function WireTransferDashboard() {
 
         {/* ── RIGHT: Orders Table ── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "white" }}>Transfer Orders</div>
-              <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{orders.length} total — click any row to view & action</div>
+          <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.28)",
+                color: "#93c5fd", borderRadius: 9, padding: "7px 14px", fontWeight: 700, fontSize: 12.5,
+              }}>
+                <FileText size={13} />Orders
+                <span style={{ background: "rgba(59,130,246,.18)", borderRadius: 20, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
+                  {filteredOrders.length}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#475569" }}>click any row to view & action</div>
             </div>
-            <button onClick={fetchOrders} style={{ ...S.iconBtn }}><RefreshCw size={14} /></button>
+           
           </div>
-          <OrdersTable orders={orders} onSelectOrder={selectOrder} loading={ordersLoading} showOwner={showOwnerColumns} />
+          <OrdersTable orders={filteredOrders} onSelectOrder={selectOrder} loading={ordersLoading} showOwner={showOwnerColumns} />
         </div>
 
         {/* ── ORDER SIDEBAR ── */}
