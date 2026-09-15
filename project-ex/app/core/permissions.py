@@ -1,14 +1,16 @@
 # app/core/permissions.py
 
 class Permissions:
-    # DASHBOARD
+    # TOP Layer
     DASHBOARD_VIEW = "dashboard.view"
-    PERSONAL_BOT_ACCESS_POINT = "telegram_personal_bot"
-
+    PERSONAL_BOT_ACCESS_POINT = "telegram.personal.bot"
+    GLOBAL_BOT_ACCESS_POINT = "telegram.global.bot"       
+    PLATFORM_SERVICE_MANAGEMENT = "platform.service.management"
+    CATEGORIES_MANAGE = "categories.manage"
+    
     # USERS
-    USERS_VIEW = "users.view"
-    USERS_CREATE = "users.create"
-    USERS_EDIT = "users.edit"
+    ALL_USERS_VIEW = "all.users.view"
+    USERS_MANAGE = "users.manage"  # Create and Edit users
     USERS_DELETE = "users.delete"
 
     # ADMINS
@@ -16,42 +18,39 @@ class Permissions:
     ADMINS_VIEW = "admins.view"
     ADMINS_PROMOTION= "admins.promotion"
 
-    # ORDERS
-    ORDERS_VIEW = "orders.view"
-    ORDERS_CREATE = "orders.create"
-    ORDERS_MANAGE = "orders.manage"
-
    # EXCHANGE
-    EXCHANGE_VIEW = "exchange.view"
-    EXCHANGE_MANAGE = "exchnage.manage"
-    PLATFORM_EXCHANGE_MANAGEMENT = "platform_exchange_management"
+    EXCHANGE_SERVICE = "exchange.service"   # Full access to exchange management (add/edit exchange pairs)
+    EXCHANGE_VIEW = "exchange.view"         # see users exchange history
+    EXCHANGE_CREATE = "exchange.create"     # create exchange on behalf of users (userSideBar)
+ 
 
     # WIRE TRANSFER
-    WIRE_TRANSFER_VIEW   = "wire_transfer.view"
-    WIRE_TRANSFER_MANAGE = "wire_transfer.manage"
+    TRANSFER_SERVICE = "transfer.service"
 
 
-    CATEGORIES_MANAGE = "categories.manage"
-
-    # PRODUCTS
-    PRODUCTS_MANAGE = "products.manage"
-    PRODUCTS_VIEW = "products.view"
-    PRODUCTS_CREATE = "products.create"
+    # PRODUCTS &  ORDERS
+    PRODUCTS_SERVICE = "products.service"
     PRODUCTS_EDIT = "products.edit"
-    PRODUCTS_DELETE = "products.delete"
+    ORDERS_VIEW = "orders.view"        # see users products order history
+    ORDERS_CREATE = "orders.create"    # create product orders on behalf of users (userSideBar)
+    ORDERS_MANAGE = "orders.manage"    
 
     # FINANCE
-    FINANCE_ASSET = "finance.assets"
-    FINANCE_MANAGE = "finance.manage"
+    PLATFORM_ASSETS = "platform.assets"
+    BALANCE_MANAGE = "balance.manage"
 
     TRANSACTION_VIEW = "transactions.view"
 
     # INTERNAL
-    INTERNAL_TRANSFER = "users.internal_transfer"
+    INTERNAL_TRANSFER = "users.internal.transfer"
 
     #MESSAGE
     MESSAGE_SEND = "send.message"
     BROADCAST_MESSAGE = "broadcast.message"
+
+    # PAYMENTS
+    CRYPTO_PAYMENT = "crypto.payment",
+    IRT_PAYMENT = "irt.payment",
 
 
 # 🔥 ROLE DEFAULTS
@@ -59,43 +58,39 @@ ROLE_PERMISSIONS = {
     "master": "*",  # full access
     "admin": [
         Permissions.PERSONAL_BOT_ACCESS_POINT,
+        Permissions.GLOBAL_BOT_ACCESS_POINT,
+        Permissions.PLATFORM_SERVICE_MANAGEMENT,
         Permissions.DASHBOARD_VIEW,
-        Permissions.USERS_VIEW,
-        Permissions.USERS_CREATE,
-        Permissions.USERS_EDIT,
-        Permissions.USERS_DELETE,
-
+        Permissions.CATEGORIES_MANAGE,
         Permissions.ADMINS_VIEW,
         Permissions.ADMINS_PROMOTION,
 
+        Permissions.ALL_USERS_VIEW,
+        Permissions.USERS_MANAGE,
+        Permissions.USERS_DELETE,
+
+        Permissions.EXCHANGE_VIEW,
+        Permissions.EXCHANGE_SERVICE,
+        Permissions.EXCHANGE_CREATE,
+
+        Permissions.PRODUCTS_SERVICE,
+        Permissions.PRODUCTS_EDIT,
         Permissions.ORDERS_VIEW,
         Permissions.ORDERS_CREATE,
         Permissions.ORDERS_MANAGE,
 
-
-        Permissions.EXCHANGE_VIEW,
-        Permissions.EXCHANGE_MANAGE,
-
-        Permissions.WIRE_TRANSFER_VIEW,
-        Permissions.WIRE_TRANSFER_MANAGE,
-
-        Permissions.CATEGORIES_MANAGE,
-
-        Permissions.PRODUCTS_MANAGE,
-        Permissions.PRODUCTS_VIEW,
-        Permissions.PRODUCTS_CREATE, 
-        Permissions.PRODUCTS_EDIT,
-        Permissions.PRODUCTS_DELETE,
-
-
-        Permissions.FINANCE_ASSET,
-        Permissions.FINANCE_MANAGE,
+        Permissions.PLATFORM_ASSETS,
+        Permissions.BALANCE_MANAGE,
         Permissions.TRANSACTION_VIEW,
-
+        Permissions.TRANSFER_SERVICE,
         Permissions.INTERNAL_TRANSFER,
+        Permissions.CRYPTO_PAYMENT,
+        Permissions.IRT_PAYMENT,
 
         Permissions.MESSAGE_SEND,
         Permissions.BROADCAST_MESSAGE,
+
+  
     
     ],
     "user": []

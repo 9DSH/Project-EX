@@ -3,7 +3,7 @@
 -- Run in pgAdmin against the app database.
 --
 -- Backfill rules confirmed from code:
---   users.created_by / products.created_by  → username string
+--   users.managed_by / products.created_by  → username string
 --   exchange_rate_history.changed_by        → user_id as string, or "system"
 --   exchange/wire orders                    → from users.admin_id
 --   exchange_rates / wire_transfer_pairs    → assign leftover rows to master
@@ -20,7 +20,7 @@ BEGIN;
 -- (used inline via subqueries below)
 
 -- ─────────────────────────────────────────────
--- 1) users.created_by (username) → admin_id
+-- 1) users.managed_by (username) → admin_id
 -- ─────────────────────────────────────────────
 ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_id INTEGER;
 

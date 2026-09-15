@@ -28,7 +28,7 @@ def get_admin(user=Depends(get_current_user)):
     role = user.get("role")
     if role not in ("master", "admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
-    if not has_access(user, "wire_transfer.view"):
+    if not has_access(user, "transfer.service"):
         raise HTTPException(status_code=403, detail="Wire Transfer permission required")
     return user
 
@@ -269,8 +269,8 @@ def list_filterable_admins(
         eligible = (
             u.role == "master"
             or role_default == "*"
-            or "wire_transfer.manage" in role_default
-            or "wire_transfer.manage" in access_points
+            or "transfer.service" in role_default
+            or "transfer.service" in access_points
         )
         if eligible:
             result.append({
@@ -310,7 +310,7 @@ def list_pairs(
 
 @router.post("/pairs")
 def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
 
     if body.rate <= 0:
@@ -350,7 +350,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
 
 @router.put("/pairs/{pair_id}")
 def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
 
     pair = db.query(WireTransferPair).options(
@@ -394,7 +394,7 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
 
 @router.delete("/pairs/{pair_id}")
 def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
     pair = db.query(WireTransferPair).filter(WireTransferPair.id == pair_id).first()
     if not pair:
@@ -479,7 +479,7 @@ def _assert_order_owner(admin: dict, order: WireTransferOrder):
 
 @router.post("/orders/{order_id}/approve")
 async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
@@ -549,7 +549,7 @@ async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = D
 
 @router.post("/orders/{order_id}/reject")
 async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
@@ -600,7 +600,7 @@ async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = De
 
 @router.post("/orders/{order_id}/deliver")
 async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
@@ -652,7 +652,7 @@ async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(
 
 @router.post("/orders/{order_id}/fail")
 async def fail_order(order_id: int, body: OrderFailRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "wire_transfer.manage"):
+    if not has_access(admin, "transfer.service"):
         raise HTTPException(403, "Manage permission required")
     order = db.query(WireTransferOrder).options(
         joinedload(WireTransferOrder.user),

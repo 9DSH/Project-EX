@@ -15,7 +15,7 @@ All of the above also accept an optional `admin_filter` query param:
   - omitted / "mine" -> scoped to the requesting user's own admin_id
   - "all"            -> platform-wide, across every admin (requires
                          can_view_all_admins — master or
-                         platform_exchange_management)
+                         platform.service.management)
   - "<user_id>"       -> scoped to that specific admin (same permission
                          requirement)
 
@@ -62,7 +62,7 @@ MAX_CANDLES = 2000
 def get_admin(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not has_access(user, "exchange.view"):
+    if not has_access(user, "exchange.service"):
         raise HTTPException(status_code=403, detail="Access denied")
     return user
 
@@ -135,7 +135,7 @@ def get_rate_history(
     db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
@@ -222,7 +222,7 @@ def get_rate_ohlc(
         high  = max(open, all updates in bucket)
         low   = min(open, all updates in bucket)
     """
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
  
     if timeframe not in TIMEFRAME_SECONDS:
@@ -359,7 +359,7 @@ def get_pnl_series(
     unrealized P&L, and README for how to extend this to a full daily
     mark-to-market series.
     """
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
@@ -464,7 +464,7 @@ def get_inventory_snapshot(
     Switching base from USDT to IRT (or any other currency) will correctly
     re-value every position using the active pair rate in either direction.
     """
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
@@ -537,7 +537,7 @@ def get_volume_by_pair(
     db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)

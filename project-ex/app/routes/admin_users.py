@@ -289,7 +289,7 @@ def get_users(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.view"):
+    if not has_access(user, "all.users.view"):
         raise HTTPException(403, "Access denied")
 
     if is_master(user):
@@ -440,7 +440,7 @@ def create_user(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.create"):
+    if not has_access(user, "users.manage"):
         raise HTTPException(403, "Access denied")
     
     access_points = []
@@ -567,7 +567,7 @@ def internal_transfer(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.internal_transfer"):
+    if not has_access(user, "users.internal.transfer"):
         raise HTTPException(403, "Access denied")
 
     if payload.amount <= 0:
@@ -763,7 +763,7 @@ def update_balance(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(admin, "finance.manage"):
+    if not has_access(admin, "balance.manage"):
         raise HTTPException(403, "Access denied")
 
     if payload.action not in ["deposit", "withdraw"]:
@@ -908,7 +908,7 @@ def delete_balance(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "finance.manage"):
+    if not has_access(admin, "balance.manage"):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -996,7 +996,7 @@ def get_user_wallet_pair(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "finance.manage"):
+    if not has_access(admin, "balance.manage"):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -1073,7 +1073,7 @@ def update_user_wallet_pair(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "finance.manage"):
+    if not has_access(admin, "balance.manage"):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -1160,7 +1160,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db_
         raise HTTPException(403, "Not authorized")
 
 
-    if not has_access(user, "users.edit"):
+    if not has_access(user, "users.manage"):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -1251,7 +1251,7 @@ def reset_password(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "users.edit"):
+    if not has_access(admin, "users.manage"):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -1286,7 +1286,7 @@ def update_user_bank_info(
 ):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
-    if not (has_access(user, "users.edit") or has_access(user, "finance.manage")):
+    if not (has_access(user, "users.manage") or has_access(user, "balance.manage")):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()

@@ -189,14 +189,14 @@ async def show_main_menu(update_or_message, text=None, user_id=None, show_servic
     ]
     services = [t("btn_wallet", lang), t("btn_exchange", lang)]
 
-    if allowed("products.view"):
+    if allowed("products.service"):
         keyboard_rows.append([KeyboardButton(t("btn_products", lang)), KeyboardButton(t("btn_orders", lang))])
         services += [t("btn_products", lang), t("btn_orders", lang)]
     else:
         keyboard_rows.append([KeyboardButton(t("btn_orders", lang))])
         services.append(t("btn_orders", lang))
 
-    if allowed("wire_transfer.manage", "wire_transfer.view"):
+    if allowed("transfer.service"):
         keyboard_rows.append([KeyboardButton(t("btn_wire", lang)), KeyboardButton(t("btn_my_account", lang))])
         services += [t("btn_wire", lang), t("btn_my_account", lang)]
     else:

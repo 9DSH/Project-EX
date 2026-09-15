@@ -42,7 +42,7 @@ export default function WalletTab({
   const [irtBankSaving, setIrtBankSaving] = useState(false);
   const [irtBankMessage, setIrtBankMessage] = useState(null);
 
-  const canManageFinance = hasPermission(user, "finance.manage");
+  const canManageBalance = hasPermission(user, "balance.manage");
 
   useEffect(() => {
     setExpandedWalletKey(null);
@@ -343,7 +343,7 @@ export default function WalletTab({
                           <FieldIcon size={13} />
                           {fieldLabel}
                         </label>
-                        {canManageFinance ? (
+                        {canManageBalance ? (
                           <input
                             value={irtBankDraft[field]}
                             onChange={(e) =>
@@ -365,7 +365,7 @@ export default function WalletTab({
                     <span style={styles.walletDetailsHint}>
                       Editable by admin for user corrections or support.
                     </span>
-                    {canManageFinance && (
+                    {canManageBalance && (
                       <button
                         type="button"
                         className="primaryBtn"
@@ -397,8 +397,8 @@ export default function WalletTab({
                     </div>
                   )}
 
-                  {canManageFinance ? (
-                    <PermissionGate allowed={canManageFinance}>
+                  {canManageBalance ? (
+                    <PermissionGate allowed={canManageBalance}>
                       <div style={styles.walletPairGrid}>
                         <div style={styles.walletAddressCard}>
                           <div style={styles.walletAddressHeader}>
@@ -525,7 +525,7 @@ export default function WalletTab({
 </div>
 
                 {/*  BALANCE MANAGEMENT  */}
-                <PermissionGate allowed={hasPermission(user, "finance.manage")}>
+                <PermissionGate allowed={hasPermission(user, "balance.manage")}>
                 <div style={styles.transferBox}>
                   {/* HEADER */}
                   <div
@@ -643,7 +643,7 @@ export default function WalletTab({
 
                   {/*  INTERNAL TRANSFER  */}
 
-                <PermissionGate allowed={hasPermission(user, "users.internal_transfer")}>
+                <PermissionGate allowed={hasPermission(user, "users.internal.transfer")}>
                   <div style={styles.transferBox}>
                     {/* HEADER */}
                     <div

@@ -927,7 +927,7 @@ const BigNumber = ({ value, style = {} }) => {
               {/* ================= EXCHANGE ORDERS ================= */}
               {permissions.canViewExchange && orderSubTab === "exchange" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%", }}>
-                 <PermissionGate allowed={hasPermission(user, "exchange.manage")}>
+                 <PermissionGate allowed={hasPermission(user, "exchange.create")}>
                   <div style={styles.createOrderBox}>
 
                     {/* HEADER */}

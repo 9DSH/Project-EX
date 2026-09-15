@@ -16,7 +16,7 @@ router = APIRouter(prefix="/admin/telegram-bot-settings", tags=["Admin Telegram 
 SUPPORTED_LANGUAGES = {"en", "fa"}
 GLOBAL_KINDS = {"global_main", "support"}
 
-PERSONAL_BOT_ACCESS_POINT = "telegram_personal_bot"
+PERSONAL_BOT_ACCESS_POINT = "telegram.personal.bot"
 
 
 class TelegramBotSettingsUpdate(BaseModel):
@@ -53,7 +53,7 @@ def require_personal_bot_access(user=Depends(get_current_user)):
     """
     Gate for any admin/master managing their OWN personal bot
     (bot_kind="admin"). Master always passes (has_access short-circuits for
-    role == master). Regular admins need the telegram_personal_bot access
+    role == master). Regular admins need the telegram.personal.bot access
     point explicitly granted.
     """
     if not is_admin_or_above(user):
@@ -129,7 +129,7 @@ async def _apply_update(settings: TelegramBotSettings, payload: TelegramBotSetti
 
 
 # ─────────────────────────────────────────────
-# MY BOT (any admin/master with telegram_personal_bot access)
+# MY BOT (any admin/master with telegram.personal.bot access)
 # ─────────────────────────────────────────────
 
 @router.get("/")
@@ -169,7 +169,7 @@ async def set_my_display_name(
 
 # ─────────────────────────────────────────────
 # MASTER: list every admin's personal bot (for "All Admin Bots" tab)
-# Only admins who (a) have the telegram_personal_bot access point and
+# Only admins who (a) have the telegram.personal.bot access point and
 # (b) have actually configured a token are shown — an admin who was never
 # granted/never set up a bot shouldn't clutter this directory.
 # ─────────────────────────────────────────────

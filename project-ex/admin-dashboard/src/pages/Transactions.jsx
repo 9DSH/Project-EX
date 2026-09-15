@@ -3,19 +3,141 @@ import { API_URL } from "../config";
 import UserSidebar from "../components/UserSidebar";
 import OrderSidebar from "../components/OrderSidebar";
 import HeroHub from "../components/HeroHub";
-import { SlidersHorizontal, Wallet, Clock, CheckCircle2 } from "lucide-react";
+import { SlidersHorizontal, Wallet } from "lucide-react";
+import "./Transactions.css";
 
-  // ── Skeleton ─────────────────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────────
 function Sk({ w = "100%", h = 16, r = 6 }) {
-    return (
-      <div style={{ width: w, height: h, borderRadius: r, background: "linear-gradient(90deg,#151f30 25%,#1e2d44 50%,#151f30 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
-    );
-  }
+  return (
+    <div
+      style={{
+        width: w,
+        height: h,
+        borderRadius: r,
+        background: "linear-gradient(90deg,#151f30 25%,#1e2d44 50%,#151f30 75%)",
+        backgroundSize: "200% 100%",
+        animation: "shimmer 1.5s infinite",
+      }}
+    />
+  );
+}
 
 const fmt = (n, d = 2) =>
   n != null ? Number(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: d }) : "—";
 
+// ── Grid column template — shared by header + every row ─────────
+// TX | Type | User | References | Amount | Chain | Wallet | Hash | Confirm | Status | Created
+const COLS = "106px 170px 200px 140px 130px 150px 140px 140px 84px 104px 128px";
 
+const IN_TYPES = new Set(["income", "deposit", "deposit_from_user", "admin_deposit", "commission"]);
+const OUT_TYPES = new Set(["withdraw", "withdrawal", "deposit_to_user"]);
+
+// ── One transaction row — every field on the Transaction model ──
+function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
+  const isIncome = IN_TYPES.has(t.type);
+  const amountValue = Number(t.amount);
+  const typeColor = amountValue > 0 || isIncome ? "#10b981" : "#ef4444";
+  const sign = amountValue > 0 || isIncome ? "+" : "-";
+
+  const statusColors = {
+    completed: { bg: "#10b98122", color: "#34d399" },
+    pending: { bg: "#f59e0b22", color: "#fbbf24" },
+  };
+  const statusStyle = statusColors[t.status] || { bg: "#ef444422", color: "#f87171" };
+
+  return (
+    <div className="tx-row" style={{ gridTemplateColumns: COLS }}>
+      {/* TX (id) */}
+      <div className="tx-id">#{t.id}</div>
+
+      {/* TYPE */}
+      <div>
+        <span className="tx-type-badge">{t.type}</span>
+      </div>
+
+      {/* USER */}
+      <div style={{ minWidth: 0 }}>
+        <div className="tx-user-link" onClick={() => onOpenUser(t)}>
+          {t.username || "Unknown"}
+        </div>
+        <div className="tx-user-sub">USER #{t.user_id}</div>
+      </div>
+
+      {/* REFERENCES: order_id / wire_transfer_order_id / platform_bank_account_id */}
+      <div className="tx-refs">
+        {t.order_id ? (
+          <span className="tx-ref-pill">
+            Order <span className="tx-ref-link" onClick={() => onOpenOrder(t)}>#{t.order_id}</span>
+          </span>
+        ) : (
+          <span className="tx-ref-pill tx-ref-muted">Order —</span>
+        )}
+        <span className={`tx-ref-pill${t.wire_transfer_order_id ? "" : " tx-ref-muted"}`}>
+          Wire {t.wire_transfer_order_id ? `#${t.wire_transfer_order_id}` : "—"}
+        </span>
+        <span className={`tx-ref-pill${t.platform_bank_account_id ? "" : " tx-ref-muted"}`}>
+          Bank Acct {t.platform_bank_account_id ? `#${t.platform_bank_account_id}` : "—"}
+        </span>
+      </div>
+
+      {/* AMOUNT */}
+      <div>
+        <div className="tx-amount" style={{ color: typeColor }}>
+          {sign}
+          {fmt(Math.abs(t.amount), 4)}
+        </div>
+        <div className="tx-amount-sub">
+          {t.currency_symbol || (t.currency_id ? `#${t.currency_id}` : "—")}
+        </div>
+      </div>
+
+      {/* CHAIN: currency/network ids + blockchain */}
+      <div style={{ minWidth: 0 }}>
+        <div className="tx-chain-line">
+          {t.network_name || (t.network_id ? `Network #${t.network_id}` : "No network")}
+        </div>
+        <span className="tx-blockchain-badge">{t.blockchain || "bsc"}</span>
+      </div>
+
+      {/* WALLET */}
+      <div className="tx-hash-text">
+        {t.wallet_address ? (
+          <>
+            {t.wallet_address.slice(0, 8)}...{t.wallet_address.slice(-6)}
+          </>
+        ) : (
+          <span className="tx-muted">—</span>
+        )}
+      </div>
+
+      {/* HASH */}
+      <div className="tx-hash-text">
+        {t.tx_hash ? (
+          <>
+            {t.tx_hash.slice(0, 10)}...{t.tx_hash.slice(-6)}
+          </>
+        ) : (
+          <span className="tx-muted">—</span>
+        )}
+      </div>
+
+      {/* CONFIRMATIONS */}
+      <div className="tx-confirm" style={{ color: Number(t.confirmations || 0) > 0 ? "#22c55e" : "#64748b" }}>
+        {t.confirmations || 0}
+      </div>
+
+      {/* STATUS */}
+      <div>
+        <span className="tx-status-badge" style={{ background: statusStyle.bg, color: statusStyle.color }}>
+          {t.status}
+        </span>
+      </div>
+
+      {/* CREATED */}
+      <div className="tx-created">{formatDate(t.created_at)}</div>
+    </div>
+  );
+}
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
@@ -36,7 +158,17 @@ export default function Transactions() {
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
 
+  // ── Sort state (same single-key / asc-desc pattern as Users) ──
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
 
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const token = localStorage.getItem("token");
 
@@ -47,14 +179,11 @@ export default function Transactions() {
     setLoading(true);
 
     try {
-      const res = await fetch(
-        `${API_URL}/admin/orders/transactions`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_URL}/admin/orders/transactions`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await res.json();
 
@@ -75,10 +204,9 @@ export default function Transactions() {
         product_name: t.product?.name || t.product_name,
         product_type: t.product?.type,
         plan: t.product?.plan,
-
       }));
 
-    setTransactions(normalized);
+      setTransactions(normalized);
     } catch (err) {
       console.error(err);
     }
@@ -101,14 +229,11 @@ export default function Transactions() {
     setLoadingUser(true);
 
     try {
-      const res = await fetch(
-        `${API_URL}/admin/users/${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await res.json();
 
@@ -121,7 +246,6 @@ export default function Transactions() {
 
       // 🔥 FULL USER OBJECT ONLY
       setSelectedUser(data);
-
     } catch (err) {
       console.error(err);
     }
@@ -138,12 +262,9 @@ export default function Transactions() {
     setLoadingOrder(true);
 
     try {
-      const res = await fetch(
-        `${API_URL}/admin/users/${t.user_id}/orders`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${API_URL}/admin/users/${t.user_id}/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       const data = await res.json();
 
@@ -173,9 +294,8 @@ export default function Transactions() {
     setLoadingOrder(false);
   };
 
-
   // =========================
-  // FILTER ENGINE
+  // FILTER + SORT ENGINE
   // =========================
   const filteredTx = useMemo(() => {
     let data = [...transactions];
@@ -186,6 +306,8 @@ export default function Transactions() {
         [
           t.id,
           t.order_id,
+          t.wire_transfer_order_id,
+          t.platform_bank_account_id,
           t.user_id,
           t.username,
           t.product_name,
@@ -193,6 +315,7 @@ export default function Transactions() {
           t.tx_hash,
           t.network_name,
           t.network_chain,
+          t.blockchain,
           t.currency_symbol,
         ]
           .filter(Boolean)
@@ -222,25 +345,66 @@ export default function Transactions() {
       data = data.filter((t) => t.network_name === networkFilter);
     }
 
-    // ACTOR FILTER (NEW)
+    // ACTOR FILTER
     if (actorFilter !== "all") {
       data = data.filter((t) => t.role === actorFilter);
     }
 
-    // DATE RANGE (NEW)
+    // DATE RANGE
     if (startDate) {
-      data = data.filter((t) =>
-        new Date(t.created_at) >= startDate
-      );
+      data = data.filter((t) => new Date(t.created_at) >= startDate);
     }
 
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      data = data.filter((t) =>
-        new Date(t.created_at) <= end
-      );
+      data = data.filter((t) => new Date(t.created_at) <= end);
     }
+
+    // SORT (mirrors the Users.jsx handleSort/sortKey/sortDir pattern)
+    data.sort((a, b) => {
+      let A, B;
+
+      switch (sortKey) {
+        case "id":
+          A = a.id;
+          B = b.id;
+          break;
+        case "type":
+          A = a.type || "";
+          B = b.type || "";
+          break;
+        case "user_id":
+          A = a.user_id;
+          B = b.user_id;
+          break;
+        case "amount":
+          A = Math.abs(Number(a.amount) || 0);
+          B = Math.abs(Number(b.amount) || 0);
+          break;
+        case "confirmations":
+          A = Number(a.confirmations || 0);
+          B = Number(b.confirmations || 0);
+          break;
+        case "status":
+          A = a.status || "";
+          B = b.status || "";
+          break;
+        case "created_at":
+          A = new Date(a.created_at).getTime() || 0;
+          B = new Date(b.created_at).getTime() || 0;
+          break;
+        default:
+          A = new Date(a.created_at).getTime() || 0;
+          B = new Date(b.created_at).getTime() || 0;
+      }
+
+      if (typeof A === "number" && typeof B === "number") {
+        return sortDir === "asc" ? A - B : B - A;
+      }
+
+      return sortDir === "asc" ? String(A).localeCompare(String(B)) : String(B).localeCompare(String(A));
+    });
 
     return data;
   }, [
@@ -253,6 +417,8 @@ export default function Transactions() {
     actorFilter,
     startDate,
     endDate,
+    sortKey,
+    sortDir,
   ]);
 
   const formatDate = (date) => {
@@ -271,23 +437,11 @@ export default function Transactions() {
   // FILTER OPTIONS
   // =========================
   const currencies = useMemo(() => {
-    return [
-      ...new Set(
-        transactions
-          .map((t) => t.currency_symbol)
-          .filter(Boolean)
-      ),
-    ];
+    return [...new Set(transactions.map((t) => t.currency_symbol).filter(Boolean))];
   }, [transactions]);
 
   const networks = useMemo(() => {
-    return [
-      ...new Set(
-        transactions
-          .map((t) => t.network_name)
-          .filter(Boolean)
-      ),
-    ];
+    return [...new Set(transactions.map((t) => t.network_name).filter(Boolean))];
   }, [transactions]);
 
   const clearFilters = () => {
@@ -311,30 +465,15 @@ export default function Transactions() {
       : null;
   const totalVolumeCurrency = filteredTxCurrencies.length === 1 ? filteredTxCurrencies[0] : null;
 
-  const IN_TYPES = new Set([
-  "income",
-  "deposit",
-  "deposit_from_user",
-  "admin_deposit",
-  "commission",
-  ]);
-
-  const OUT_TYPES = new Set([
-    "withdraw",
-    "withdrawal",
-    "deposit_to_user",
-  ]);
-
+  const sortArrow = (key) => (sortKey === key ? (sortDir === "asc" ? "↑" : "↓") : "");
 
   // =========================
   // UI
   // =========================
   return (
-    <div style={styles.page}>
-      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-
+    <div className="tx-page">
       {/* ── HERO HUB (title/subtitle + filters + stat pills), centered on the page ── */}
-      <div style={styles.header}>
+      <div className="tx-header">
         <HeroHub
           title="Transactions Management"
           subtitle="Monitor deposits, withdrawals, purchases and blockchain activity"
@@ -417,474 +556,56 @@ export default function Transactions() {
       </div>
 
       {/* TABLE */}
-      <div style={styles.tableContainer}>
-        <div style={styles.tableScroll}>
-        <table style={styles.table}>
-
-          <thead>
-
-            <tr style={styles.tableHeader}>
-
-              <th style={thStyle}>TX</th>
-              <th style={thStyle}>Type</th>
-              <th style={thStyle}>User</th>
-              <th style={thStyle}>Order</th>
-              <th style={thStyle}>Product</th>
-              <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Created</th>
-              <th style={thStyle}>Wallet</th>
-              <th style={thStyle}>Hash</th>
-              <th style={thStyle}>Confirm</th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            {filteredTx.map((t) => {
-
-
-              const isIncome = IN_TYPES.has(t.type);
-              
-              const amountValue = Number(t.amount);
-              const typeColor = amountValue > 0 || isIncome ? "#10b981" : "#ef4444";
-
-
-              
-              const sign = amountValue > 0 || isIncome ? "+" : "-";
-
-
-              return (
-
-                <tr
-                  key={t.id}
-                  style={styles.row}
-                >
-
-                  {/* TX */}
-                  <td style={tdStyle}>
-                    <strong>
-                      #{t.id}
-                    </strong>
-                  </td>
-
-                  {/* TYPE */}
-                  <td style={tdStyle}>
-                    <span style={styles.typeBadge}>
-                      {t.type}
-                    </span>
-                  </td>
-
-                  {/* USER */}
-                  <td style={tdStyle}>
-                    <div
-                      onClick={() => openUser(t)}
-                      style={styles.userLink}
-                    >
-                      {t.username || "Unknown"}
-                    </div>
-
-                    <small style={styles.sub}>
-                      USER #{t.user_id}
-                    </small>
-                  </td>
-
-                  {/* ORDER */}
-                  <td style={tdStyle}>
-
-                    {t.order_id ? (
-                      <div
-                        onClick={() => openOrder(t)}
-                        style={styles.orderLink}
-                      >
-                        #{t.order_id}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-
-                  </td>
-
-                  {/* PRODUCT */}
-                  <td style={tdStyle}>
-
-                    <div
-                      style={{
-                        fontWeight: 600,
-                      }}
-                    >
-                      {t.product?.name ||  "-"}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 6,
-                        flexWrap: "wrap",
-                        marginTop: 6,
-                      }}
-                    >
-
-                      {t.plan && (
-                        <span
-                          style={styles.planBadge}
-                        >
-                          {t.plan}
-                        </span>
-                      )}
-
-
-
-                    </div>
-
-                  </td>
-
-                  {/* AMOUNT */}
-                  <td style={tdStyle}>
-
-                    <div
-                      style={{
-                        color: typeColor,
-                        fontWeight: 700
-                      }}
-                    >
-                {sign}
-                {fmt(Math.abs(t.amount), 4)}
-                            </div>
-                    
-
-                    <small style={styles.sub}>
-                      {t.currency_symbol}
-                      
-                    </small>
-                      {t.network_name && (
-                        <span
-                          style={{
-                            ...styles.networkBadge, marginLeft:6,
-                          }}
-                        >
-                          {t.network_name}
-                        </span>
-                      )}
-
-
-                  </td>
-
-
-
-                  {/* STATUS */}
-                  <td style={tdStyle}>
-
-                    <span
-                      style={{
-                        ...styles.statusBadge,
-
-                        background:
-                          t.status === "completed"
-                            ? "#10b98122"
-                            : t.status ===
-                              "pending"
-                            ? "#f59e0b22"
-                            : "#ef444422",
-
-                        color:
-                          t.status === "completed"
-                            ? "#34d399"
-                            : t.status ===
-                              "pending"
-                            ? "#fbbf24"
-                            : "#f87171",
-                      }}
-                    >
-                      {t.status}
-                    </span>
-
-                  </td>
-
-                  {/* CREATED */}
-                  <td style={tdStyle}>
-
-                    <small>{formatDate(t.created_at)}
-                    </small>
-
-                  </td>
-
-                  {/* WALLET */}
-                  <td style={tdStyle}>
-
-                    {t.wallet_address ? (
-                      <div style={styles.hashText}>
-                        {t.wallet_address.slice(
-                          0,
-                          8
-                        )}
-                        ...
-                        {t.wallet_address.slice(
-                          -6
-                        )}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-
-                  </td>
-
-                  {/* HASH */}
-                  <td style={tdStyle}>
-
-                    {t.tx_hash ? (
-                      <div style={styles.hashText}>
-                        {t.tx_hash.slice(0, 10)}
-                        ...
-                        {t.tx_hash.slice(-6)}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-
-                  </td>
-
-                  {/* CONFIRM */}
-                  <td style={tdStyle}>
-
-                    <span
-                      style={{
-                        color:
-                          Number(
-                            t.confirmations || 0
-                          ) > 0
-                            ? "#22c55e"
-                            : "#64748b",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {t.confirmations || 0}
-                    </span>
-
-                  </td>
-
-                </tr>
-              );
-            })}
-
-          </tbody>
-
-        </table>
-
-        {!loading && transactions.length > 0 && filteredTx.length === 0 && (
-            <div style={styles.empty}>
-              No transactions found
+      <div className="tx-table-container">
+        <div className="tx-table-scroll">
+          {/* Sticky sortable header — stays visible while the body scrolls */}
+          <div className="tx-table-head" style={{ gridTemplateColumns: COLS }}>
+            <div className={`tx-sortable${sortKey === "id" ? " is-active" : ""}`} onClick={() => handleSort("id")}>
+              TX {sortArrow("id")}
             </div>
+            <div className={`tx-sortable${sortKey === "type" ? " is-active" : ""}`} onClick={() => handleSort("type")}>
+              Type {sortArrow("type")}
+            </div>
+            <div className={`tx-sortable${sortKey === "user_id" ? " is-active" : ""}`} onClick={() => handleSort("user_id")}>
+              User {sortArrow("user_id")}
+            </div>
+            <div>References</div>
+            <div className={`tx-sortable${sortKey === "amount" ? " is-active" : ""}`} onClick={() => handleSort("amount")}>
+              Amount {sortArrow("amount")}
+            </div>
+            <div>Chain</div>
+            <div>Wallet</div>
+            <div>Hash</div>
+            <div className={`tx-sortable${sortKey === "confirmations" ? " is-active" : ""}`} onClick={() => handleSort("confirmations")}>
+              Conf. {sortArrow("confirmations")}
+            </div>
+            <div className={`tx-sortable${sortKey === "status" ? " is-active" : ""}`} onClick={() => handleSort("status")}>
+              Status {sortArrow("status")}
+            </div>
+            <div className={`tx-sortable${sortKey === "created_at" ? " is-active" : ""}`} onClick={() => handleSort("created_at")}>
+              Created {sortArrow("created_at")}
+            </div>
+          </div>
+
+          {/* Rows */}
+          <div className="tx-table-body">
+            {filteredTx.map((t) => (
+              <TransactionRow key={t.id} t={t} onOpenUser={openUser} onOpenOrder={openOrder} formatDate={formatDate} />
+            ))}
+          </div>
+
+          {!loading && transactions.length > 0 && filteredTx.length === 0 && (
+            <div className="tx-empty">No transactions found</div>
           )}
-
+        </div>
       </div>
-      </div>
-
-
-
 
       {/* SIDEBARS */}
-      {selectedUser && (
-        <UserSidebar
-          user={selectedUser}
-          onClose={() =>
-            setSelectedUser(null)
-          }
-          onRefresh={loadTransactions}
-        />
-      )}
+      {selectedUser && <UserSidebar user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={loadTransactions} />}
 
       {selectedOrder && (
-        <OrderSidebar
-          order={selectedOrder}
-          onClose={() =>
-            setSelectedOrder(null)
-          }
-          onRefresh={loadTransactions}
-          onOpenUser={openUser}
-        />
+        <OrderSidebar order={selectedOrder} onClose={() => setSelectedOrder(null)} onRefresh={loadTransactions} onOpenUser={openUser} />
       )}
-
     </div>
   );
 }
-
-const thStyle = {
-  textAlign: "left",
-  padding: "18px 16px",
-  color: "#94a3b8",
-  fontSize: 13,
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-
-const tdStyle = {
-  padding: "18px 16px",
-  borderBottom: "1px solid #1e293b",
-  verticalAlign: "middle",
-};
-
-const styles = {
-  page: {
-    padding: "0px",
-    background: "#020617",
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    color: "white",
-    boxSizing: "border-box",
-  },
-
-
-
-tableScroll: {
-  overflowY: "auto",
-  flex: 1,
-  minHeight: 0,
-},
-
-    title: { color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",   },
-  subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
-  header: {
-    display: "flex",
-    justifyContent: "flex-start",
-    width: "100%",
-    padding: "0px 0px 10px",
-    boxSizing: "border-box",
-  },
-
-  refreshBtn: {
-    display: "flex",
-    alignItems: "center",
-    background: "transparent",
-    border: "1px solid #313d58ff",
-    borderRadius: 10,
-    padding: "8px 14px",
-    color: "#6c798dff",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 13,
-  },
-
- filtersContainer: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 14,
-    marginBottom: 24,
-    flexWrap: "wrap",
-  },
-
-  searchInput: {
-    flex: 1,
-    minWidth: 260,
-    maxWidth: 320,
-    background: "#0f172a1f",
-    border: "1px solid #1e293b",
-    color: "white",
-    padding: "10px 14px",
-    borderRadius: 12,
-    outline: "none",
-  },
-
-  filterInput: {
-    background:"#0a1020", border:"1px solid rgba(255,255,255,.07)", color:"white",
-    borderRadius:8, padding:"6px 10px", fontSize:11, outline:"none", minWidth:80,
-  },
-
-  tableContainer: {
-    background: "#0b1424",
-    border: "1px solid #313d58bc",
-    borderRadius: 15,
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    
-    margin: "10px 100px 20px 100px",
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-
-  tableHeader: {
-    background: "#111827",
-  },
-
-  row: {
-    borderBottom: "1px solid #1e293b",
-    cursor: "pointer",
-    transition: "0.2s",
-  },
-
-  userLink: {
-    color: "#60a5fa",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
-  orderLink: {
-    color: "#34d399",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-
-  sub: {
-    color: "#64748b",
-    fontSize: 11,
-  },
-
-  typeBadge: {
-    background: "#1e293b",
-    padding: "6px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-
-  planBadge: {
-    background: "#172554",
-    color: "#93c5fd",
-    padding: "5px 10px",
-    borderRadius: 999,
-    fontSize: 11,
-  },
-
-  networkBadge: {
-    background: "#1e293b",
-    padding: "5px 10px",
-    borderRadius: 999,
-    fontSize: 11,
-  },
-
-  statusBadge: {
-    padding: "6px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 700,
-    textTransform: "capitalize",
-  },
-
-  hashText: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    color: "#cbd5e1",
-  },
-
-  empty: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    minHeight: "400px",
-    textAlign: "center",
-    color: "#64748b",
-  },
-
-
-};

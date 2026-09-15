@@ -12,10 +12,10 @@ const LANGUAGE_OPTIONS = [
 ];
 
 const SERVICE_CATALOG = [
-  { key: "products.view", label: "Products" },
+  { key: "products.service", label: "Products" },
   { key: "orders.view", label: "Orders" },
-  { key: "exchange.view", label: "Exchange" },
-  { key: "wire_transfer.view", label: "Wire Transfer" },
+  { key: "exchange.service", label: "Exchange" },
+  { key: "transfer.service", label: "Wire Transfer" },
 ];
 
 const emptyBankForm = () => ({
@@ -930,7 +930,7 @@ export default function TelegramManagement() {
   };
 
   const isMaster = role === "master";
-  const hasPersonalBotAccess = hasPermission(currentUser, "telegram_personal_bot");
+  const hasPersonalBotAccess = hasPermission(currentUser, "telegram.personal.bot");
 
   const availableTabs = [
     hasPersonalBotAccess && { key: "my_bot", label: "My Bot", icon: <Bot size={14} /> },

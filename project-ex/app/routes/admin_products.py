@@ -28,7 +28,7 @@ def get_admin(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not has_access(user, "products.view"):
+    if not has_access(user, "products.service"):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
@@ -72,7 +72,7 @@ def create_product(
     admin=Depends(get_admin)
     ):
 
-    if not has_access(admin, "products.create"):
+    if not has_access(admin, "products.service"):
         raise HTTPException(403, "Access denied")
 
     if payload.category_id:
@@ -125,7 +125,7 @@ def toggle_product_active(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "products.management"):
+    if not has_access(admin, "products.service"):
         raise HTTPException(status_code=403, detail="Access denied")
 
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -242,7 +242,7 @@ def delete_product(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "products.delete"):
+    if not has_access(admin, "products.edit"):
         raise HTTPException(403, "Access denied")
     
     product = db.query(Product).filter(

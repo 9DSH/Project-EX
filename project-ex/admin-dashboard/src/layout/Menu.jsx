@@ -187,7 +187,7 @@ export default function Menu({ pinned, setPinned }) {
 
 
           <div style={submenu(expanded && open.platforms)}>
-            {hasPermission(user, "telegram_personal_bot") && (
+            {hasPermission(user, "telegram.personal.bot") && (
               <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))}>
                 <Bot size={14} style={{ flexShrink: 0 }} />
                 {label("Telegram Management")}
@@ -208,21 +208,21 @@ export default function Menu({ pinned, setPinned }) {
     </div>
 
 
-            {hasPermission(user, "products.manage")  && (
+            {hasPermission(user, "products.service")  && (
         <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))} title="Products">
           <Package size={17} style={{ flexShrink: 0 }} />
           {label("Products")}
         </Link>
       )}
 
-      {hasPermission(user, "exchange.view") && hasPermission(user, "exchange.manage") && (
+      {hasPermission(user, "exchange.service") && (
         <Link to="/exchange_dashboard" style={linkStyle(isActive("/exchange_dashboard"))} title="Exchange">
           <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
           {label("Exchange")}
         </Link>
       )}
 
-      {hasPermission(user, "wire_transfer.view") && hasPermission(user, "wire_transfer.manage") && (
+      {hasPermission(user, "transfer.service") && (
         <Link to="/wire_transfer" style={linkStyle(isActive("/wire_transfer"))} title="Wire Transfer">
           <Landmark size={17} style={{ flexShrink: 0 }} />
           {label("Wire Transfer")}
@@ -233,7 +233,7 @@ export default function Menu({ pinned, setPinned }) {
           <div style={sectionTitle}>FINANCE</div>
           <div style={sectionDivider} />
         </div>
-      {hasPermission(user, "finance.assets") && (
+      {hasPermission(user, "platform.asset") && (
         <Link to="/asset_manager" style={linkStyle(isActive("/asset_manager"))} title="Asset Management">
           <Wallet size={17} style={{ flexShrink: 0 }} />
           {label("Asset Management")}

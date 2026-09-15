@@ -1057,7 +1057,7 @@ const ProductCard = ({
           )}
 
           {/* Toggle active */}
-          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.management") && (
+          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.service") && (
             <button
               className="pm-cardBtnToggle"
               style={{
@@ -1073,7 +1073,7 @@ const ProductCard = ({
           )}
 
           {/* Delete */}
-          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.delete") && (
+          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.edit") && (
             <button className="pm-cardBtnDelete" onClick={() => onDelete(p.id)}>
               <Trash2 size={12} />
             </button>
@@ -1325,7 +1325,7 @@ const ProductDetailPanel = ({ product, categories, safeExtra, currentUser, viewM
                 <Edit3 size={11} style={{ marginRight: 5 }} />Edit
               </button>
             )}
-            {hasPermission(currentUser, "products.management") && (
+            {hasPermission(currentUser, "products.service") && (
               <button
                 className="pm-actionBtn" style={{ flex: 1, background: product.is_active ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)", borderColor: product.is_active ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)", color: product.is_active ? "#f87171" : "#4ade80" }}
                 onClick={() => onToggleActive(product.id, !product.is_active)}
@@ -1333,7 +1333,7 @@ const ProductDetailPanel = ({ product, categories, safeExtra, currentUser, viewM
                 {product.is_active ? <><PowerOff size={11} style={{ marginRight: 5 }}  />Disable</> : <> <Power size={11} style={{ marginRight: 5 }} />Enable</>}
               </button>
             )}
-            {hasPermission(currentUser, "products.delete") && (
+            {hasPermission(currentUser, "products.edit") && (
               <button className="pm-actionBtn" style={{ background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(product.id)}>
                 <Trash2 size={12} />
               </button>
@@ -1864,7 +1864,7 @@ export default function ProductsManagement() {
 
   // ── TABS CONFIG (product filter, moved into Hero dropdown — master only) ──
   const tabs = [
-    hasPermission(currentUser, "products.view") && { id: "all", label: "Products", icon: Package, count: allProducts.length, accent: "#3b82f6" },
+    hasPermission(currentUser, "products.service") && { id: "all", label: "Products", icon: Package, count: allProducts.length, accent: "#3b82f6" },
     { id: "my", label: "My Products", icon: ShieldCheck, count: myProducts.length, accent: "#8b5cf6" },
     currentUser.role === "master" && { id: "pending", label: "Pending Approval", icon: Clock, count: pendingProducts.length, accent: "#eab308" },
     currentUser.role === "master" && { id: "rejected", label: "Rejected", icon: XCircle, count: rejectedProducts.length, accent: "#ef4444" },
@@ -2070,7 +2070,7 @@ export default function ProductsManagement() {
 
             {/* Right: Add button */}
             <PermButton
-              permission="products.create"
+              permission="products.service"
               onClick={() =>
                 setPanel(panel === "add-product" ? null : "add-product")
               }

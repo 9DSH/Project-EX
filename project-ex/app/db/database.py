@@ -590,6 +590,7 @@ def ensure_schema():
         _migrate_exchange_rate_history_changed_by(conn)
         _migrate_conversations_kind(conn)
         _migrate_subscription_columns(conn)
+        _migrate_access_point_required_plans(conn)
 
 def _rls_enabled(conn, table_name: str) -> bool:
     return bool(
@@ -715,7 +716,7 @@ def _ensure_global_eligibility_function(conn):
             WHERE user_id = check_admin_id
               AND (
                 role = 'master'
-                OR access_points::jsonb @> '["telegram_global_bot_access"]'::jsonb
+                OR access_points::jsonb @> '["telegram.global.bot"]'::jsonb
               )
           );
         $$;
@@ -788,13 +789,14 @@ def _recompute_wire_order_admin_from_pair(conn) -> None:
 
 def _migrate_subscription_columns(conn) -> None:
     """
-    Adds the v2 subscription columns (required_plan_id on the access point
-    catalog, discount_percent on both price tables, duration_days on
-    plans) to tables that may already exist from an earlier deployment of
-    this feature, without touching any existing rows/history.
+    Adds the v2 subscription columns (discount_percent on both price
+    tables, duration_days on plans) to tables that may already exist from
+    an earlier deployment of this feature, without touching any existing
+    rows/history. required_plan_id is handled separately by
+    _migrate_access_point_required_plans, which migrates it into a
+    many-to-many table instead of re-adding the old single-FK column.
     """
     targets = [
-        ("access_point_catalog", "required_plan_id", "INTEGER"),
         ("access_point_prices", "discount_percent", "NUMERIC(5,2) DEFAULT 0"),
         ("plans", "duration_days", "INTEGER DEFAULT 30"),
         ("plan_prices", "discount_percent", "NUMERIC(5,2) DEFAULT 0"),
@@ -809,19 +811,70 @@ def _migrate_subscription_columns(conn) -> None:
             continue
         conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
 
-    if _table_exists(conn, "access_point_catalog") and _column_exists(conn, "access_point_catalog", "required_plan_id"):
+
+def _migrate_access_point_required_plans(conn) -> None:
+    """
+    v3 of the access-point plan-gating feature: replaces the single
+    access_point_catalog.required_plan_id column with a many-to-many
+    access_point_required_plans join table, so one access point can be
+    unlocked by several plans at once (e.g. "Starter OR Business" for a
+    Global Bot add-on). Any existing single-plan links are copied into
+    the join table before the legacy column + its FK are dropped, so no
+    prior gating configuration is lost.
+    """
+    if not _table_exists(conn, "access_point_catalog") or not _table_exists(conn, "plans"):
+        print("[ensure_schema] skip access_point_required_plans: base tables missing")
+        return
+
+    if not _table_exists(conn, "access_point_required_plans"):
+        conn.execute(text(
+            """
+            CREATE TABLE access_point_required_plans (
+                access_point_id INTEGER NOT NULL REFERENCES access_point_catalog(id) ON DELETE CASCADE,
+                plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+                PRIMARY KEY (access_point_id, plan_id)
+            )
+            """
+        ))
+        print("[ensure_schema] created access_point_required_plans")
+
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_access_point_required_plans_plan_id "
+            "ON access_point_required_plans (plan_id)"
+        )
+    )
+
+    # Legacy single-plan column may still be present from an earlier
+    # deployment (or from _migrate_subscription_columns runs prior to
+    # this function existing) — backfill it into the join table, then
+    # drop it so the app's model (which no longer declares the column)
+    # stays in sync with the schema.
+    if _column_exists(conn, "access_point_catalog", "required_plan_id"):
+        conn.execute(text(
+            """
+            INSERT INTO access_point_required_plans (access_point_id, plan_id)
+            SELECT id, required_plan_id FROM access_point_catalog
+            WHERE required_plan_id IS NOT NULL
+            ON CONFLICT DO NOTHING
+            """
+        ))
+
         fk_name = "fk_access_point_catalog_required_plan"
-        if not _constraint_exists(conn, fk_name) and _table_exists(conn, "plans"):
-            conn.execute(text(f"SAVEPOINT sp_{fk_name}"))
+        if _constraint_exists(conn, fk_name):
+            conn.execute(text(f"SAVEPOINT sp_drop_{fk_name}"))
             try:
-                conn.execute(
-                    text(
-                        "ALTER TABLE access_point_catalog "
-                        f"ADD CONSTRAINT {fk_name} "
-                        "FOREIGN KEY (required_plan_id) REFERENCES plans(id)"
-                    )
-                )
-                conn.execute(text(f"RELEASE SAVEPOINT sp_{fk_name}"))
+                conn.execute(text(f"ALTER TABLE access_point_catalog DROP CONSTRAINT {fk_name}"))
+                conn.execute(text(f"RELEASE SAVEPOINT sp_drop_{fk_name}"))
             except Exception as e:
-                conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_{fk_name}"))
-                print(f"[ensure_schema] skip FK {fk_name}: {e}")
+                conn.execute(text(f"ROLLBACK TO SAVEPOINT sp_drop_{fk_name}"))
+                print(f"[ensure_schema] skip dropping FK {fk_name}: {e}")
+
+        conn.execute(text("SAVEPOINT sp_drop_required_plan_id"))
+        try:
+            conn.execute(text("ALTER TABLE access_point_catalog DROP COLUMN required_plan_id"))
+            conn.execute(text("RELEASE SAVEPOINT sp_drop_required_plan_id"))
+            print("[ensure_schema] migrated access_point_catalog.required_plan_id -> access_point_required_plans")
+        except Exception as e:
+            conn.execute(text("ROLLBACK TO SAVEPOINT sp_drop_required_plan_id"))
+            print(f"[ensure_schema] skip dropping access_point_catalog.required_plan_id: {e}")

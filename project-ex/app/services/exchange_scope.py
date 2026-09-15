@@ -8,8 +8,8 @@ from app.models.user import User
 
 
 def can_view_all_admins(admin: dict) -> bool:
-    """Master, or any admin individually granted platform_exchange_management."""
-    return is_master(admin) or has_access(admin, "platform_exchange_management")
+    """Master, or any admin individually granted platform.service.management."""
+    return is_master(admin) or has_access(admin, "platform.service.management")
 
 
 def resolve_admin_scope(

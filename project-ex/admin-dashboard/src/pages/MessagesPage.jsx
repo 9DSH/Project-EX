@@ -406,7 +406,7 @@ export default function MessagesPage() {
             } catch (e) {
             accessPoints = rawAccessPoints;
             }
-    const canViewAllUsers = hasPermission(accessPoints, "users.view");
+    const canViewAllUsers = hasPermission(accessPoints, "all.users.view");
     const canBroadcast =  hasPermission(accessPoints, "broadcast.message");
 
 

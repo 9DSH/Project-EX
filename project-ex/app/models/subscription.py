@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     UniqueConstraint,
     Text,
+    Table,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -15,10 +16,22 @@ from datetime import datetime
 from app.db.database import Base
 
 
+# Many-to-many: an access point can be gated behind ANY ONE of several
+# plans (its "minimum plan requirement" set) — e.g. a "Global Bot" add-on
+# might be purchasable by admins on either the Starter or the Business
+# plan. Empty set = purchasable by any admin regardless of plan.
+access_point_required_plans = Table(
+    "access_point_required_plans",
+    Base.metadata,
+    Column("access_point_id", Integer, ForeignKey("access_point_catalog.id", ondelete="CASCADE"), primary_key=True),
+    Column("plan_id", Integer, ForeignKey("plans.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 # =========================================================
-# ACCESS POINT CATALOG (root list — key/label + an optional
-# required plan; pricing is per active currency/network pair
-# via AccessPointPrice)
+# ACCESS POINT CATALOG (root list — key/label + zero or more
+# eligible plans; pricing is per active currency/network pair
+# via AccessPointPrice, and MAY be zero for a free access point)
 # =========================================================
 class AccessPointCatalog(Base):
     __tablename__ = "access_point_catalog"
@@ -30,17 +43,18 @@ class AccessPointCatalog(Base):
 
     is_active = Column(Boolean, default=True)
 
-    # If set, an admin must hold an active/grace subscription to THIS plan
-    # before they're allowed to purchase this access point as an add-on.
-    # NULL = purchasable by any admin regardless of plan. This relationship
-    # IS the "Plan -> Available Add-ons" link (queried in reverse), so it
-    # is never duplicated elsewhere.
-    required_plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True)
-
     created_at = Column(DateTime, default=datetime.utcnow)
 
     prices = relationship("AccessPointPrice", back_populates="access_point", cascade="all, delete-orphan")
-    required_plan = relationship("Plan", foreign_keys=[required_plan_id])
+
+    # An admin qualifies to purchase this add-on if their current plan is
+    # ANY of these. Empty list = purchasable by any admin regardless of
+    # plan. This relationship IS the "Plan -> Available Add-ons" link
+    # (queried in reverse via Plan.unlocks_addons), so it is never
+    # duplicated elsewhere.
+    required_plans = relationship(
+        "Plan", secondary=access_point_required_plans, backref="unlocks_addons"
+    )
 
 
 class AccessPointPrice(Base):

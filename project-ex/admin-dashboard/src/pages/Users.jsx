@@ -71,10 +71,10 @@ export default function Users() {
 
   // ── Permission gates for the HeroHub "users" filter ────────
   const isMaster = currentUser.role === "master";
-  const canViewAllUsers = isMaster || hasPermission(currentUser, "users.view");
+  const canViewAllUsers = isMaster || hasPermission(currentUser, "all.users.view");
   const canViewAdmins = isMaster || hasPermission(currentUser, "admins.view");
 
-  // Admins without users.view access only ever see their own users —
+  // Admins without all.users.view access only ever see their own users —
   // keep viewMode pinned there so the (hidden) filter can't drift.
   useEffect(() => {
     if (!canViewAllUsers && viewMode !== "myUsers") setViewMode("myUsers");
@@ -271,7 +271,7 @@ export default function Users() {
               {
                 key: "viewMode",
                 label: "Users", 
-                // only master / admins with "users.view" get to switch between
+                // only master / admins with "all.users.view" get to switch between
                 // All Users, My Users and Admins — everyone else is pinned to
                 // their own users and never sees this filter at all.
                 visible: canViewAllUsers,
@@ -288,7 +288,7 @@ export default function Users() {
               {
                 key: "totalUsers",
                 icon: UsersIcon,
-                // for master / users.view admins this reflects whichever
+                // for master / all.users.view admins this reflects whichever
                 // filter is selected (all / my / admins); everyone else
                 // just sees their own users total.
                 label: "Total Users",
@@ -302,7 +302,7 @@ export default function Users() {
             actions={[
               {
                 key: "addUser",
-                visible: hasPermission(currentUser, "users.create"),
+                visible: hasPermission(currentUser, "users.manage"),
                 label: "Add User",
                 icon: UserPlus,
                 active: panelOpen,
@@ -334,7 +334,7 @@ export default function Users() {
                 {[
                   { val: "user", label: "User", icon: User },
 
-                  ...(hasPermission(currentUser, "users.create")
+                  ...(hasPermission(currentUser, "users.manage")
                     ? [{ val: "admin", label: "Admin", icon: Shield }]
                     : []),
                 ].map(({ val, label, icon: Icon }) => (
@@ -384,7 +384,7 @@ export default function Users() {
                     color="#22c55e"
                   />
 
-                  {hasPermission("users.create") && (
+                  {hasPermission("users.manage") && (
                     <Toggle
                       checked={newRole === "master"}
                       onChange={(v) => {
@@ -403,7 +403,7 @@ export default function Users() {
                 </div>
 
                 {/* ══ PERMISSION TABS SYSTEM (fitted to 360px sidebar) ══ */}
-                {hasPermission(currentUser, "users.create") && newRole === "admin" && (
+                {hasPermission(currentUser, "users.manage") && newRole === "admin" && (
                   <div className="users-permbox">
                     {/* Header */}
                     <div className="users-permbox-header">

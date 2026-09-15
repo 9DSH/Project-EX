@@ -159,7 +159,7 @@ def admin_preview_exchange(
     admin=Depends(get_admin)
 ):
 
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.create"):
         raise HTTPException(403, "Access denied")
     
     amount = Decimal(str(payload.amount))
@@ -289,7 +289,7 @@ def admin_execute_exchange(
     admin=Depends(get_admin)
 ):
 
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.create"):
         raise HTTPException(403, "Access denied")
 
     if payload.amount is None or payload.amount <= 0:
@@ -369,7 +369,7 @@ def get_rate_only(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.create"):
         raise HTTPException(403, "Access denied")
 
     pair = _resolve_pair_for_admin(db, admin, payload.from_currency, payload.to_currency)
@@ -406,8 +406,8 @@ def list_filterable_admins(
         eligible = (
             u.role == "master"
             or role_default == "*"
-            or "exchange.manage" in role_default
-            or "exchange.manage" in access_points
+            or "exchange.service" in role_default
+            or "exchange.service" in access_points
         )
         if eligible:
             result.append({
@@ -431,7 +431,7 @@ def get_pairs(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
@@ -486,7 +486,7 @@ def create_pair(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     if payload.from_currency_id == payload.to_currency_id:
@@ -544,7 +544,7 @@ def update_pair(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
@@ -613,7 +613,7 @@ def delete_pair(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
@@ -637,7 +637,7 @@ def admin_all_orders(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
@@ -697,7 +697,7 @@ def admin_user_exchange_orders(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "exchange.manage"):
+    if not has_access(admin, "exchange.service"):
         raise HTTPException(403, "Access denied")
 
     target_user = db.query(User).filter(User.user_id == user_id).first()
@@ -778,7 +778,7 @@ def get_failed_sweeps(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not (has_access(admin, "exchange.manage") and has_access(admin, "finance.manage")):
+    if not (has_access(admin, "exchange.service") and has_access(admin, "balance.manage")):
         raise HTTPException(403, "Access denied")
 
     scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
@@ -843,7 +843,7 @@ def manual_retry_sweep(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not (has_access(admin, "exchange.manage") and has_access(admin, "finance.manage")):
+    if not (has_access(admin, "exchange.service") and has_access(admin, "balance.manage")):
         raise HTTPException(403, "Access denied")
 
     from app.services.sweep_service import retry_failed_sweeps

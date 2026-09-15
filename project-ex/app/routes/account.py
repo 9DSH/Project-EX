@@ -66,7 +66,7 @@ def check_global_bot_eligibility(
     if not admin_row:
         return {"eligible": False}
 
-    eligible = admin_row.role == "master" or "telegram_global_bot_access" in (admin_row.access_points or [])
+    eligible = admin_row.role == "master" or "telegram.global.bot" in (admin_row.access_points or [])
     return {"eligible": eligible}
 
 @router.get("/me")
@@ -160,7 +160,7 @@ def get_active_bank_account(
     current_user=Depends(get_current_user),
 ):
     normalized_kind = (kind or "wires").strip().lower()
-    if normalized_kind not in {"general", "wires"}:
+    if normalized_kind not in {"telegram_bot", "wires"}:
         raise HTTPException(400, "kind must be one of: general, wires")
 
     account = (
@@ -169,7 +169,7 @@ def get_active_bank_account(
             PlatformBankAccount.is_active == True,
             or_(
                 PlatformBankAccount.platform_kind == normalized_kind,
-                PlatformBankAccount.platform_kind.is_(None) if normalized_kind == "general" else False,
+                PlatformBankAccount.platform_kind.is_(None) if normalized_kind == "telegram_bot" else False,
             ),
         )
         .order_by(PlatformBankAccount.id.desc())
@@ -192,6 +192,6 @@ def get_active_bank_account(
             "bank_holder_name": account.bank_holder_name,
             "bank_card_number": account.bank_card_number,
             "bank_sheba": account.bank_sheba,
-            "platform_kind": account.platform_kind or "general",
+            "platform_kind": account.platform_kind or "telegram_bot",
         }
     }

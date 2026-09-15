@@ -265,7 +265,7 @@ def _get_active_platform_bank_account(db: Session):
     return {
         "id": account.id,
         "admin_id": account.admin_id,
-        "platform_kind": account.platform_kind or "general",
+        "platform_kind": account.platform_kind or "telegram_bot",
         "bank_name": account.bank_name,
         "bank_holder_name": account.bank_holder_name,
         "bank_card_number": account.bank_card_number,

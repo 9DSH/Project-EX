@@ -31,7 +31,7 @@ def get_admin(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not has_access(user, "dashboard.view"):
+    if not has_access(user, "send.message"):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
@@ -304,7 +304,7 @@ def get_users(
     admin=Depends(get_admin)
 ):  
     
-    if has_access(admin, "users.view"):
+    if has_access(admin, "all.users.view"):
         users = (
             db.query(User)
             .filter(

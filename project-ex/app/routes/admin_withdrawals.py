@@ -34,7 +34,7 @@ router = APIRouter(
 def _get_admin_user(user=Depends(get_current_user)):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not has_access(user, "finance.manage"):
+    if not has_access(user, "balance.manage"):
         raise HTTPException(status_code=403, detail="Access denied")
     return user
 

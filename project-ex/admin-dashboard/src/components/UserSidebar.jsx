@@ -235,8 +235,8 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     canViewOrders: hasPermission(currentUser, "orders.view"),
     canManageOrders: hasPermission(currentUser, "orders.manage"),
     canViewExchange: hasPermission(currentUser, "exchange.view"),
-    canManageExchange: hasPermission(currentUser, "exchange.manage"),
-    canEditUser: hasPermission(currentUser, "users.edit"),
+    canManageExchange: hasPermission(currentUser, "exchange.service"),
+    canEditUser: hasPermission(currentUser, "users.manage"),
   }), [currentUser]);
 
 

@@ -348,7 +348,7 @@ def get_pending_orders(
     # -------------------------
     if not has_access(admin, "orders.manage"):
         raise HTTPException(403, "Access denied")
-    include_buyer_detail = has_access(admin, "users.view") 
+    include_buyer_detail = has_access(admin, "all.users.view") 
     orders = db.query(OrderItem).filter(OrderItem.status == "pending").order_by(OrderItem.created_at.desc()).all()
     return [build_order_response(o, db, include_buyer_detail) for o in orders]
 
@@ -366,7 +366,7 @@ def get_all_orders(
     # -------------------------
     if not has_access(admin, "orders.view"):
         raise HTTPException(403, "Access denied")
-    include_buyer_detail = has_access(admin, "users.view") 
+    include_buyer_detail = has_access(admin, "all.users.view") 
     orders = db.query(OrderItem).order_by(OrderItem.created_at.desc()).all()
     return [build_order_response(o, db, include_buyer_detail) for o in orders]
 

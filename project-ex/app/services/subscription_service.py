@@ -12,7 +12,9 @@ Core of the admin subscription/access-point monetization system.
 2. BILLING — subscribe/switch/buy-addon/cancel-addon, all funneled through
    one _charge() helper that mirrors the balance-check/deduct pattern used
    in execute_exchange() and admin_users.update_balance(). Add-on
-   purchases are gated server-side by AccessPointCatalog.required_plan_id.
+   purchases are gated server-side by AccessPointCatalog.required_plans —
+   an admin qualifies if their current plan is ANY ONE of the plans
+   listed there (empty list = open to everyone).
 """
 
 import json
@@ -248,17 +250,20 @@ def get_active_subscription(db: Session, admin_id: int) -> Optional[AdminSubscri
 
 
 def _assert_required_plan(db: Session, admin_id: int, ap: AccessPointCatalog):
-    """Server-side enforcement: an add-on with a required plan can only be
-    purchased/renewed by an admin currently holding that plan (active or
-    in grace — grace still counts as "holding" it, since access isn't
-    revoked yet)."""
-    if not ap.required_plan_id:
+    """Server-side enforcement: an add-on with one or more required plans
+    can only be purchased/renewed by an admin currently holding ANY ONE
+    of those plans (active or in grace — grace still counts as "holding"
+    it, since access isn't revoked yet). No required plans = open to
+    everyone."""
+    required_plans = ap.required_plans
+    if not required_plans:
         return
 
     sub = get_active_subscription(db, admin_id)
-    if not sub or sub.plan_id != ap.required_plan_id or sub.status not in ACTIVE_LIKE_STATUSES:
-        plan_name = ap.required_plan.name if ap.required_plan else f"#{ap.required_plan_id}"
-        raise HTTPException(403, f"This add-on requires an active '{plan_name}' subscription")
+    required_ids = {p.id for p in required_plans}
+    if not sub or sub.plan_id not in required_ids or sub.status not in ACTIVE_LIKE_STATUSES:
+        plan_names = ", ".join(p.name for p in required_plans)
+        raise HTTPException(403, f"This add-on requires one of these plans: {plan_names}")
 
 
 # =========================================================
@@ -373,6 +378,18 @@ def subscribe_to_plan(
     return sub
 
 
+def _assert_not_already_included(db: Session, admin_id: int, ap: AccessPointCatalog):
+    """An access point already granted for free as a FIXED benefit of the
+    admin's current plan cannot also be bought as a paid add-on."""
+    already_included = db.query(AdminAccessGrant).filter(
+        AdminAccessGrant.admin_id == admin_id,
+        AdminAccessGrant.access_point_key == ap.key,
+        AdminAccessGrant.source == SOURCE_PLAN,
+    ).first()
+    if already_included:
+        raise HTTPException(400, "This access point is already included in your current plan and doesn't need to be purchased.")
+
+
 def buy_addon(db: Session, admin_id: int, access_point_id: int, currency_id: int, network_id: int):
     ap = db.query(AccessPointCatalog).filter(
         AccessPointCatalog.id == access_point_id, AccessPointCatalog.is_active == True  # noqa: E712
@@ -381,6 +398,7 @@ def buy_addon(db: Session, admin_id: int, access_point_id: int, currency_id: int
         raise HTTPException(404, "Access point not found or inactive")
 
     _assert_required_plan(db, admin_id, ap)
+    _assert_not_already_included(db, admin_id, ap)
 
     price, discount = _resolve_addon_price(db, access_point_id, currency_id, network_id)
 

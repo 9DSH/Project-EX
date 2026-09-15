@@ -29,6 +29,7 @@ from app.services.subscription_service import (
     buy_addon,
     cancel_addon,
     effective_price,
+    SOURCE_PLAN,
 )
 
 router = APIRouter(prefix="/admin/subscriptions", tags=["Admin Subscriptions"])
@@ -53,20 +54,23 @@ class AccessPointCreate(BaseModel):
     key: str
     label: str
     is_active: bool = True
-    required_plan_id: Optional[int] = None
+    # Minimum-plan requirement: an admin on ANY one of these plans may buy
+    # this add-on. Empty list = open to everyone.
+    required_plan_ids: list[int] = []
 
 
 class AccessPointUpdate(BaseModel):
     label: Optional[str] = None
     is_active: Optional[bool] = None
-    required_plan_id: Optional[int] = None
-    clear_required_plan: bool = False
+    # When provided (including []), fully replaces the eligible-plan set.
+    # Omit the field entirely to leave it untouched.
+    required_plan_ids: Optional[list[int]] = None
 
 
 class PriceUpsert(BaseModel):
     currency_id: int
     network_id: int
-    price: float
+    price: float = 0          # 0 = free for this currency/network pair
     discount_percent: float = 0
     is_active: bool = True
 
@@ -140,14 +144,14 @@ def _serialize_access_point(ap: AccessPointCatalog):
         "key": ap.key,
         "label": ap.label,
         "is_active": ap.is_active,
-        "required_plan_id": ap.required_plan_id,
-        "required_plan_name": ap.required_plan.name if ap.required_plan else None,
+        "required_plan_ids": [p.id for p in ap.required_plans],
+        "required_plans": [{"id": p.id, "name": p.name} for p in ap.required_plans],
         "prices": [_serialize_price(p) for p in ap.prices],
     }
 
 
 def _serialize_plan(plan: Plan, db: Session):
-    addons = db.query(AccessPointCatalog).filter(AccessPointCatalog.required_plan_id == plan.id).all()
+    addons = db.query(AccessPointCatalog).filter(AccessPointCatalog.required_plans.any(id=plan.id)).all()
     return {
         "id": plan.id,
         "name": plan.name,
@@ -240,16 +244,20 @@ def create_access_point(payload: AccessPointCreate, db: Session = Depends(get_db
     if existing:
         raise HTTPException(400, "Access point key already exists")
 
-    if payload.required_plan_id is not None:
-        if not db.query(Plan).filter(Plan.id == payload.required_plan_id).first():
-            raise HTTPException(404, "Required plan not found")
+    required_plans = []
+    if payload.required_plan_ids:
+        required_plans = db.query(Plan).filter(Plan.id.in_(payload.required_plan_ids)).all()
+        found_ids = {p.id for p in required_plans}
+        missing = set(payload.required_plan_ids) - found_ids
+        if missing:
+            raise HTTPException(404, f"Required plan(s) not found: {sorted(missing)}")
 
     ap = AccessPointCatalog(
         key=payload.key,
         label=payload.label,
         is_active=payload.is_active,
-        required_plan_id=payload.required_plan_id,
     )
+    ap.required_plans = required_plans
     db.add(ap)
     db.commit()
     db.refresh(ap)
@@ -267,16 +275,39 @@ def update_access_point(access_point_id: int, payload: AccessPointUpdate, db: Se
     if payload.is_active is not None:
         ap.is_active = payload.is_active
 
-    if payload.clear_required_plan:
-        ap.required_plan_id = None
-    elif payload.required_plan_id is not None:
-        if not db.query(Plan).filter(Plan.id == payload.required_plan_id).first():
-            raise HTTPException(404, "Required plan not found")
-        ap.required_plan_id = payload.required_plan_id
+    if payload.required_plan_ids is not None:
+        if payload.required_plan_ids:
+            plans = db.query(Plan).filter(Plan.id.in_(payload.required_plan_ids)).all()
+            found_ids = {p.id for p in plans}
+            missing = set(payload.required_plan_ids) - found_ids
+            if missing:
+                raise HTTPException(404, f"Required plan(s) not found: {sorted(missing)}")
+            ap.required_plans = plans
+        else:
+            ap.required_plans = []
 
     db.commit()
     db.refresh(ap)
     return _serialize_access_point(ap)
+
+
+@router.delete("/access-points/{access_point_id}")
+def delete_access_point(access_point_id: int, db: Session = Depends(get_db_rls), master=Depends(get_master)):
+    ap = db.query(AccessPointCatalog).filter(AccessPointCatalog.id == access_point_id).first()
+    if not ap:
+        raise HTTPException(404, "Access point not found")
+
+    in_use = db.query(AdminAddon).filter(AdminAddon.access_point_id == access_point_id).count()
+    if in_use > 0:
+        raise HTTPException(400, "Access point has active purchases and cannot be deleted. Deactivate it instead.")
+
+    linked_to_plan = db.query(PlanAccessPoint).filter(PlanAccessPoint.access_point_id == access_point_id).count()
+    if linked_to_plan > 0:
+        raise HTTPException(400, "Access point is included as a fixed benefit in one or more plans. Remove it from those plans first.")
+
+    db.delete(ap)
+    db.commit()
+    return {"success": True}
 
 
 @router.put("/access-points/{access_point_id}/prices")
@@ -398,9 +429,9 @@ def delete_plan(plan_id: int, db: Session = Depends(get_db_rls), master=Depends(
     if in_use > 0:
         raise HTTPException(400, "Plan has active subscribers and cannot be deleted. Deactivate it instead.")
 
-    linked_addons = db.query(AccessPointCatalog).filter(AccessPointCatalog.required_plan_id == plan_id).count()
+    linked_addons = db.query(AccessPointCatalog).filter(AccessPointCatalog.required_plans.any(id=plan_id)).count()
     if linked_addons > 0:
-        raise HTTPException(400, "Plan is required by one or more add-ons. Unlink them first.")
+        raise HTTPException(400, "Plan is listed as a requirement on one or more add-ons. Unlink it from those add-ons first.")
 
     db.delete(plan)
     db.commit()
@@ -570,11 +601,27 @@ def revoke_admin_access(admin_id: int, payload: GrantPayload, db: Session = Depe
 # =========================================================
 @router.get("/catalog")
 def browse_catalog(db: Session = Depends(get_db_rls), admin=Depends(get_admin_self)):
+    admin_id = admin["user_id"]
     plans = db.query(Plan).filter(Plan.is_active == True).order_by(Plan.id.asc()).all()  # noqa: E712
     access_points = db.query(AccessPointCatalog).filter(AccessPointCatalog.is_active == True).order_by(AccessPointCatalog.id.asc()).all()  # noqa: E712
+
+    # Access points already handed to this admin for free as a FIXED
+    # benefit of their current plan are not purchasable add-ons — only
+    # access points outside that included set should ever show up here.
+    # Read straight from AdminAccessGrant (the source-of-truth ledger)
+    # rather than the plan's raw PlanAccessPoint rows, so choice-group
+    # options the admin did NOT pick are correctly treated as still
+    # purchasable.
+    included_keys = {
+        row.access_point_key
+        for row in db.query(AdminAccessGrant.access_point_key)
+        .filter(AdminAccessGrant.admin_id == admin_id, AdminAccessGrant.source == SOURCE_PLAN)
+        .all()
+    }
+
     return {
         "plans": [_serialize_plan(p, db) for p in plans],
-        "access_points": [_serialize_access_point(a) for a in access_points],
+        "access_points": [_serialize_access_point(a) for a in access_points if a.key not in included_keys],
     }
 
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  CircleUserRound, CreditCard, Mail, MessageSquare, Pencil, Phone, Save,
+  CalendarClock, CircleUserRound, CreditCard, Mail, MessageSquare, Pencil, Phone, Save,
   Send, ShieldCheck, KeyRound, Ticket, Wallet, X,
 } from "lucide-react";
 import { API_URL } from "../config";
@@ -9,6 +9,9 @@ import BalancesPanel from "../components/BalancesPanel";
 import InvitationsPanel from "../components/InvitationsPanel";
 import SubscriptionAdminPanel from "../components/SubscriptionAdminPanel";
 import PlanCard from "../components/PlanCard";
+import AccessPointCard from "../components/AccessPointCard";
+import PlanSwitchModal from "../components/PlanSwitchModal";
+import { S as SS, T, accentFor, statusColor, fmtDateShort, fmtMoney, daysRemaining } from "../components/subscriptionTheme";
 
 const api = axios.create({ baseURL: API_URL });
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });
@@ -75,6 +78,7 @@ export default function MyAccount() {
   const [subscribing, setSubscribing] = useState(false);
   const [purchasingAddonId, setPurchasingAddonId] = useState(null);
   const [myPlanStatus, setMyPlanStatus] = useState(null); // lightweight status for the sidebar
+  const [switchTarget, setSwitchTarget] = useState(null); // plan object mid-switch confirmation
 
   const role = (profile?.role || "").toLowerCase();
   const isMaster = role === "master" || role === "superadmin";
@@ -171,9 +175,11 @@ export default function MyAccount() {
         { headers: authHeaders(token) }
       );
       showToast("Subscribed successfully");
+      setSwitchTarget(null);
       await loadSubscription();
     } catch (err) {
       showToast(err?.response?.data?.detail || err?.message || "Subscription failed.", false);
+      throw err;
     } finally {
       setSubscribing(false);
     }
@@ -206,12 +212,14 @@ export default function MyAccount() {
     }
   };
 
-  // Mirrors the backend's _assert_required_plan check — backend is the
-  // real enforcement point (403 on purchase), this only drives the UI.
+  // Mirrors the backend's eligibility check — backend is the real
+  // enforcement point (403 on purchase), this only drives the UI. An
+  // add-on with no required plans is open to everyone; otherwise the
+  // admin's current plan just needs to be ANY ONE of the listed plans.
   const isAddonEligible = (ap) => {
-    if (!ap.required_plan_id) return true;
+    if (!ap.required_plan_ids || ap.required_plan_ids.length === 0) return true;
     const sub = mySub.subscription;
-    return !!sub && sub.plan_id === ap.required_plan_id && (sub.status === "active" || sub.status === "grace");
+    return !!sub && ap.required_plan_ids.includes(sub.plan_id) && (sub.status === "active" || sub.status === "grace");
   };
 
   // =========================================================
@@ -271,7 +279,6 @@ export default function MyAccount() {
   };
 
   const profileTitle = isMaster ? "Master Info" : "Admin Info";
-  const planStatusColor = myPlanStatus?.status === "active" ? "#10b981" : myPlanStatus?.status === "grace" ? "#f59e0b" : "#ef4444";
 
   return (
     <div style={styles.page}>
@@ -283,19 +290,7 @@ export default function MyAccount() {
             onEdit={() => setProfileModalOpen(true)}
           />
 
-          {!isMaster && (
-            <div style={styles.planChip}>
-              <span style={styles.planChipLabel}>CURRENT PLAN</span>
-              {myPlanStatus ? (
-                <div style={styles.planChipRow}>
-                  <span style={styles.planChipName}>{myPlanStatus.plan_name}</span>
-                  <span style={styles.planChipTag(planStatusColor)}>{myPlanStatus.status.toUpperCase()}</span>
-                </div>
-              ) : (
-                <span style={styles.subtle}>No subscription yet</span>
-              )}
-            </div>
-          )}
+          {!isMaster && <SidebarPlanChip status={myPlanStatus} />}
 
           <div style={styles.sectionNav}>
             {sections.map((section) => {
@@ -320,131 +315,16 @@ export default function MyAccount() {
             isMaster ? (
               <SubscriptionAdminPanel />
             ) : (
-              <div style={styles.stack}>
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Current Plan</div>
-                  {mySub.subscription ? (
-                    <div style={{ marginTop: 10 }}>
-                      <div>
-                        {mySub.subscription.plan_name} —{" "}
-                        <Tag
-                          text={mySub.subscription.status.toUpperCase()}
-                          color={mySub.subscription.status === "active" ? "#10b981" : mySub.subscription.status === "grace" ? "#f59e0b" : "#ef4444"}
-                        />
-                      </div>
-                      <div style={styles.subtle}>Renews / expires: {mySub.subscription.current_period_end || "Never (free plan)"}</div>
-                      {mySub.subscription.status === "grace" && (
-                        <div style={{ ...styles.alertWarn, marginTop: 10 }}>
-                          Your last renewal failed. Top up your balance before the grace period ends or your plan's access points will be revoked.
-                        </div>
-                      )}
-                    </div>
-                  ) : <div style={styles.subtle}>No active subscription.</div>}
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Available Plans</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))", gap: 14, marginTop: 12 }}>
-                    {subCatalog.plans.map((plan) => {
-                      const isCurrent = mySub.subscription?.plan_id === plan.id;
-                      return (
-                        <PlanCard
-                          key={plan.id}
-                          plan={plan}
-                          highlight={isCurrent}
-                          footer={
-                            isCurrent ? (
-                              <div style={{ ...styles.subtle, textAlign: "center" }}>Current plan</div>
-                            ) : plan.is_default ? (
-                              <button type="button" disabled={subscribing} onClick={() => subscribeToPlan(plan.id, null, null)} style={{ ...styles.secondaryBtn, width: "100%" }}>
-                                Switch to Free
-                              </button>
-                            ) : plan.prices.length === 0 ? (
-                              <div style={{ ...styles.subtle, textAlign: "center" }}>Not available yet</div>
-                            ) : (
-                              plan.prices.map((p) => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  disabled={subscribing}
-                                  onClick={() => subscribeToPlan(plan.id, p.currency_id, p.network_id)}
-                                  style={{ ...styles.secondaryBtn, marginTop: 6, width: "100%" }}
-                                >
-                                  Subscribe — {p.effective_price} {p.currency}/{p.network}
-                                </button>
-                              ))
-                            )
-                          }
-                        />
-                      );
-                    })}
-                    {subCatalog.plans.length === 0 && <div style={styles.subtle}>No plans available.</div>}
-                  </div>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Add-ons</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
-                    {subCatalog.access_points.map((ap) => {
-                      const owned = mySub.addons.find((a) => a.key === ap.key && a.status !== "expired");
-                      const eligible = isAddonEligible(ap);
-                      return (
-                        <div key={ap.id} style={{ border: "1px solid #223451", borderRadius: 14, padding: 14, opacity: !owned && !eligible ? 0.55 : 1 }}>
-                          <div style={{ fontWeight: 800 }}>{ap.label}</div>
-                          {ap.required_plan_name && (
-                            <div style={{ ...styles.subtle, marginTop: 4 }}>Requires: {ap.required_plan_name}</div>
-                          )}
-
-                          {owned ? (
-                            <div style={{ marginTop: 8 }}>
-                              <Tag text={owned.status.toUpperCase()} color={owned.status === "active" ? "#10b981" : owned.status === "grace" ? "#f59e0b" : "#ef4444"} />
-                              <button type="button" onClick={() => cancelAddon(ap.id)} style={{ ...styles.secondaryBtn, marginTop: 8, width: "100%", color: "#f87171" }}>
-                                Cancel
-                              </button>
-                            </div>
-                          ) : !eligible ? (
-                            <button type="button" disabled style={{ ...styles.secondaryBtn, marginTop: 8, width: "100%", cursor: "not-allowed" }}>
-                              Subscribe to {ap.required_plan_name} first
-                            </button>
-                          ) : ap.prices.length === 0 ? (
-                            <div style={{ ...styles.subtle, marginTop: 8 }}>Not available yet</div>
-                          ) : (
-                            ap.prices.map((p) => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                disabled={purchasingAddonId === ap.id}
-                                onClick={() => buyAddon(ap.id, p.currency_id, p.network_id)}
-                                style={{ ...styles.secondaryBtn, marginTop: 8, width: "100%" }}
-                              >
-                                Buy — {p.effective_price} {p.currency}/{p.network}
-                                {p.discount_percent > 0 ? ` (-${p.discount_percent}%)` : ""}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      );
-                    })}
-                    {subCatalog.access_points.length === 0 && <div style={styles.subtle}>No add-ons available.</div>}
-                  </div>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Invoices</div>
-                  <div style={{ marginTop: 10 }}>
-                    {mySub.invoices.map((i) => (
-                      <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #1e293b", fontSize: 13 }}>
-                        <span>
-                          {i.type === "plan" ? i.plan_name : i.access_point_key} — {i.amount} {i.currency}
-                          {i.discount_percent > 0 ? ` (-${i.discount_percent}%)` : ""}
-                        </span>
-                        <span style={styles.subtle}>{i.status} · {i.created_at}</span>
-                      </div>
-                    ))}
-                    {mySub.invoices.length === 0 && <div style={styles.subtle}>No invoices yet.</div>}
-                  </div>
-                </div>
-              </div>
+              <AdminSubscriptionView
+                mySub={mySub}
+                subCatalog={subCatalog}
+                subscribing={subscribing}
+                purchasingAddonId={purchasingAddonId}
+                isAddonEligible={isAddonEligible}
+                onOpenSwitch={(plan) => setSwitchTarget(plan)}
+                onBuyAddon={buyAddon}
+                onCancelAddon={cancelAddon}
+              />
             )
           )}
 
@@ -512,12 +392,235 @@ export default function MyAccount() {
           saving={savingProfile}
         />
       )}
+
+      {switchTarget && (
+        <PlanSwitchModal
+          currentPlanName={mySub.subscription?.plan_name}
+          plan={switchTarget}
+          onClose={() => setSwitchTarget(null)}
+          onConfirm={(cid, nid) => subscribeToPlan(switchTarget.id, cid, nid)}
+        />
+      )}
     </div>
   );
 }
 
 function Tag({ text, color }) {
   return <span style={styles.tag(color)}>{text}</span>;
+}
+
+// =========================================================
+// ADMIN SUBSCRIPTION VIEW — overview, plans row, access
+// points row, invoice history. Mirrors the master's panel
+// visual language (PlanCard / AccessPointCard / scroll rows).
+// =========================================================
+function AdminSubscriptionView({
+  mySub, subCatalog, subscribing, purchasingAddonId, isAddonEligible,
+  onOpenSwitch, onBuyAddon, onCancelAddon,
+}) {
+  const sub = mySub.subscription;
+  const color = sub ? statusColor(sub.status) : "#64748b";
+  const remaining = sub ? daysRemaining(sub.current_period_end) : null;
+  const cyclePct = (() => {
+    if (!sub?.current_period_end || !sub?.duration_days) return null;
+    const totalMs = sub.duration_days * 86400000;
+    const leftMs = new Date(sub.current_period_end).getTime() - Date.now();
+    const usedPct = Math.min(100, Math.max(0, 100 - (leftMs / totalMs) * 100));
+    return usedPct;
+  })();
+
+  // Full plan record (with its fixed access points) for whatever plan the
+  // admin is currently on, so the overview can show exactly what's
+  // included — not just the plan name.
+  const currentPlanFull = sub ? subCatalog.plans.find((p) => p.id === sub.plan_id) : null;
+  const includedAccessPoints = currentPlanFull?.access_points || [];
+  const activeAddons = mySub.addons.filter((a) => a.status !== "expired");
+
+  return (
+    <div style={styles.stack}>
+      {/* ── Overview ── */}
+      <div style={{ ...styles.card, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(600px 160px at 0% 0%, ${color}14, transparent)`, pointerEvents: "none" }} />
+        <div style={{ position: "relative" }}>
+          <div style={styles.cardTitle}>Current plan</div>
+          {sub ? (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: "white" }}>{sub.plan_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                    <Tag text={sub.status.toUpperCase()} color={color} />
+                    {sub.forced_by_master && <span style={{ fontSize: 10.5, color: "#93c5fd" }}>Set by master</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: T.textDim, display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
+                    <CalendarClock size={12} /> Renews / expires
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "white", marginTop: 4 }}>
+                    {sub.current_period_end ? fmtDateShort(sub.current_period_end) : "Never (free plan)"}
+                  </div>
+                  {remaining != null && (
+                    <div style={{ fontSize: 12, color: remaining <= 3 ? "#f87171" : T.textDim, marginTop: 2 }}>
+                      {remaining >= 0 ? `${remaining} day${remaining === 1 ? "" : "s"} left` : "Expired"}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {cyclePct != null && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ height: 6, borderRadius: 999, background: "rgba(148,163,184,0.12)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${cyclePct}%`, borderRadius: 999, background: `linear-gradient(90deg, ${color}, ${color}aa)` }} />
+                  </div>
+                </div>
+              )}
+
+              {sub.status === "grace" && (
+                <div style={{ ...styles.alertWarn, marginTop: 14 }}>
+                  Your last renewal failed. Top up your balance before the grace period ends or your plan's access points will be revoked.
+                </div>
+              )}
+
+              <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+                <div>
+                  <div style={styles.overviewSectionLabel}>Included in your plan</div>
+                  <div style={styles.chipWrapRow}>
+                    {includedAccessPoints.length === 0 && <span style={styles.subtle}>No fixed access points on this plan.</span>}
+                    {includedAccessPoints.map((ap) => (
+                      <span key={ap.id} style={styles.accessChip("#10b981")}>
+                        {ap.label}{ap.choice_group ? ` · ${ap.choice_group}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {activeAddons.length > 0 && (
+                  <div>
+                    <div style={styles.overviewSectionLabel}>Your active add-ons</div>
+                    <div style={styles.chipWrapRow}>
+                      {activeAddons.map((a) => (
+                        <span key={a.id} style={styles.accessChip("#8b5cf6")}>
+                          {a.label || a.key}
+                          {a.status === "grace" && <span style={{ color: "#fbbf24" }}> · grace</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div style={{ ...styles.subtle, marginTop: 10 }}>No active subscription — pick a plan below.</div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Plans row ── */}
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Available plans</div>
+        <div style={{ ...styles.subtle, marginTop: 2 }}>Switching resets your billing cycle and charges the full plan price.</div>
+        <div style={{ ...SS.scrollRow, marginTop: 14 }}>
+          {subCatalog.plans.map((plan, i) => {
+            const isCurrent = sub?.plan_id === plan.id;
+            return (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                accentColor={accentFor(plan, i)}
+                current={isCurrent}
+                footer={
+                  isCurrent ? (
+                    <div style={{ ...styles.subtle, textAlign: "center" }}>This is your current plan</div>
+                  ) : plan.is_default ? (
+                    <button type="button" disabled={subscribing} onClick={() => onOpenSwitch(plan)} style={{ ...styles.secondaryBtn, width: "100%", justifyContent: "center" }}>
+                      Switch to Free
+                    </button>
+                  ) : plan.prices.length === 0 ? (
+                    <div style={{ ...styles.subtle, textAlign: "center" }}>Not available yet</div>
+                  ) : (
+                    <button type="button" disabled={subscribing} onClick={() => onOpenSwitch(plan)} style={{ ...styles.primaryBtn, width: "100%", justifyContent: "center" }}>
+                      Switch to this plan
+                    </button>
+                  )
+                }
+              />
+            );
+          })}
+          {subCatalog.plans.length === 0 && <div style={styles.subtle}>No plans available.</div>}
+        </div>
+      </div>
+
+      {/* ── Access points row ── */}
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Add-ons</div>
+        <div style={{ ...styles.subtle, marginTop: 2 }}>Purchase extra access points priced by master, where your plan allows it. Anything already included free in your current plan won't be listed here.</div>
+        <div style={{ ...SS.scrollRow, marginTop: 14 }}>
+          {subCatalog.access_points.map((ap, i) => {
+            const owned = mySub.addons.find((a) => a.key === ap.key && a.status !== "expired");
+            const eligible = isAddonEligible(ap);
+            return (
+              <AccessPointCard
+                key={ap.id}
+                ap={ap}
+                accentColor={["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ec4899"][i % 5]}
+                muted={!owned && !eligible}
+                statusChip={owned ? { text: owned.status.toUpperCase(), color: statusColor(owned.status) } : null}
+                footer={
+                  owned ? (
+                    <button type="button" onClick={() => onCancelAddon(ap.id)} style={{ ...styles.secondaryBtn, width: "100%", justifyContent: "center", color: "#f87171" }}>
+                      Cancel
+                    </button>
+                  ) : !eligible ? (
+                    <button type="button" disabled style={{ ...styles.secondaryBtn, width: "100%", justifyContent: "center", cursor: "not-allowed" }}>
+                      Requires {ap.required_plans.map((p) => p.name).join(" or ")}
+                    </button>
+                  ) : ap.prices.length === 0 ? (
+                    <div style={{ ...styles.subtle, textAlign: "center" }}>Not available yet</div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={purchasingAddonId === ap.id}
+                      onClick={() => onBuyAddon(ap.id, ap.prices[0].currency_id, ap.prices[0].network_id)}
+                      style={{ ...styles.primaryBtn, width: "100%", justifyContent: "center" }}
+                    >
+                      {purchasingAddonId === ap.id ? "Adding…" : ap.prices[0].effective_price === 0 ? "Add for free" : "Buy add-on"}
+                    </button>
+                  )
+                }
+              />
+            );
+          })}
+          {subCatalog.access_points.length === 0 && <div style={styles.subtle}>No add-ons available.</div>}
+        </div>
+      </div>
+
+      {/* ── Invoices ── */}
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Invoice history</div>
+        <div style={{ marginTop: 10 }}>
+          {mySub.invoices.map((i) => (
+            <div key={i.id} style={styles.invoiceRow}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "white" }}>
+                  {i.type === "plan" ? i.plan_name : i.access_point_key}
+                </div>
+                <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>{fmtDateShort(i.created_at)}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: "white" }}>
+                  {fmtMoney(i.amount)} {i.currency}
+                  {i.discount_percent > 0 && <span style={{ color: "#f59e0b", fontWeight: 700 }}> -{i.discount_percent}%</span>}
+                </div>
+                <div style={{ fontSize: 11, color: statusColor(i.status === "paid" ? "active" : i.status === "failed" ? "expired" : "grace"), marginTop: 2, fontWeight: 700 }}>{i.status}</div>
+              </div>
+            </div>
+          ))}
+          {mySub.invoices.length === 0 && <div style={styles.subtle}>No invoices yet.</div>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // =========================================================
@@ -564,6 +667,37 @@ function SidebarProfileCard({ profile, isMaster, onEdit }) {
           <div style={styles.profileDetailRow}><KeyRound size={11} /> <span style={{ wordBreak: "break-all" }}>#{profile.account_id}</span></div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Subscription status chip for the sidebar — plan name, status, and a
+// short "days left" readout so it doubles as an at-a-glance summary.
+function SidebarPlanChip({ status }) {
+  const color = status ? statusColor(status.status) : "#64748b";
+  const remaining = status ? daysRemaining(status.current_period_end) : null;
+  return (
+    <div style={styles.planChip}>
+      <div style={styles.planChipTopRow}>
+        <span style={styles.planChipLabel}>Subscription</span>
+        {status && <span style={styles.planChipTag(color)}>{status.status.toUpperCase()}</span>}
+      </div>
+      {status ? (
+        <>
+          <div style={styles.planChipName}>{status.plan_name}</div>
+          <div style={styles.planChipMeta}>
+            {status.current_period_end ? (
+              <>
+                <CalendarClock size={11} />
+                {remaining != null && remaining >= 0 ? `${remaining}d left` : "Renewal date passed"}
+                <span style={{ color: T.textFaint }}>· {fmtDateShort(status.current_period_end)}</span>
+              </>
+            ) : "Free plan · never expires"}
+          </div>
+        </>
+      ) : (
+        <span style={styles.subtle}>No subscription yet</span>
+      )}
     </div>
   );
 }
@@ -659,10 +793,11 @@ const styles = {
   profileDetailRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94a3b8" },
 
   // ── Plan status chip ──
-  planChip: { borderRadius: 14, border: "1px solid #223451", background: "#0b1628", padding: 12 },
+  planChip: { borderRadius: 14, border: "1px solid #223451", background: "linear-gradient(160deg, rgba(15,27,48,.9), rgba(8,15,29,.9))", padding: 12 },
+  planChipTopRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   planChipLabel: { fontSize: 10, fontWeight: 800, color: "#64748b", letterSpacing: 0.6 },
-  planChipRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 6, flexWrap: "wrap" },
-  planChipName: { fontSize: 13, fontWeight: 700, color: "white" },
+  planChipName: { fontSize: 14, fontWeight: 800, color: "white", marginTop: 6 },
+  planChipMeta: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#94a3b8", marginTop: 5 },
   planChipTag: (color) => ({
     fontSize: 9, fontWeight: 800, color, background: `${color}22`, border: `1px solid ${color}`,
     borderRadius: 999, padding: "2px 7px",
@@ -703,6 +838,16 @@ const styles = {
   }),
   alertWarn: {
     padding: 14, borderRadius: 14, background: "rgba(120,53,15,.18)", border: "1px solid rgba(245,158,11,.35)", color: "#fde68a",
+  },
+  overviewSectionLabel: { fontSize: 10.5, fontWeight: 800, color: "#64748b", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 },
+  chipWrapRow: { display: "flex", flexWrap: "wrap", gap: 6 },
+  accessChip: (color) => ({
+    fontSize: 11.5, fontWeight: 700, color, background: `${color}1a`, border: `1px solid ${color}55`,
+    borderRadius: 999, padding: "5px 11px",
+  }),
+  invoiceRow: {
+    display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0",
+    borderBottom: "1px solid rgba(148,163,184,0.1)",
   },
 
   input: { width: "100%", padding: "10px 12px", borderRadius: 12, border: "1px solid #29405e", background: "#081224", color: "white", boxSizing: "border-box" },

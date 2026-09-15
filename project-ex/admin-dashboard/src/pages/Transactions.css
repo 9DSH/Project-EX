@@ -1,0 +1,264 @@
+/* ── Transactions page ───────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.tx-page * {
+  box-sizing: border-box;
+}
+
+.tx-page ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.tx-page ::-webkit-scrollbar-track {
+  background: #060b16;
+  border-radius: 4px;
+}
+
+.tx-page ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+.tx-page ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+.tx-page {
+  padding: 0;
+  background: #060b16;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: white;
+}
+
+.tx-header {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 0 10px;
+  box-sizing: border-box;
+}
+
+/* ── Table shell ─────────────────────────────────────────────── */
+
+.tx-table-container {
+  background: #060b16;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 0 10px 10px 10px;
+}
+
+.tx-table-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b #0b1424;
+}
+
+/* Sticky, always-visible header row */
+.tx-table-head {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: #060b16;
+  border-bottom: 1px solid #1e293b;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.tx-sortable {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+
+.tx-sortable:hover {
+  color: #e2e8f0;
+}
+
+.tx-sortable.is-active {
+  color: #60a5fa;
+}
+
+.tx-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 20px 24px;
+}
+
+.tx-row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  background: #0d1526;
+  border: 1px solid #1a2540;
+  border-radius: 14px;
+  transition: border-color 0.15s ease;
+}
+
+.tx-row:hover {
+  border-color: #2a3a5c;
+}
+
+.tx-cell-label {
+  font-size: 9px;
+  color: #475569;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.tx-id {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.tx-type-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #1e293b;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.tx-user-link {
+  color: #60a5fa;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-user-sub {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.tx-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tx-ref-pill {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.tx-ref-link {
+  color: #34d399;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tx-ref-muted {
+  color: #334155;
+}
+
+.tx-amount {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.tx-amount-sub {
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.tx-chain-line {
+  font-size: 11px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tx-blockchain-badge {
+  background: #0d1e3a;
+  border: 1px solid #313d58ff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: #60a5fa;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.tx-confirm {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.tx-hash-text {
+  font-family: monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: default;
+}
+
+.tx-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.tx-created {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.tx-muted {
+  color: #334155;
+}
+
+.tx-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  min-height: 300px;
+  text-align: center;
+  color: #64748b;
+}
