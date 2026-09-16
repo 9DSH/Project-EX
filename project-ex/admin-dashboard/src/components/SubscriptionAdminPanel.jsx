@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownAZ, ArrowDownUp, Pencil, Plus, Power, RefreshCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowDownUp, Clock, Pencil, Plus, Power, RefreshCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { API_URL } from "../config";
 import ACCESS_OPTIONS from "../constants/AccessPoints";
 import PlanCard from "./PlanCard";
@@ -41,6 +41,8 @@ export default function SubscriptionAdminPanel() {
   const [editApId, setEditApId] = useState(null);
 
   const [grantKeySelect, setGrantKeySelect] = useState("");
+  const [switchPlanSelect, setSwitchPlanSelect] = useState("");
+  const [addAddonSelect, setAddAddonSelect] = useState("");
 
   const [apSearch, setApSearch] = useState("");
   const [apPlanFilter, setApPlanFilter] = useState("all");
@@ -216,6 +218,53 @@ export default function SubscriptionAdminPanel() {
   const revokeKey = async (adminId, key) => {
     await req(`${API_URL}/admin/subscriptions/admins/${adminId}/revoke`, token, { method: "POST", body: JSON.stringify({ key }) });
     openAdminDetail(adminId);
+  };
+
+  const switchAdminPlan = async (adminId) => {
+    if (!switchPlanSelect) return;
+    const plan = plans.find((p) => p.id === Number(switchPlanSelect));
+    if (!window.confirm(`Switch this admin to "${plan?.name}"? This is a free master override — no charge, and it replaces their current fixed access points immediately.`)) return;
+    try {
+      await req(`${API_URL}/admin/subscriptions/admins/${adminId}/switch-plan`, token, { method: "POST", body: JSON.stringify({ plan_id: Number(switchPlanSelect) }) });
+      setSwitchPlanSelect("");
+      openAdminDetail(adminId);
+      loadAll();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to switch plan.");
+    }
+  };
+
+  const addAdminAddon = async (adminId) => {
+    if (!addAddonSelect) return;
+    try {
+      await req(`${API_URL}/admin/subscriptions/admins/${adminId}/addons`, token, { method: "POST", body: JSON.stringify({ access_point_id: Number(addAddonSelect) }) });
+      setAddAddonSelect("");
+      openAdminDetail(adminId);
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to add add-on.");
+    }
+  };
+
+  const expireAdminAddon = async (adminId, accessPointId) => {
+    if (!window.confirm("Mark this add-on as expired? Access is revoked immediately, but the purchase record stays for the books.")) return;
+    try {
+      await req(`${API_URL}/admin/subscriptions/admins/${adminId}/addons/${accessPointId}/expire`, token, { method: "PUT" });
+      openAdminDetail(adminId);
+      loadAll();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to expire add-on.");
+    }
+  };
+
+  const removeAdminAddon = async (adminId, accessPointId) => {
+    if (!window.confirm("Remove this add-on from the admin? This fully deletes their purchase record, not just marks it expired.")) return;
+    try {
+      await req(`${API_URL}/admin/subscriptions/admins/${adminId}/addons/${accessPointId}`, token, { method: "DELETE" });
+      openAdminDetail(adminId);
+      loadAll();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to remove add-on.");
+    }
   };
 
   return (
@@ -399,16 +448,63 @@ export default function SubscriptionAdminPanel() {
                       <button type="button" onClick={() => forceStatus(detail.admin_id, "grace")} style={S.ghostBtn}>Force grace</button>
                       <button type="button" onClick={() => forceStatus(detail.admin_id, "expired")} style={S.ghostBtn}>Force expired</button>
                     </div>
+
+                    <hr style={{ ...S.divider, margin: "14px 0 10px" }} />
+
+                    <div style={S.sectionLabel}>Switch plan</div>
+                    <div style={{ fontSize: 11, color: T.textFaint, marginTop: 3 }}>Free master override — replaces their current fixed access points immediately, no charge.</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <select value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)} style={{ ...S.input, flex: 1, minWidth: 180 }}>
+                        <option value="">Select a plan…</option>
+                        {plans.filter((p) => p.id !== detail.subscription.plan_id).map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} style={S.primaryBtn}>Switch plan</button>
+                    </div>
                   </div>
-                ) : <div style={{ fontSize: 13, color: T.textDim }}>No plan subscription yet.</div>}
+                ) : (
+                  <div style={detailCard}>
+                    <div style={{ fontSize: 13, color: T.textDim, marginBottom: 10 }}>No plan subscription yet.</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <select value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)} style={{ ...S.input, flex: 1, minWidth: 180 }}>
+                        <option value="">Select a plan…</option>
+                        {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} style={S.primaryBtn}>Assign plan</button>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div style={S.sectionLabel}>Add-ons</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 3 }}>
+                    <Clock size={10} style={{ verticalAlign: -1 }} /> expires it (keeps the record) · <Trash2 size={10} style={{ verticalAlign: -1 }} /> deletes it completely
+                  </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                     {detail.addons.length === 0 && <span style={{ fontSize: 12, color: T.textFaint }}>None</span>}
                     {detail.addons.map((a) => (
-                      <span key={a.id} style={{ fontSize: 11.5, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#c4b5fd", borderRadius: 999, padding: "5px 11px" }}>
+                      <span
+                        key={a.id}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#c4b5fd", borderRadius: 999, padding: "5px 8px 5px 11px" }}
+                      >
                         {a.label || a.key} · {a.status}
+                        <button
+                          type="button"
+                          onClick={() => expireAdminAddon(detail.admin_id, a.access_point_id)}
+                          title="Mark expired (keeps the record)"
+                          style={{ width: 18, height: 18, borderRadius: 6, border: "none", background: "rgba(245,158,11,.18)", color: "#fbbf24", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                        >
+                          <Clock size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeAdminAddon(detail.admin_id, a.access_point_id)}
+                          title="Remove completely (deletes the record)"
+                          style={{ width: 18, height: 18, borderRadius: 6, border: "none", background: "rgba(239,68,68,.18)", color: "#f87171", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </span>
                     ))}
                   </div>

@@ -42,6 +42,12 @@ export default function ConversationList({
                             }}
                         >
                             {c.username?.charAt(0).toUpperCase() + c.username?.slice(1)}
+                            {c.kind === "internal" && (
+                                <div style={{ fontSize: 9, color: "#f59e0b", fontWeight: 800, marginTop: 2 }}>
+                                    INTERNAL
+                                </div>
+                            )}
+                        
                         </div>
 
                         {/* MIDDLE: divider */}
@@ -59,7 +65,8 @@ export default function ConversationList({
                             style={{
                                 flex: 1,
                                 fontSize: 12,
-                                color: "#94a3b8",
+                                color: c.isNew ? "#60a5fa" : "#94a3b8",
+                                fontStyle: c.isNew ? "italic" : "normal",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import ConversationList from "../components/ConversationList";
 import ChatWindow from "../components/ChatWindow";
 import API from "../api/client";
+import HeroHub from "../components/HeroHub";
 import {
     getConversations,
     getUsers,
@@ -185,7 +186,7 @@ function BroadcastPanel({ users, onSend, canBroadcast }) {
             flexDirection: "column",
             padding: 20,
             background: "#08111f",
-            borderRadius: 15,
+            borderRadius: 8,
             overflow: "hidden"
         }}>
 
@@ -391,7 +392,7 @@ export default function MessagesPage() {
     const [search, setSearch] = useState("");
     const [showNewChat, setShowNewChat] = useState(false);
     const [loadingConvs, setLoadingConvs] = useState(true);
-
+    const [convSearch, setConvSearch] = useState("");
     const dropdownRef = useRef(null);
     const newChatBtnRef = useRef(null);
     const token = localStorage.getItem("token");
@@ -548,6 +549,38 @@ export default function MessagesPage() {
     };
 
     const activeUsers = users.filter(u => u.is_active !== false);
+        // ── Conversation search: filters existing conversations by username,
+    // and also surfaces any matching user who doesn't have a conversation
+    // yet, so typing a username always finds them (clicking starts a chat).
+    const normalizedConvSearch = convSearch.trim().toLowerCase();
+
+    const filteredConversations = normalizedConvSearch
+        ? conversations.filter(c => c.username?.toLowerCase().includes(normalizedConvSearch))
+        : conversations;
+
+    const conversationUserIds = new Set(conversations.map(c => c.user_id));
+    const matchingNewUsers = normalizedConvSearch
+        ? users.filter(u =>
+            u.user_id !== undefined &&
+            !conversationUserIds.has(u.user_id) &&
+            u.username?.toLowerCase().includes(normalizedConvSearch)
+          )
+        : [];
+
+    const displayedConversations = normalizedConvSearch
+        ? [
+            ...filteredConversations,
+            ...matchingNewUsers.map(u => ({
+                conversation_id: `new-${u.user_id}`,
+                user_id: u.user_id,
+                username: u.username,
+                last_message: "Start a new conversation",
+                last_time: null,
+                unread_count: 0,
+                isNew: true,
+            })),
+          ]
+        : conversations;
 
     return (
 
@@ -559,121 +592,25 @@ export default function MessagesPage() {
                     flexDirection: "column",
                     background: "transparent",
                     overflow: "hidden",
-                    padding: "5px"
                 }}
             >
-
-
-            {/* ═══ HEADER ════════════════════════════════════════ */}
-            <div style={{
-                flexShrink: 0,
-                background: "transparent",
-                padding: "0 14px 0",
-                
-            }}>
-                {/* Top row: title + stat pills */}
-                <div style={{
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
-                    }}>
-                        
-                    {/* Stat pills */}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginLeft:20 }}>
-                            <div>
-                                <h1 style={{ color: "#2e7ce9af",margin: 0, fontSize: 26, fontWeight: 600, marginRight: 20 , letterSpacing: "0.1rem",}}>
-                                    Messages
-                                </h1>
-                                <div style={{ color: "#64748b", fontSize: 13, margin: "2px 0 0" }}>
-                                    Direct conversations &amp; broadcasts
-                                </div>
-                            </div>
-                        <StatPill
-                            icon={Users}
-                            label="Active Users"
-                            value={activeUsers.length}
-                            accent="#22c55e"
-                            loading={loadingConvs}
-                        />
-                        <StatPill
-                            icon={MessagesSquare}
-                            label="Conversations"
-                            value={conversations.length}
-                            accent="#3b82f6"
-                            loading={loadingConvs}
-                        />
-                        
-                        <StatPill
-                            icon={Bell}
-                            label="Unread"
-                            value={totalUnread || "0"}
-                            accent={totalUnread > 0 ? "#ef4444" : "#334155"}
-                            loading={loadingConvs}
-                        />
-                    </div>
-                </div>
-
-                {/* Bottom row: action buttons */}
-                <div style={{ 
-                    
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 8, 
-                    paddingBottom: 24 }}>
-                    {/* New Chat button with dropdown */}
-                    <div style={{ position: "relative" }}>
-                        <button
-                            ref={newChatBtnRef}
-                            onClick={() => { setShowNewChat(v => !v); setSearch(""); }}
-                            style={{
-                                display: "flex", alignItems: "center", gap: 7,
-                                background: showNewChat ? "rgba(59,130,246,0.25)" : "rgba(59,130,246,0.12)",
-                                border: `1px solid ${showNewChat ? "#3b82f6" : "rgba(59,130,246,0.3)"}`,
-                                color: showNewChat ? "white" : "#60a5fa",
-                                borderRadius: 10, padding: "8px 16px",
-                                cursor: "pointer", fontWeight: 600, fontSize: 13,
-                                transition: "all 0.2s",
-                            }}
-                        >
-                            <span style={{ fontSize: 15 }}><MessageCircle size={20}/></span>
-                            New Chat
-                            <span style={{
-                                fontSize: 10, display: "inline-block",
-                                transform: showNewChat ? "rotate(180deg)" : "rotate(0deg)",
-                                transition: "transform 0.2s",
-                            }}>▾</span>
-                        </button>
-
-                        {showNewChat && (
-                            <NewChatDropdown
-                                users={users}
-                                search={search}
-                                setSearch={setSearch}
-                                onStart={handleStartChat}
-                                onClose={() => { setShowNewChat(false); setSearch(""); }}
-                                dropdownRef={dropdownRef}
-                            />
-                        )}
-                    </div>
-
-
-                    {/* Unread badge shortcut */}
-                    {totalUnread > 0 && (
-                        <div style={{
-                            display: "flex", alignItems: "center", gap: 6,
-                            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-                            borderRadius: 10, padding: "8px 14px", fontSize: 13, color: "#fca5a5",
-                            fontWeight: 600,
-                        }}>
-                            <span style={{
-                                background: "#ef4444", color: "white",
-                                borderRadius: 99, fontSize: 11, fontWeight: 800,
-                                padding: "1px 7px", minWidth: 18, textAlign: "center",
-                            }}>{totalUnread}</span>
-                            unread
-                        </div>
-                    )}
-
-                </div>
+          {/* ── HERO HUB — ONE fixed filter set, shared and applied across Products / Orders / Analysis ── */}
+            <div style={{  flexShrink: 0 }}>
+                <HeroHub
+                title="Messages"
+                subtitle="Direct conversations &amp; broadcasts"
+                search={{
+                    value: convSearch,
+                    onChange: setConvSearch,
+                    placeholder: "Search users…",
+                    label: "Search",
+                }}
+                statPills={[
+                    { key: "users", icon: Users, label: "Active Users", value: activeUsers.length, accent: "#3b82f6", loadingConvs },
+                    { key: "orders", icon: MessagesSquare, label: "Conversations", value: conversations.length, accent: "#a78bfa", loading: loadingConvs },
+                    { key: "value", icon: Bell, label: "Unread", value: totalUnread, accent: "#eb0f0b", loading: loadingConvs },
+                ]}
+                />
             </div>
 
             {/* CENTER AREA (THIS IS THE FIX) */}
@@ -683,7 +620,7 @@ export default function MessagesPage() {
                 display: "flex",
                 justifyContent: "flex-start",
                 alignItems: "center",
-                padding: "20px 0",
+                padding: "8px 8px 8px 8px",
                 overflow: "hidden",
                 marginLeft: "5px"
                 
@@ -700,7 +637,7 @@ export default function MessagesPage() {
                 maxHeight: "calc(100vh - 120px)", // prevents clipping
                 color: "white",
                 fontFamily: "'Inter', sans-serif",
-                borderRadius: 15,
+                borderRadius: 8,
                 overflow: "hidden",
                 }}
             >
@@ -711,7 +648,7 @@ export default function MessagesPage() {
                  display: "flex", 
                  overflow: "hidden" , 
                  background: "transparent", 
-                 borderRadius: 15 , 
+                 borderRadius: 8 , 
                  gap: 10,
                  
                  }}>
@@ -724,29 +661,73 @@ export default function MessagesPage() {
                     background: "#0b1424", 
                     border: "1px solid #313d58bc",
                     overflow: "hidden",
-                    borderRadius: 15
+                    borderRadius: 8
                     
                 }}>
                     {/* Search bar inside sidebar */}
-                    <div style={{ padding: "10px 12px", borderBottom: "1px solid #0d1e35" }}>
-                        <div style={{ position: "relative" }}>
-                            <span style={{
-                                position: "absolute", left: 10, top: "50%",
-                                transform: "translateY(-50%)", color: "#334155", fontSize: 13,
-                            }}>🔍</span>
-                            <input
-                                placeholder="Search conversations…"
-                                style={{
-                                    width: "100%", background: "#06101e",
-                                    border: "1px solid #0f1f38", color: "#cbd5e1",
-                                    padding: "8px 10px 8px 32px", borderRadius: 9,
-                                    fontSize: 13, outline: "none", boxSizing: "border-box",
-                                    transition: "border-color 0.15s",
-                                }}
-                                onFocus={e => e.target.style.borderColor = "#1d3a6e"}
-                                onBlur={e => e.target.style.borderColor = "#0f1f38"}
-                            />
+                    <div style={{display: "flex",  padding: "10px 12px", borderBottom: "1px solid #0d1e35" }}>
+                    {/* Bottom row: action buttons */}
+                        <div style={{ 
+                            
+                            display: "flex", 
+                            alignItems: "center", 
+                            gap: 8 }}>
+                            {/* New Chat button with dropdown */}
+                            <div style={{ position: "relative" }}>
+                                <button
+                                    ref={newChatBtnRef}
+                                    onClick={() => { setShowNewChat(v => !v); setSearch(""); }}
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: 7,
+                                        background: showNewChat ? "rgba(59,130,246,0.25)" : "rgba(59,130,246,0.12)",
+                                        border: `1px solid ${showNewChat ? "#3b82f6" : "rgba(59,130,246,0.3)"}`,
+                                        color: showNewChat ? "white" : "#60a5fa",
+                                        borderRadius: 10, padding: "8px 16px",
+                                        cursor: "pointer", fontWeight: 600, fontSize: 13,
+                                        transition: "all 0.2s",
+                                    }}
+                                >
+                                    <span style={{ fontSize: 15 }}><MessageCircle size={20}/></span>
+                                    New Chat
+                                    <span style={{
+                                        fontSize: 10, display: "inline-block",
+                                        transform: showNewChat ? "rotate(180deg)" : "rotate(0deg)",
+                                        transition: "transform 0.2s",
+                                    }}>▾</span>
+                                </button>
+
+                                {showNewChat && (
+                                    <NewChatDropdown
+                                        users={users}
+                                        search={search}
+                                        setSearch={setSearch}
+                                        onStart={handleStartChat}
+                                        onClose={() => { setShowNewChat(false); setSearch(""); }}
+                                        dropdownRef={dropdownRef}
+                                    />
+                                )}
+                            </div>
+
+
+                            {/* Unread badge shortcut */}
+                            {totalUnread > 0 && (
+                                <div style={{
+                                    display: "flex", alignItems: "center", gap: 6,
+                                    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
+                                    borderRadius: 10, padding: "8px 14px", fontSize: 13, color: "#fca5a5",
+                                    fontWeight: 600,
+                                }}>
+                                    <span style={{
+                                        background: "#ef4444", color: "white",
+                                        borderRadius: 99, fontSize: 11, fontWeight: 800,
+                                        padding: "1px 7px", minWidth: 18, textAlign: "center",
+                                    }}>{totalUnread}</span>
+                                    unread
+                                </div>
+                            )}
+
                         </div>
+                        
                     </div>
 
                     {/* Conversation list */}
@@ -768,29 +749,39 @@ export default function MessagesPage() {
                                         </div>
                                     ))}
                                 </div>
-                            ) : conversations.length === 0 ? (
-                                <div style={{ padding: 32, textAlign: "center" }}>
-                                    <div style={{ color: "#28528aff",fontSize: 36, marginBottom: 12 }}><MessagesSquare/></div>
-                                    <div style={{ color: "#28528aff", fontWeight: 600, fontSize: 14 }}>No conversations yet</div>
-                                    <div style={{ color: "#3a4962ff", fontSize: 12, marginTop: 6 }}>Start a new chat to begin</div>
-                                </div>
-                            ) : (
-                                <ConversationList
-                                    conversations={conversations}
-                                    activeChat={activeChat}
-                                    setActiveChat={(conv) => {
-                                        setActiveChat(conv);
-                                        // Mark as read
-                                        setConversations(prev =>
-                                            prev.map(c =>
-                                                c.conversation_id === conv.conversation_id
-                                                    ? { ...c, unread_count: 0 }
-                                                    : c
-                                            )
-                                        );
-                                    }}
-                                />
-                            )}
+                            ) : displayedConversations.length === 0 ? (
+                                 <div style={{ padding: 32, textAlign: "center" }}>
+                                     <div style={{ color: "#28528aff",fontSize: 36, marginBottom: 12 }}><MessagesSquare/></div>
+                                   <div style={{ color: "#28528aff", fontWeight: 600, fontSize: 14 }}>
+                                        {normalizedConvSearch ? "No matching conversations or users" : "No conversations yet"}
+                                    </div>
+                                   <div style={{ color: "#3a4962ff", fontSize: 12, marginTop: 6 }}>
+                                        {normalizedConvSearch ? "Try a different search" : "Start a new chat to begin"}
+                                    </div>
+                                 </div>
+                             ) : (
+                                 <ConversationList
+
+                                     conversations={displayedConversations}
+                                     activeChat={activeChat}
+                                     setActiveChat={(conv) => {
+                                        if (conv.isNew) {
+                                            handleStartChat({ user_id: conv.user_id, username: conv.username });
+                                            setConvSearch("");
+                                            return;
+                                        }
+                                         setActiveChat(conv);
+                                         // Mark as read
+                                         setConversations(prev =>
+                                             prev.map(c =>
+                                                 c.conversation_id === conv.conversation_id
+                                                     ? { ...c, unread_count: 0 }
+                                                     : c
+                                             )
+                                         );
+                                     }}
+                                 />
+                             )}
                         </div>
                     </div>
 
@@ -801,7 +792,7 @@ export default function MessagesPage() {
                     flexDirection: "column", 
                     background: "#060d1a",  
                     border: "1px solid #34343dbe",
-                    borderRadius: 15,
+                    borderRadius: 8,
                     overflow: "hidden" ,
                     }}>
                     {activeChat ? (
@@ -856,7 +847,7 @@ export default function MessagesPage() {
                     marginRight: "5px", 
   
                  border: "1px solid #34343dbe",
-                    borderRadius: 15,
+                    borderRadius: 8,
                     overflow: "auto" ,
                     }}>
 

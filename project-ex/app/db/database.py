@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 import os
 from pathlib import Path
+from app.db.bootstrap import ensure_database_and_role
 
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -15,6 +16,7 @@ print("DATABASE_URL LOADED:", DATABASE_URL)
 if not DATABASE_URL:
     raise Exception("DATABASE_URL is missing. Check .env loading.")
 
+ensure_database_and_role()
 engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(
@@ -635,8 +637,8 @@ def _apply_rls(conn, table_name: str, using_sql: str, policy_name: str | None = 
 
 def ensure_rls_policies():
     with engine.begin() as conn:
-        is_master = "current_setting('app.is_master', true)::boolean IS TRUE"
-        is_global_bot = "current_setting('app.is_global_bot', true)::boolean IS TRUE"
+        is_master = "COALESCE(NULLIF(current_setting('app.is_master', true), ''), 'false')::boolean IS TRUE"
+        is_global_bot = "COALESCE(NULLIF(current_setting('app.is_global_bot', true), ''), 'false')::boolean IS TRUE"
         cur_admin = "NULLIF(current_setting('app.current_admin_id', true), '')::int"
 
         GLOBAL_BOT_TABLES = {"products", "exchange_pairs", "wire_transfer_pairs"}
@@ -703,6 +705,14 @@ def get_db():
         db.close()
 
 def _ensure_global_eligibility_function(conn):
+    # check_function_bodies must be off here: with FORCE RLS already applied
+    # to "users" from a previous boot, Postgres validates this function's
+    # SQL body against the current (contextless) session at CREATE time —
+    # not against the function's own `SET row_security = off`, which only
+    # takes effect when the function actually runs. Without this, every
+    # restart after RLS has been applied once fails with an RLS permission
+    # error during CREATE OR REPLACE FUNCTION itself.
+    conn.execute(text("SET LOCAL check_function_bodies = off"))
     conn.execute(text("""
         CREATE OR REPLACE FUNCTION is_admin_global_eligible(check_admin_id integer)
         RETURNS boolean

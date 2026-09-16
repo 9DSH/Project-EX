@@ -71,6 +71,12 @@ async def get_stats(admin_id: int | None = None):
             }
             for o, p, u in order_rows
         ]
+                # who is this? needed to know whether to fold in internal-thread unread
+        current_user_row = (
+            db.query(User).filter(User.user_id == admin_id).first() if admin_id is not None else None
+        )
+        is_current_master = bool(current_user_row and current_user_row.role == "master")
+
 
         # ── UNREAD USER MESSAGES ───────────────────────────
         message_rows = (
@@ -93,6 +99,50 @@ async def get_stats(admin_id: int | None = None):
             }
             for m, u in message_rows
         ]
+
+
+        # Master also needs unread admin→master internal messages folded
+        # into the same indicator, so the top-bar badge lights up for
+        # internal replies too — not just Telegram support messages.
+        internal_admin_unread = 0
+        internal_admin_items = []
+        if is_current_master:
+            internal_rows = (
+                db.query(Message, User)
+                .join(Conversation, Conversation.id == Message.conversation_id)
+                .outerjoin(User, User.user_id == Conversation.user_id)
+                .filter(
+                    Conversation.kind == "internal",
+                    Message.sender == "admin",
+                    Message.is_read == False,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(RECENT_LIMIT)
+                .all()
+            )
+            internal_admin_unread = (
+                db.query(func.count(Message.id))
+                .join(Conversation, Conversation.id == Message.conversation_id)
+                .filter(
+                    Conversation.kind == "internal",
+                    Message.sender == "admin",
+                    Message.is_read == False,
+                )
+                .scalar()
+            ) or 0
+            internal_admin_items = [
+                {
+                    "id": f"imsg-{m.id}",
+                    "title": u.username if u else "Unknown admin",
+                    "subtitle": (m.content[:70] if m.content else "📎 Attachment"),
+                    "status": None,
+                    "time": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m, u in internal_rows
+            ]
+
+        combined_messages_count = unread_messages + internal_admin_unread
+        combined_message_items = (message_items + internal_admin_items)[:RECENT_LIMIT]
 
         # ── PENDING WITHDRAWALS ─────────────────────────────
         withdrawal_rows = (
@@ -117,6 +167,48 @@ async def get_stats(admin_id: int | None = None):
             }
             for t, u, c in withdrawal_rows
         ]
+
+
+                # ── UNREAD MESSAGES FROM MASTER (internal admin<->master thread) ──
+        master_conv_unread = 0
+        master_conv_items = []
+        if admin_id is not None:
+            internal_conv = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == admin_id, Conversation.kind == "internal")
+                .first()
+            )
+            if internal_conv:
+                master_conv_unread = (
+                    db.query(func.count(Message.id))
+                    .filter(
+                        Message.conversation_id == internal_conv.id,
+                        Message.sender == "master",
+                        Message.is_read == False,
+                    )
+                    .scalar()
+                ) or 0
+                unread_rows = (
+                    db.query(Message)
+                    .filter(
+                        Message.conversation_id == internal_conv.id,
+                        Message.sender == "master",
+                        Message.is_read == False,
+                    )
+                    .order_by(Message.created_at.desc())
+                    .limit(RECENT_LIMIT)
+                    .all()
+                )
+                master_conv_items = [
+                    {
+                        "id": f"mm-{m.id}",
+                        "title": "Master",
+                        "subtitle": (m.content[:70] if m.content else "📎 Attachment"),
+                        "status": None,
+                        "time": m.created_at.isoformat() if m.created_at else None,
+                    }
+                    for m in unread_rows
+                ]
 
         # ── PENDING WIRE TRANSFER ORDERS ────────────────────
         wire_rows = (
@@ -172,7 +264,8 @@ async def get_stats(admin_id: int | None = None):
             "admin_balances": admin_balances,
             "indicators": {
                 "orders": {"count": pending_orders_count, "items": order_items},
-                "messages": {"count": unread_messages, "items": message_items},
+                "messages": {"count": combined_messages_count, "items": combined_message_items},
+                "master_messages": {"count": master_conv_unread, "items": master_conv_items},   # ← add this line
                 "withdrawals": {"count": pending_withdrawals_count, "items": withdrawal_items},
                 "exchange": {"count": len(exchange_items), "items": exchange_items},
                 "wire_transfer": {"count": pending_wire_count, "items": wire_items},

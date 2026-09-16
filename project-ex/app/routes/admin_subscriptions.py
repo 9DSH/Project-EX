@@ -23,6 +23,10 @@ from app.models.subscription import (
 )
 from app.services.subscription_service import (
     master_set_subscription_status,
+    master_switch_plan,
+    master_grant_addon,
+    master_expire_addon,
+    master_remove_addon,
     master_grant_access,
     master_revoke_access,
     subscribe_to_plan,
@@ -106,6 +110,14 @@ class ForceStatusPayload(BaseModel):
 
 class GrantPayload(BaseModel):
     key: str
+
+
+class MasterSwitchPlanPayload(BaseModel):
+    plan_id: int
+
+
+class MasterAddonPayload(BaseModel):
+    access_point_id: int
 
 
 class SubscribePayload(BaseModel):
@@ -297,13 +309,31 @@ def delete_access_point(access_point_id: int, db: Session = Depends(get_db_rls),
     if not ap:
         raise HTTPException(404, "Access point not found")
 
-    in_use = db.query(AdminAddon).filter(AdminAddon.access_point_id == access_point_id).count()
+    # Only a LIVE purchase should block deletion — cancelled add-ons are
+    # now hard-deleted by cancel_addon(), but any already-expired rows
+    # left over from before that change (back when cancelling only set
+    # status="expired") shouldn't keep blocking master from cleaning up
+    # the catalog.
+    in_use = db.query(AdminAddon).filter(
+        AdminAddon.access_point_id == access_point_id,
+        AdminAddon.status.in_(["active", "grace"]),
+    ).count()
     if in_use > 0:
         raise HTTPException(400, "Access point has active purchases and cannot be deleted. Deactivate it instead.")
 
     linked_to_plan = db.query(PlanAccessPoint).filter(PlanAccessPoint.access_point_id == access_point_id).count()
     if linked_to_plan > 0:
         raise HTTPException(400, "Access point is included as a fixed benefit in one or more plans. Remove it from those plans first.")
+
+    # Every purchase/grant leaves a SubscriptionInvoice row for the
+    # billing/audit trail, even after the AdminAddon itself is later
+    # hard-deleted. That invoice history must never be destroyed just
+    # because master wants to retire the catalog entry — deactivating
+    # instead keeps the access point out of new purchases while leaving
+    # past invoices intact and readable.
+    has_billing_history = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.access_point_id == access_point_id).count()
+    if has_billing_history > 0:
+        raise HTTPException(400, "Access point has billing/invoice history and cannot be deleted. Deactivate it instead to hide it from new purchases.")
 
     db.delete(ap)
     db.commit()
@@ -574,6 +604,53 @@ def get_admin_subscription_detail(admin_id: int, db: Session = Depends(get_db_rl
 def force_subscription_status(admin_id: int, payload: ForceStatusPayload, db: Session = Depends(get_db_rls), master=Depends(get_master)):
     sub = master_set_subscription_status(db, admin_id, payload.status)
     return _serialize_subscription(sub)
+
+
+@router.post("/admins/{admin_id}/switch-plan")
+def master_switch_admin_plan(admin_id: int, payload: MasterSwitchPlanPayload, db: Session = Depends(get_db_rls), master=Depends(get_master)):
+    """Master override: put this admin on a different plan right now,
+    free of charge. Their old plan's fixed access points are revoked and
+    the new plan's are granted immediately; any purchased add-ons are
+    left untouched (remove those separately below if they no longer
+    apply)."""
+    user = db.query(User).filter(User.user_id == admin_id, User.role == "admin").first()
+    if not user:
+        raise HTTPException(404, "Admin not found")
+    sub = master_switch_plan(db, admin_id, payload.plan_id)
+    return _serialize_subscription(sub)
+
+
+@router.post("/admins/{admin_id}/addons")
+def master_add_admin_addon(admin_id: int, payload: MasterAddonPayload, db: Session = Depends(get_db_rls), master=Depends(get_master)):
+    """Master override: hand this admin a specific add-on directly, free
+    of charge, bypassing required-plan gating entirely."""
+    user = db.query(User).filter(User.user_id == admin_id, User.role == "admin").first()
+    if not user:
+        raise HTTPException(404, "Admin not found")
+    addon = master_grant_addon(db, admin_id, payload.access_point_id)
+    return _serialize_addon(addon)
+
+
+@router.put("/admins/{admin_id}/addons/{access_point_id}/expire")
+def master_expire_admin_addon(admin_id: int, access_point_id: int, db: Session = Depends(get_db_rls), master=Depends(get_master)):
+    """Master override: revoke this add-on's access immediately but keep
+    the purchase record (and its invoice history) for the books — use
+    the DELETE endpoint below instead to wipe the record entirely."""
+    user = db.query(User).filter(User.user_id == admin_id, User.role == "admin").first()
+    if not user:
+        raise HTTPException(404, "Admin not found")
+    addon = master_expire_addon(db, admin_id, access_point_id)
+    return _serialize_addon(addon)
+
+
+@router.delete("/admins/{admin_id}/addons/{access_point_id}")
+def master_remove_admin_addon(admin_id: int, access_point_id: int, db: Session = Depends(get_db_rls), master=Depends(get_master)):
+    """Master override: pull a purchased/granted add-on off this admin
+    immediately, regardless of how they got it."""
+    user = db.query(User).filter(User.user_id == admin_id, User.role == "admin").first()
+    if not user:
+        raise HTTPException(404, "Admin not found")
+    return master_remove_addon(db, admin_id, access_point_id)
 
 
 @router.post("/admins/{admin_id}/grant")

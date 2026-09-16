@@ -6,7 +6,7 @@ from app.db.database import engine, Base, ensure_schema, ensure_rls_policies
 from app.services.ws_manager import manager
 from app.services.sweep_scheduler import sweep_worker_loop
 from app.services.wire_transfer_expiry import wire_order_expiry_loop
-
+from app.services.wallet_service import ensure_system_wallet
 # =========================
 # IMPORT ROUTERS CORRECTLY
 # =========================
@@ -86,6 +86,7 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    ensure_system_wallet() 
     ensure_schema()
     ensure_rls_policies()
     asyncio.create_task(sweep_worker_loop())

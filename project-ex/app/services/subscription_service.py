@@ -455,6 +455,12 @@ def buy_addon(db: Session, admin_id: int, access_point_id: int, currency_id: int
 
 
 def cancel_addon(db: Session, admin_id: int, access_point_id: int):
+    """Cancels (and fully removes) an admin's add-on — used both for
+    self-serve cancellation and master's forced removal. This is a hard
+    delete rather than a soft "expired" flag: a lingering expired row
+    would otherwise still count as a "purchase" against the access point
+    and block master from deleting it from the catalog later, even
+    though nobody actually holds it anymore."""
     addon = db.query(AdminAddon).filter(
         AdminAddon.admin_id == admin_id,
         AdminAddon.access_point_id == access_point_id,
@@ -462,12 +468,10 @@ def cancel_addon(db: Session, admin_id: int, access_point_id: int):
     if not addon:
         raise HTTPException(404, "Addon not found")
 
-    addon.status = "expired"
-    addon.current_period_end = None
-    addon.grace_started_at = None
-    db.commit()
-
     revoke_all_for_source(db, admin_id, source=SOURCE_ADDON, source_id=addon.id)
+
+    db.delete(addon)
+    db.commit()
 
     return {"success": True}
 
@@ -496,6 +500,150 @@ def master_set_subscription_status(db: Session, admin_id: int, status: str):
 
     db.commit()
     return sub
+
+
+def master_switch_plan(db: Session, admin_id: int, plan_id: int):
+    """Master override: force an admin onto a different plan immediately,
+    with no charge and no balance check. Mirrors the grant bookkeeping
+    subscribe_to_plan does (revoke the old plan's PLAN-sourced grants,
+    grant the new plan's fixed access points) but skips billing entirely
+    and records a free ($0) invoice so it still shows up in history."""
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    if not plan.is_active:
+        raise HTTPException(400, "Plan is inactive")
+
+    sub = db.query(AdminSubscription).filter(AdminSubscription.admin_id == admin_id).first()
+    period_end = None if plan.is_default else (datetime.utcnow() + timedelta(days=plan.duration_days or RENEWAL_PERIOD_DAYS_DEFAULT))
+
+    if sub:
+        revoke_all_for_source(db, admin_id, source=SOURCE_PLAN, source_id=sub.id)
+        sub.plan_id = plan.id
+        sub.status = "active"
+        sub.currency_id = None
+        sub.network_id = None
+        sub.chosen_options = None
+        sub.current_period_end = period_end
+        sub.grace_started_at = None
+        sub.forced_by_master = True
+    else:
+        sub = AdminSubscription(
+            admin_id=admin_id,
+            plan_id=plan.id,
+            status="active",
+            current_period_end=period_end,
+            forced_by_master=True,
+        )
+        db.add(sub)
+        db.flush()
+
+    db.commit()
+    db.refresh(sub)
+
+    db.add(SubscriptionInvoice(
+        admin_id=admin_id,
+        type="plan",
+        plan_id=plan.id,
+        amount=0,
+        discount_percent=0,
+        status="free",
+        note="Plan switched by master (no charge)",
+    ))
+    db.commit()
+
+    for key in _plan_access_keys(db, plan.id, None):
+        grant_access(db, admin_id, key, source=SOURCE_PLAN, source_id=sub.id)
+
+    return sub
+
+
+def master_grant_addon(db: Session, admin_id: int, access_point_id: int):
+    """Master override: hand an admin a specific add-on directly, free,
+    bypassing required-plan gating, the already-included-in-plan check,
+    and billing. Reactivates an expired/cancelled record if one exists
+    instead of erroring on the unique (admin_id, access_point_id)
+    constraint."""
+    ap = db.query(AccessPointCatalog).filter(AccessPointCatalog.id == access_point_id).first()
+    if not ap:
+        raise HTTPException(404, "Access point not found")
+
+    addon = db.query(AdminAddon).filter(
+        AdminAddon.admin_id == admin_id,
+        AdminAddon.access_point_id == access_point_id,
+    ).first()
+
+    period_end = datetime.utcnow() + timedelta(days=RENEWAL_PERIOD_DAYS_DEFAULT)
+
+    if addon:
+        addon.status = "active"
+        addon.currency_id = None
+        addon.network_id = None
+        addon.current_period_end = period_end
+        addon.grace_started_at = None
+        addon.forced_by_master = True
+    else:
+        addon = AdminAddon(
+            admin_id=admin_id,
+            access_point_id=access_point_id,
+            status="active",
+            current_period_end=period_end,
+            forced_by_master=True,
+        )
+        db.add(addon)
+        db.flush()
+
+    db.commit()
+    db.refresh(addon)
+
+    db.add(SubscriptionInvoice(
+        admin_id=admin_id,
+        type="addon",
+        access_point_id=access_point_id,
+        amount=0,
+        discount_percent=0,
+        status="free",
+        note="Add-on granted by master (no charge)",
+    ))
+    db.commit()
+
+    grant_access(db, admin_id, ap.key, source=SOURCE_ADDON, source_id=addon.id)
+
+    return addon
+
+
+def master_expire_addon(db: Session, admin_id: int, access_point_id: int):
+    """Master override: revoke access immediately by marking this add-on
+    'expired', but keep the AdminAddon row (and its billing history)
+    intact — unlike master_remove_addon, which deletes the row entirely.
+    Use this when master wants the record to stay for audit purposes;
+    use master_remove_addon to wipe it completely instead."""
+    addon = db.query(AdminAddon).filter(
+        AdminAddon.admin_id == admin_id,
+        AdminAddon.access_point_id == access_point_id,
+    ).first()
+    if not addon:
+        raise HTTPException(404, "Addon not found")
+
+    addon.status = "expired"
+    addon.current_period_end = None
+    addon.grace_started_at = None
+    addon.forced_by_master = True
+    db.commit()
+    db.refresh(addon)
+
+    revoke_all_for_source(db, admin_id, source=SOURCE_ADDON, source_id=addon.id)
+
+    return addon
+
+
+def master_remove_addon(db: Session, admin_id: int, access_point_id: int):
+    """Master override: pull a purchased/granted add-on off an admin
+    immediately, deleting the row entirely. Thin wrapper so the route
+    layer doesn't need to know cancel_addon() is doing double duty for
+    both self-serve and master use — same delete-and-revoke behavior
+    either way."""
+    return cancel_addon(db, admin_id, access_point_id)
 
 
 def master_grant_access(db: Session, admin_id: int, key: str):

@@ -17,12 +17,13 @@ def derive_bsc_private_key(index: int):
     Derive BSC (Ethereum) wallet from mnemonic
     Path: m/44'/60'/0'/0/index
     """
+    mnemonic = os.getenv("MASTER_MNEMONIC")
 
-    if not MNEMONIC:
+    if not mnemonic:
         raise Exception("MASTER_MNEMONIC not set")
 
     account = Account.from_mnemonic(
-        MNEMONIC,
+        mnemonic,
         account_path=f"m/44'/60'/0'/0/{index}"
     )
 

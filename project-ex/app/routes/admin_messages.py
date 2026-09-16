@@ -75,11 +75,6 @@ async def admin_send_message(
         return {"error": "Conversation not found"}
 
 
-    if not conversation.support_chat_id:
-        print("❌ No support_chat_id — cannot forward to Telegram")
-        raise HTTPException(status_code=400, detail="No support chat linked")
-
-    
       # Save media file if present
     media_url = None
     if payload.media_file and payload.media_type:
@@ -88,6 +83,51 @@ async def admin_send_message(
         except Exception as e:
             print("❌ Failed to save media:", e)
             return {"error": "Failed to save media"}
+
+        
+    # Internal admin<->master threads: no Telegram to forward to, just
+   # persist and broadcast. Sender is whichever side of the pair the
+    # currently-authenticated user is (master replying to an admin here,
+    # since admins use /admin-master-messages/send for their own side).
+
+    if conversation.kind == "internal":
+        sender = "master" if is_master(admin) else "admin"
+
+        msg = Message(
+            conversation_id=conversation.id,
+            sender=sender,
+            content=payload.content,
+            media_type=payload.media_type,
+            media_url=media_url,
+            media_file_id=None,
+            status="sent",
+            is_read=False,
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+
+        await manager.broadcast({
+            "type": "new_message",
+            "conversation_id": conversation.id,
+            "message": {
+                "id": msg.id,
+                "conversation_id": conversation.id,
+                "sender": msg.sender,
+                "content": msg.content,
+                "media_type": msg.media_type,
+                "media_url": media_url,
+                "status": msg.status,
+                "username": sender,
+            }
+        })
+
+        return {"success": True, "message_id": msg.id, "media_url": media_url}
+
+    # Telegram-backed support conversation — original behavior.
+    if not conversation.support_chat_id:
+        print("❌ No support_chat_id — cannot forward to Telegram")
+        raise HTTPException(status_code=400, detail="No support chat linked")
 
     msg = Message(
         conversation_id=conversation.id,
@@ -178,6 +218,7 @@ def get_conversations(
             "conversation_id": conv.id,
             "user_id": conv.user_id,
             "username": user.username if user else "Unknown",
+            "kind": conv.kind,
             "telegram_id": conv.telegram_id,
             "support_chat_id": conv.support_chat_id,
             "last_message": last_msg.content if last_msg else None,
@@ -220,9 +261,12 @@ async def get_conversation_messages(
         Message.conversation_id == conversation_id
     ).order_by(Message.created_at.asc()).all()
 
+    # Telegram support threads: unread messages come from "user".
+    # Internal admin<->master threads: unread messages come from "admin".
+    unread_sender = "admin" if conversation.kind == "internal" else "user"
     db.query(Message).filter(
         Message.conversation_id == conversation_id,
-        Message.sender == "user",
+        Message.sender == unread_sender,
         Message.is_read == False
     ).update({"is_read": True})
 

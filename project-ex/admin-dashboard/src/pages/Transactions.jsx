@@ -487,9 +487,10 @@ export default function Transactions() {
             {
               key: "type",
               visible: true,
+              label: "Type",
               value: typeFilter,
               onChange: setTypeFilter,
-              placeholder: "All Types",
+              placeholder: "All",
               options: [
                 { label: "Deposit", value: "deposit" },
                 { label: "Withdraw", value: "withdraw" },
@@ -499,10 +500,11 @@ export default function Transactions() {
             },
             {
               key: "status",
+              label: "Status",
               visible: true,
               value: statusFilter,
               onChange: setStatusFilter,
-              placeholder: "All Status",
+              placeholder: "All",
               options: [
                 { label: "Pending", value: "pending" },
                 { label: "Completed", value: "completed" },
@@ -512,26 +514,30 @@ export default function Transactions() {
             },
             {
               key: "currency",
+              label: "Currency",
               visible: true,
               value: currencyFilter,
               onChange: setCurrencyFilter,
-              placeholder: "All Currency",
+              placeholder: "All",
               options: currencies.map((c) => ({ label: c, value: c })),
             },
             {
               key: "network",
+              label: "Network",
               visible: true,
               value: networkFilter,
               onChange: setNetworkFilter,
-              placeholder: "All Networks",
+              placeholder: "All",
               options: networks.map((n) => ({ label: n, value: n })),
             },
             {
+              
               key: "actor",
+              label: "User",
               visible: true,
               value: actorFilter,
               onChange: setActorFilter,
-              placeholder: "All Actors",
+              placeholder: "All",
               options: [
                 { label: "Admin Only", value: "admin" },
                 { label: "User Only", value: "user" },

@@ -23,11 +23,6 @@ def _resolve_scope(user: dict) -> tuple[bool, int | None]:
 
 
 def get_db_rls(user: dict = Depends(get_current_user)):
-    """
-    Drop-in replacement for `get_db` on any route that also depends on
-    get_current_user. Sets the Postgres session variables RLS policies read,
-    scoped to the current transaction (SET LOCAL), then yields the session.
-    """
     db = SessionLocal()
     try:
         is_master, admin_id = _resolve_scope(user)
@@ -36,6 +31,7 @@ def get_db_rls(user: dict = Depends(get_current_user)):
             text("SET LOCAL app.current_admin_id = :v"),
             {"v": str(admin_id) if admin_id is not None else ""},
         )
+        db.execute(text("SET LOCAL app.is_global_bot = 'false'"))
         yield db
     finally:
         db.close()
@@ -44,12 +40,15 @@ def get_db_rls(user: dict = Depends(get_current_user)):
 def get_db_master():
     """
     For unauthenticated / signature-authenticated entry points (webhooks)
-    that legitimately need platform-wide row visibility. SET LOCAL is fine
-    here since these are single-transaction request-scoped sessions.
+    that legitimately need platform-wide row visibility. Uses session-level
+    SET (not SET LOCAL) because callers may commit multiple times within
+    the same request (e.g. bootstrap-master does insert -> commit -> refresh),
+    and SET LOCAL is wiped after the first commit.
     """
     db = SessionLocal()
     try:
-        db.execute(text("SET LOCAL app.is_master = 'true'"))
+        db.execute(text("SET app.is_master = 'true'"))
+        db.execute(text("SET app.is_global_bot = 'false'"))
         yield db
     finally:
         db.close()

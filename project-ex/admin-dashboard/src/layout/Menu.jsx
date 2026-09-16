@@ -252,14 +252,17 @@ export default function Menu({ pinned, setPinned }) {
         </Link>
       )}
 
+
       <div style={sectionTitleWrap}>
         <div style={sectionTitle}>COMMUNICATION</div>
         <div style={sectionDivider} />
       </div>
+      {hasPermission(user, "send.message") && (
       <Link to="/messages" style={linkStyle(isActive("/messages"))} title="Messages">
         <MessageSquare size={17} style={{ flexShrink: 0 }} />
         {label("Messages")}
       </Link>
+        )}
     </div>
   );
 }

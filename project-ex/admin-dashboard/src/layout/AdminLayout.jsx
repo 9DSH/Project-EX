@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Menu from "./Menu";
 import TopBar from "./TopBar";
-
+import SupportWidget from "../components/SupportWidget";
 export const TOPBAR_HEIGHT = 48;
 export const COLLAPSED_WIDTH = 54;
 export const EXPANDED_WIDTH = 250;
@@ -35,6 +35,8 @@ export default function AdminLayout({ children }) {
           {children}
         </div>
       </div>
+
+      <SupportWidget />
     </div>
   );
 }

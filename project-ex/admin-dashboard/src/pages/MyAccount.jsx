@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  CalendarClock, CircleUserRound, CreditCard, Mail, MessageSquare, Pencil, Phone, Save,
+  CalendarClock, CircleUserRound, CreditCard, Mail,  Pencil, Phone, Save,
   Send, ShieldCheck, KeyRound, Ticket, Wallet, X,
 } from "lucide-react";
 import { API_URL } from "../config";
@@ -36,26 +36,18 @@ function showToast(msg, ok = true) {
 }
 
 const fmtDate = (value) => (value ? new Date(value).toLocaleString() : "—");
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Failed to read file."));
-    reader.readAsDataURL(file);
-  });
+
 
 const sectionsBase = [
   { key: "balances", label: "Balances", icon: Wallet },
   { key: "subscription", label: "Subscription", icon: CreditCard },
   { key: "invitations", label: "Invitations", icon: Ticket },
-  { key: "messages", label: "Messages", icon: MessageSquare },
 ];
 
 const emptyProfileDraft = { first_name: "", last_name: "", email: "", phone_number: "" };
 
 export default function MyAccount() {
   const token = localStorage.getItem("token");
-  const messagesBottomRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,11 +59,6 @@ export default function MyAccount() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const [messages, setMessages] = useState([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messageText, setMessageText] = useState("");
-  const [messageFile, setMessageFile] = useState(null);
-  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [subCatalog, setSubCatalog] = useState({ plans: [], access_points: [] });
   const [mySub, setMySub] = useState({ subscription: null, addons: [], invoices: [] });
@@ -83,11 +70,7 @@ export default function MyAccount() {
   const role = (profile?.role || "").toLowerCase();
   const isMaster = role === "master" || role === "superadmin";
 
-  const sections = useMemo(
-    () => sectionsBase.filter((s) => (isMaster ? s.key !== "messages" : true)),
-    [isMaster]
-  );
-
+  const sections = sectionsBase;
   // =========================================================
   // PROFILE
   // =========================================================
@@ -222,61 +205,6 @@ export default function MyAccount() {
     return !!sub && ap.required_plan_ids.includes(sub.plan_id) && (sub.status === "active" || sub.status === "grace");
   };
 
-  // =========================================================
-  // MESSAGES (admin -> master thread)
-  // =========================================================
-  const loadMessages = useCallback(async () => {
-    if (!token || isMaster) return;
-    setMessagesLoading(true);
-    try {
-      const res = await api.get("/admin-master-messages/messages", { headers: authHeaders(token) });
-      setMessages(Array.isArray(res.data?.messages) ? res.data.messages : []);
-    } catch (err) {
-      showToast(err?.response?.data?.detail || err?.message || "Failed to load messages.", false);
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, [isMaster, token]);
-
-  useEffect(() => {
-    if (activeSection === "messages" && !isMaster) {
-      void loadMessages();
-      const interval = setInterval(loadMessages, 5000);
-      return () => clearInterval(interval);
-    }
-    return undefined;
-  }, [activeSection, isMaster, loadMessages]);
-
-  useEffect(() => {
-    messagesBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const sendMessageToMaster = async () => {
-    if (!token || isMaster) return;
-    if (!messageText.trim() && !messageFile) return;
-
-    setSendingMessage(true);
-    try {
-      let mediaPayload = null;
-      let mediaType = null;
-      if (messageFile) {
-        mediaPayload = await fileToDataUrl(messageFile);
-        mediaType = messageFile.type.startsWith("image/") ? "photo" : "document";
-      }
-      await api.post(
-        "/admin-master-messages/send",
-        { content: messageText.trim() || null, media_type: mediaType, media_file: mediaPayload },
-        { headers: authHeaders(token) }
-      );
-      setMessageText("");
-      setMessageFile(null);
-      await loadMessages();
-    } catch (err) {
-      showToast(err?.response?.data?.detail || err?.message || "Failed to send message.", false);
-    } finally {
-      setSendingMessage(false);
-    }
-  };
 
   const profileTitle = isMaster ? "Master Info" : "Admin Info";
 
@@ -330,52 +258,11 @@ export default function MyAccount() {
 
           {activeSection === "invitations" && <InvitationsPanel isMaster={isMaster} />}
 
-          {activeSection === "messages" && !isMaster && (
-            <div style={styles.stack}>
-              <div style={styles.card}>
-                <div style={styles.cardTitle}>Message to Master</div>
-                <div style={styles.subtle}>Use this thread for admin ↔ master communication and receipt uploads.</div>
-                <div style={styles.messageLayout}>
-                  <div style={styles.messageThread}>
-                    {(messagesLoading && messages.length === 0) ? (
-                      <div style={styles.subtle}>Loading messages...</div>
-                    ) : (
-                      messages.map((message) => (
-                        <div key={message.id} style={styles.messageBubble(message.sender === "admin")}>
-                          <div style={styles.messageMeta}>{message.sender} · {fmtDate(message.created_at)}</div>
-                          {message.content && <div>{message.content}</div>}
-                          {message.media_url && (
-                            <a href={`${API_URL}${message.media_url}`} target="_blank" rel="noreferrer" style={styles.messageLink}>
-                              Open attachment
-                            </a>
-                          )}
-                        </div>
-                      ))
-                    )}
-                    <div ref={messagesBottomRef} />
-                  </div>
-                  <div style={styles.composeCard}>
-                    <textarea
-                      value={messageText}
-                      onChange={(event) => setMessageText(event.target.value)}
-                      rows={6}
-                      placeholder="Write to master..."
-                      style={styles.textarea}
-                    />
-                    <input type="file" onChange={(event) => setMessageFile(event.target.files?.[0] || null)} style={styles.input} />
-                    {messageFile && <div style={styles.subtle}>{messageFile.name}</div>}
-                    <button type="button" onClick={sendMessageToMaster} disabled={sendingMessage} style={styles.primaryBtn}>
-                      <Mail size={13} /> {sendingMessage ? "Sending..." : "Send"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+
         </main>
 
         {error && (
-          <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9000, maxWidth: 420, background: "rgba(127,29,29,.95)", border: "1px solid rgba(239,68,68,.5)", borderRadius: 14, padding: "12px 16px", color: "#fecaca", fontSize: 13, display: "flex", gap: 10, alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.5)" }}>
+          <div style={{ position: "fixed", top: 46, right: 16, zIndex: 9000, maxWidth: 420, background: "rgba(127,29,29,.95)", border: "1px solid rgba(239,68,68,.5)", borderRadius: 14, padding: "12px 16px", color: "#fecaca", fontSize: 13, display: "flex", gap: 10, alignItems: "flex-start", boxShadow: "0 8px 32px rgba(0,0,0,.5)" }}>
             <span style={{ flex: 1 }}><strong>Error:</strong> {error}</span>
             <button type="button" onClick={() => setError("")} style={{ background: "none", border: "none", color: "#fecaca", cursor: "pointer", padding: 0, lineHeight: 1 }}><X size={14} /></button>
           </div>

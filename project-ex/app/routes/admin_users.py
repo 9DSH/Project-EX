@@ -17,7 +17,7 @@ from app.constants.transaction_types import ADMIN_DEPOSIT,ADMIN_WITHDRAW, MASTER
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 import uuid
 from app.core.security import hash_password
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from app.models.messages import Conversation, Message
 from typing import Optional
 from app.models.user import UserWallet
@@ -85,6 +85,21 @@ def has_access(user, permission: str):
         return True
 
     return permission in allowed
+
+
+def _reassert_master_rls(db: Session):
+    """
+    Several helper functions (sync_master_grants, get_or_create_wallet_for_pair,
+    enroll_free_plan_on_signup, grant_access, etc.) call db.commit() internally.
+    Since app.is_master / app.current_admin_id are SET LOCAL (transaction-scoped),
+    any internal commit wipes them — and every table this touches has
+    FORCE ROW LEVEL SECURITY, so subsequent writes in the same request get
+    silently rejected. Call this after any such helper, before issuing more
+    writes in the same request.
+    """
+    db.execute(text("SET LOCAL app.is_master = 'true'"))
+    db.execute(text("SET LOCAL app.current_admin_id = ''"))
+
 # -------------------------
 # SHARED USER SERIALIZER
 # -------------------------
@@ -498,21 +513,26 @@ def create_user(
 
         if access_points:
             sync_master_grants(db, new_user.user_id, access_points)
+            _reassert_master_rls(db)
 
         # =========================
         # WALLET GENERATION
         # (single source of truth: UserWallet per active pair)
         # =========================
         wallets = create_wallet_for_user(db, new_user)
+        _reassert_master_rls(db)
 
         create_default_balances(db, new_user.user_id)
+        _reassert_master_rls(db)
 
         # Every new admin is auto-enrolled in the default free/showcase
         # plan at zero cost. Not applicable to role=user or role=master.
         if requested_role == "admin":
             enroll_free_plan_on_signup(db, new_user.user_id)
+            _reassert_master_rls(db)
 
         db.commit()
+        _reassert_master_rls(db)
         db.refresh(new_user)
 
         return {
@@ -1235,8 +1255,67 @@ def delete_user(user_id: int, db: Session = Depends(get_db_rls), user=Depends(ge
     if db_user.role == "master":
         raise HTTPException(403, "Cannot delete a master account via this endpoint")
 
-    db.delete(db_user)
-    db.commit()
+    try:
+        # =========================
+        # CASCADE DELETE DEPENDENT ROWS
+        # (children must go before the parent User row, or the DB's FK
+        # constraints reject the delete with an IntegrityError)
+        # =========================
+        conversation_ids = [
+            c.id for c in db.query(Conversation.id).filter(Conversation.user_id == user_id).all()
+        ]
+        if conversation_ids:
+            db.query(Message).filter(
+                Message.conversation_id.in_(conversation_ids)
+            ).delete(synchronize_session=False)
+
+        db.query(Conversation).filter(
+            Conversation.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(Transaction).filter(
+            Transaction.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(OrderItem).filter(
+            OrderItem.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(WireTransferOrder).filter(
+            WireTransferOrder.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(UserWallet).filter(
+            UserWallet.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(ExternalWallet).filter(
+            ExternalWallet.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(UserBankInfo).filter(
+            UserBankInfo.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.query(UserBalance).filter(
+            UserBalance.user_id == user_id
+        ).delete(synchronize_session=False)
+
+        db.delete(db_user)
+        db.commit()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not delete user because related records still reference "
+                f"this account: {str(e)}"
+            ),
+        )
+
     return {"message": "User deleted"}
 
 

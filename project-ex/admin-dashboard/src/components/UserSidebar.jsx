@@ -237,6 +237,7 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     canViewExchange: hasPermission(currentUser, "exchange.view"),
     canManageExchange: hasPermission(currentUser, "exchange.service"),
     canEditUser: hasPermission(currentUser, "users.manage"),
+    canDeleteUser: hasPermission(currentUser, "users.delete"),
   }), [currentUser]);
 
 
@@ -657,6 +658,59 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
     } catch (err) {
       console.error(err);
       alert("Network error while resetting password");
+    }
+  };
+
+  // =====================================================
+  // DELETE USER
+  // =====================================================
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  const deleteUser = async () => {
+    if (!user?.user_id) return;
+
+    if (user.role === "master") {
+      alert("Master accounts cannot be deleted here.");
+      return;
+    }
+
+    const confirmStep1 = window.confirm(
+      `Are you sure you want to delete user "${user.username}" (#${user.user_id})?\n\nThis action cannot be undone.`
+    );
+    if (!confirmStep1) return;
+
+    const typed = window.prompt(
+      `To confirm, type the username "${user.username}" exactly:`
+    );
+    if (typed !== user.username) {
+      if (typed !== null) alert("Username didn't match. Deletion cancelled.");
+      return;
+    }
+
+    setDeletingUser(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${user.user_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(data.detail || "Failed to delete user");
+        return;
+      }
+
+      alert(data.message || "User deleted");
+      onRefresh?.();
+      handleClose();
+    } catch (err) {
+      console.error(err);
+      alert("Network error while deleting user");
+    } finally {
+      setDeletingUser(false);
     }
   };
 
@@ -1201,6 +1255,8 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
 
                     updateProfile={updateProfile}
                     resetPassword={resetPassword}
+                    deleteUser={deleteUser}
+                    deletingUser={deletingUser}
 
                     permissions={permissions}
                     ACCESS_GROUPS={ACCESS_GROUPS}

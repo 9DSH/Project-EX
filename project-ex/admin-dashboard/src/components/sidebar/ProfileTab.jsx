@@ -118,10 +118,12 @@ export default function ProfileTab({
   telegramId, setTelegramId, status, setStatus, role, setRole, accessPoints,
   toggleAccess, permissionTab, setPermissionTab, updateProfile, resetPassword,
   newPassword, setNewPassword, permissions, ACCESS_GROUPS, hasPermission,
+  deleteUser, deletingUser,
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
   const canEdit = permissions?.canEditUser;
+  const canDelete = permissions?.canDeleteUser && user?.role !== "master";
   const canManagePermissions =
     (user?.role === "admin" || user?.role === "master") && hasPermission(user, "admins.promotion");
 
@@ -242,6 +244,28 @@ export default function ProfileTab({
               Reset password
             </button>
           </div>
+
+          {canDelete && (
+            <>
+              <div style={styles.divider} />
+              <div style={styles.dangerZone}>
+                <div style={styles.dangerZoneText}>
+                  <div style={styles.dangerZoneTitle}>Delete this user</div>
+                  <div style={styles.toggleDesc}>
+                    Permanently removes this account and all associated data. This cannot be undone.
+                  </div>
+                </div>
+                <button
+                  onClick={deleteUser}
+                  disabled={deletingUser}
+                  style={{ ...styles.dangerBtn, opacity: deletingUser ? 0.6 : 1, cursor: deletingUser ? "not-allowed" : "pointer" }}
+                >
+                  <Icon path={icons.lock} size={15} />
+                  {deletingUser ? "Deleting..." : "Delete user"}
+                </button>
+              </div>
+            </>
+          )}
         </Section>
       )}
 
@@ -483,6 +507,19 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
+  dangerZone: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    background: "rgba(239,68,68,0.06)",
+    border: "1px solid rgba(239,68,68,0.25)",
+    borderRadius: 14,
+    padding: "14px 16px",
+  },
+  dangerZoneText: { display: "flex", flexDirection: "column", gap: 4, minWidth: 200 },
+  dangerZoneTitle: { fontSize: 14, fontWeight: 700, color: "#fca5a5" },
 
   /* Toggle */
   toggleRow: {
