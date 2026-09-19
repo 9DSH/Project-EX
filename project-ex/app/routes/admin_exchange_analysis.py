@@ -15,7 +15,7 @@ All of the above also accept an optional `admin_filter` query param:
   - omitted / "mine" -> scoped to the requesting user's own admin_id
   - "all"            -> platform-wide, across every admin (requires
                          can_view_all_admins — master or
-                         platform.service.management)
+                         platform.{service}.service)
   - "<user_id>"       -> scoped to that specific admin (same permission
                          requirement)
 
@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.core.permissions import has_access
-from app.services.exchange_scope import resolve_admin_scope
+from app.services.admins_scope import resolve_admin_scope
 
 from app.models.exchange_pair import ExchangePair
 from app.models.exchange_order import ExchangeOrder
@@ -59,10 +59,13 @@ TIMEFRAME_SECONDS = {
 # At 30m tf over 1Y that is ~17 500 candles — cap keeps payload reasonable.
 MAX_CANDLES = 2000
 
-def get_admin(user=Depends(get_current_user)):
+def get_admin(
+    db: Session = Depends(get_db_rls),
+    user=Depends(get_current_user),
+):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not has_access(user, "exchange.service"):
+    if not has_access(user, "exchange.service", db):
         raise HTTPException(status_code=403, detail="Access denied")
     return user
 
@@ -135,14 +138,12 @@ def get_rate_history(
     db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
-    if not has_access(admin, "exchange.service"):
-        raise HTTPException(403, "Access denied")
 
     pair = db.query(ExchangePair).filter(ExchangePair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
     if not scope_all and pair.admin_id != scope_admin_id:
         raise HTTPException(403, "Pair not available for this scope")
 
@@ -222,8 +223,6 @@ def get_rate_ohlc(
         high  = max(open, all updates in bucket)
         low   = min(open, all updates in bucket)
     """
-    if not has_access(admin, "exchange.service"):
-        raise HTTPException(403, "Access denied")
  
     if timeframe not in TIMEFRAME_SECONDS:
         raise HTTPException(
@@ -235,7 +234,7 @@ def get_rate_ohlc(
     if not pair:
         raise HTTPException(404, "Pair not found")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
     if not scope_all and pair.admin_id != scope_admin_id:
         raise HTTPException(403, "Pair not available for this scope")
  
@@ -359,10 +358,8 @@ def get_pnl_series(
     unrealized P&L, and README for how to extend this to a full daily
     mark-to-market series.
     """
-    if not has_access(admin, "exchange.service"):
-        raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
 
     dt_from, dt_to = _parse_date_range(date_from, date_to)
 
@@ -464,10 +461,8 @@ def get_inventory_snapshot(
     Switching base from USDT to IRT (or any other currency) will correctly
     re-value every position using the active pair rate in either direction.
     """
-    if not has_access(admin, "exchange.service"):
-        raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
 
     LEDGER_BASE = "USDT"  # rate_to_base_at_trade was recorded against this
 
@@ -537,10 +532,8 @@ def get_volume_by_pair(
     db:    Session = Depends(get_db_rls),
     admin = Depends(get_admin),
 ):
-    if not has_access(admin, "exchange.service"):
-        raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
 
     dt_from, dt_to = _parse_date_range(date_from, date_to)
 

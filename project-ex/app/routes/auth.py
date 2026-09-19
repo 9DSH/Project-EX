@@ -9,7 +9,7 @@ from app.models.user_balance import UserBalance
 from app.db.database import get_db
 from app.core.rls import get_db_master
 from app.models.user import User, TelegramBotSettings
-from app.core.security import hash_password
+from app.core.security import hash_password, get_current_user, create_access_token
 from app.services.invitation_service import (
     validate_invitation_code,
     consume_invitation_code,
@@ -106,6 +106,21 @@ def login(data: LoginRequest):
             detail="Internal server error during login"
         )
     
+@router.post("/refresh")
+def refresh_token(current_user: dict = Depends(get_current_user)):
+    """
+    Re-issues a JWT with a fresh expiry, using the still-valid token's own
+    payload. Called by the frontend on user activity to keep an active
+    session alive without a full re-login.
+    """
+    new_token = create_access_token({
+        "sub": current_user.get("sub"),
+        "role": current_user.get("role"),
+        "user_id": current_user.get("user_id"),
+        "admin_id": current_user.get("admin_id"),
+        "access_points": current_user.get("access_points"),
+    })
+    return {"access_token": new_token, "token_type": "bearer"}
 
 # =========================
 # SIGNUP ENDPOINT

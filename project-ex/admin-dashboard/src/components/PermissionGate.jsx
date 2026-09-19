@@ -11,7 +11,7 @@ export default function PermissionGate({
       {/* CONTENT */}
       <div
         style={{
-          filter: allowed ? "none" : "blur(1.5px) grayscale(0.4)",
+          filter: allowed ? "none" : "blur(0.7px) grayscale(0.4)",
           opacity: allowed ? 1 : 0.5,
           pointerEvents: allowed ? "auto" : "none",
           transition: "0.2s",
@@ -29,12 +29,12 @@ export default function PermissionGate({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontWeight: 800,
+            fontWeight: 700,
             letterSpacing: 2,
             fontSize: 12,
             color: "#ffffffa3",
             background: "rgba(0,0,0,0.35)",
-            backdropFilter: "blur(1px)",
+            backdropFilter: "blur(0px)",
             borderRadius: 10,
             pointerEvents: "none",
           }}

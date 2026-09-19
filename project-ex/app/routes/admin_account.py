@@ -3,10 +3,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-
+from app.routes.utilts.shared_functions import _reassert_master_rls
 from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master
 from app.models.currency import Currency
@@ -419,15 +419,18 @@ def _get_or_create_internal_conversation(db: Session, user_id: int):
         if conversation.kind != INTERNAL_KIND:
             conversation.kind = INTERNAL_KIND
             db.commit()
+            _reassert_master_rls(db)
         return conversation
 
     conversation = Conversation(user_id=user_id, kind=INTERNAL_KIND)
     db.add(conversation)
     try:
         db.commit()
+        _reassert_master_rls(db)
         db.refresh(conversation)
     except IntegrityError:
         db.rollback()
+        _reassert_master_rls(db)
         conversation = (
             db.query(Conversation)
             .filter(Conversation.user_id == user_id)
@@ -630,6 +633,8 @@ def get_my_account_summary(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
+
+    print(admin)
     row = db.query(User).filter(User.user_id == admin["user_id"]).first()
     if not row:
         raise HTTPException(404, "User not found")

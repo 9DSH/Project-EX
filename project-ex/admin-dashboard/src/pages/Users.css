@@ -627,6 +627,10 @@
   background: var(--count-color, #ef4444);
 }
 
+.users-activity-icon.is-active {
+  border-color: rgb(79, 84, 134);
+}
+
 .users-balances-row {
   display: flex;
   align-items: center;

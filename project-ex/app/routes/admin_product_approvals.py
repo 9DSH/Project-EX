@@ -6,7 +6,8 @@ from fastapi import HTTPException
 
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
+from app.core.rls import get_db_rls, get_db_master
+from app.routes.utilts.shared_functions import _reassert_master_rls
 
 from app.models.product import Product
 
@@ -47,7 +48,7 @@ def get_master(
 
 @router.get("/pending")
 def pending_products(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     master=Depends(get_master)
 ):
     return (
@@ -62,7 +63,7 @@ def pending_products(
 
 @router.get("/approved")
 def approved_products(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     master=Depends(get_master)
 ):
     return (
@@ -77,7 +78,7 @@ def approved_products(
 
 @router.get("/rejected")
 def rejected_products(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     master=Depends(get_master)
 ):
     return (
@@ -90,11 +91,12 @@ def rejected_products(
     )
 
 
+
 @router.post("/{product_id}/approve")
 def approve_product(
     product_id: int,
     payload: ProductApprovePayload,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     master=Depends(get_master)
 ):
     product = (
@@ -125,6 +127,7 @@ def approve_product(
     product.rejection_reason = None
 
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(product)
 
     return {
@@ -137,7 +140,7 @@ def approve_product(
 def reject_product(
     product_id: int,
     payload: ProductRejectPayload,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     master=Depends(get_master)
 ):
     product = (
@@ -165,6 +168,7 @@ def reject_product(
     product.approved_at = datetime.utcnow()
 
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(product)
 
     return {
@@ -176,7 +180,7 @@ def reject_product(
 @router.post("/{product_id}/resubmit")
 def resubmit_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_rls),
     admin=Depends(get_current_user)
 ):
     product = (
@@ -211,9 +215,10 @@ def resubmit_product(
     product.rejection_reason = None
 
     db.commit()
+    if is_master(admin):
+        _reassert_master_rls(db)
+    db.refresh(product)
 
     return {
         "success": True
     }
-
-

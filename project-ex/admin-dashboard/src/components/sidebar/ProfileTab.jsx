@@ -1,28 +1,18 @@
 import { useState } from "react";
+import {
+  User,
+  Phone,
+  Mail,
+  Send,
+  Shield,
+  Lock,
+  Eye,
+  EyeOff,
+  Check,
+  ChevronDown,
+  Trash2,
+} from "lucide-react";
 
-/* =========================
-   ICONS (inline, no deps)
-========================= */
-const Icon = ({ path, size = 16 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d={path} />
-  </svg>
-);
-
-const icons = {
-  user: "M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
-  at: "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-5.5 8.3",
-  phone: "M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z",
-  mail: "M4 4h16v16H4V4Zm0 0 8 9 8-9",
-  telegram: "M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z",
-  wallet: "M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4h-4Z",
-  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z",
-  lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2ZM7 11V7a5 5 0 0 1 10 0v4",
-  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-  eyeOff: "M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.3 21.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.3 21.3 0 0 1-3.22 4.53M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22",
-  check: "M20 6 9 17l-5-5",
-  chevron: "M6 9l6 6 6-6",
-};
 
 /* =========================
    HELPERS
@@ -63,14 +53,14 @@ const Toggle = ({ checked, onChange, label, description, disabled, color = "#636
 /* =========================
    INPUT COMPONENT
 ========================= */
-function Input({ label, value, setValue, disabled, icon, type = "text", placeholder }) {
+function Input({ label, value, setValue, disabled, icon: IconComp, type = "text", placeholder }) {
   return (
     <div style={styles.fieldWrap}>
       <label style={styles.label}>{label}</label>
       <div style={{ ...styles.inputShell, ...(disabled ? styles.inputShellDisabled : {}) }}>
-        {icon && (
+        {IconComp && (
           <span style={styles.inputIcon}>
-            <Icon path={icons[icon]} size={15} />
+            <IconComp size={15} />
           </span>
         )}
         <input
@@ -89,13 +79,13 @@ function Input({ label, value, setValue, disabled, icon, type = "text", placehol
 /* =========================
    SECTION WRAPPER
 ========================= */
-function Section({ icon, title, subtitle, children, right }) {
+function Section({ icon: IconComp, title, subtitle, children, right }) {
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader}>
         <div style={styles.sectionHeaderLeft}>
           <div style={styles.sectionIconBadge}>
-            <Icon path={icons[icon]} size={17} />
+            {IconComp && <IconComp size={17} />}
           </div>
           <div>
             <div style={styles.sectionTitle}>{title}</div>
@@ -122,6 +112,7 @@ export default function ProfileTab({
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
+  const [securityExpanded, setSecurityExpanded] = useState(false);
   const canEdit = permissions?.canEditUser;
   const canDelete = permissions?.canDeleteUser && user?.role !== "master";
   const canManagePermissions =
@@ -159,7 +150,7 @@ export default function ProfileTab({
             {isActive ? "Active" : "Disabled"}
           </div>
           <span style={{ ...styles.chevronBtn, transform: identityExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-            <Icon path={icons.chevron} size={16} />
+            <ChevronDown size={16} />
           </span>
         </button>
 
@@ -170,12 +161,12 @@ export default function ProfileTab({
           <div style={styles.identityExpandedContent}>
             <div style={styles.divider} />
             <div style={styles.formGrid}>
-              <Input label="Username" icon="user" value={username} setValue={setUsername} disabled={!canEdit} />
-              <Input label="Telegram ID" icon="telegram" value={telegramId} setValue={setTelegramId} disabled={!canEdit} />
+              <Input label="Username" icon={User} value={username} setValue={setUsername} disabled={!canEdit} />
+              <Input label="Telegram ID" icon={Send} value={telegramId} setValue={setTelegramId} disabled={!canEdit} />
               <Input label="First name" value={firstName} setValue={handleFirstName} disabled={!canEdit} />
               <Input label="Last name" value={lastName} setValue={handleLastName} disabled={!canEdit} />
-              <Input label="Phone number" icon="phone" value={phoneNumber} setValue={setPhoneNumber} disabled={!canEdit} />
-              <Input label="Email" icon="mail" value={email} setValue={setEmail} disabled={!canEdit} />
+              <Input label="Phone number" icon={Phone} value={phoneNumber} setValue={setPhoneNumber} disabled={!canEdit} />
+              <Input label="Email" icon={Mail} value={email} setValue={setEmail} disabled={!canEdit} />
 
               {canManagePermissions && (
                 <div style={styles.fieldWrap}>
@@ -210,70 +201,95 @@ export default function ProfileTab({
       </div>
 
       {/* =========================
-          SECURITY
+          SECURITY (expandable)
       ========================= */}
       {canEdit && (
-        <Section icon="lock" title="Security" subtitle="Reset the user's password">
-          <div style={styles.securityRow}>
-            <div style={{ ...styles.fieldWrap, flex: 1 }}>
-              <label style={styles.label}>New password</label>
-              <div style={styles.inputShell}>
-                <span style={styles.inputIcon}>
-                  <Icon path={icons.lock} size={15} />
-                </span>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={newPassword || ""}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  style={styles.input}
-                  placeholder="Enter new password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  style={styles.eyeBtn}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  <Icon path={showPassword ? icons.eyeOff : icons.eye} size={15} />
-                </button>
+        <div style={styles.section}>
+          <button
+            type="button"
+            onClick={() => setSecurityExpanded((v) => !v)}
+            style={styles.sectionHeaderTrigger}
+            aria-expanded={securityExpanded}
+          >
+            <div style={styles.sectionHeaderLeft}>
+              <div style={styles.sectionIconBadge}>
+                <Lock size={17} />
+              </div>
+              <div>
+                <div style={styles.sectionTitle}>Security</div>
+                <div style={styles.sectionSubtitle}>Reset the user's password</div>
               </div>
             </div>
+            <span style={{ ...styles.chevronBtn, transform: securityExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <ChevronDown size={16} />
+            </span>
+          </button>
 
-            <button onClick={() => resetPassword(newPassword)} style={styles.dangerBtn}>
-              <Icon path={icons.shield} size={15} />
-              Reset password
-            </button>
-          </div>
-
-          {canDelete && (
-            <>
+          {securityExpanded && (
+            <div style={styles.identityExpandedContent}>
               <div style={styles.divider} />
-              <div style={styles.dangerZone}>
-                <div style={styles.dangerZoneText}>
-                  <div style={styles.dangerZoneTitle}>Delete this user</div>
-                  <div style={styles.toggleDesc}>
-                    Permanently removes this account and all associated data. This cannot be undone.
+              <div style={styles.securityRow}>
+                <div style={{ ...styles.fieldWrap, flex: 1 }}>
+                  <label style={styles.label}>New password</label>
+                  <div style={styles.inputShell}>
+                    <span style={styles.inputIcon}>
+                      <Lock size={15} />
+                    </span>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={newPassword || ""}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      style={styles.input}
+                      placeholder="Enter new password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      style={styles.eyeBtn}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={deleteUser}
-                  disabled={deletingUser}
-                  style={{ ...styles.dangerBtn, opacity: deletingUser ? 0.6 : 1, cursor: deletingUser ? "not-allowed" : "pointer" }}
-                >
-                  <Icon path={icons.lock} size={15} />
-                  {deletingUser ? "Deleting..." : "Delete user"}
+
+                <button onClick={() => resetPassword(newPassword)} style={styles.dangerBtn}>
+                  <Shield size={15} />
+                  Reset password
                 </button>
               </div>
-            </>
+
+              {canDelete && (
+                <>
+                  <div style={styles.divider} />
+                  <div style={styles.dangerZone}>
+                    <div style={styles.dangerZoneText}>
+                      <div style={styles.dangerZoneTitle}>Delete this user</div>
+                      <div style={styles.toggleDesc}>
+                        Permanently removes this account and all associated data. This cannot be undone.
+                      </div>
+                    </div>
+                    <button
+                      onClick={deleteUser}
+                      disabled={deletingUser}
+                      style={{ ...styles.dangerBtn, opacity: deletingUser ? 0.6 : 1, cursor: deletingUser ? "not-allowed" : "pointer" }}
+                    >
+                      <Trash2 size={15} />
+                      {deletingUser ? "Deleting..." : "Delete user"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
-        </Section>
+        </div>
       )}
 
       {/* =========================
           PERMISSIONS
       ========================= */}
       {canManagePermissions && (
-        <Section icon="shield" title="Admin permissions" subtitle="Control what this admin can access">
+        <Section icon={Shield} title="Admin permissions" subtitle="Control what this admin can access">
           <div style={styles.permissionTabs}>
             {Object.keys(ACCESS_GROUPS).map((group) => (
               <button
@@ -310,8 +326,11 @@ export default function ProfileTab({
       ========================= */}
       {canEdit && (
         <div style={styles.saveBar}>
-          <button onClick={updateProfile} style={styles.saveBtn}>
-            <Icon path={icons.check} size={16} />
+          <button 
+          onClick={updateProfile} 
+           
+          className="primaryBtn"
+           >
             Save changes
           </button>
         </div>
@@ -413,6 +432,21 @@ const styles = {
     justifyContent: "space-between",
     marginBottom: 18,
     gap: 12,
+  },
+  sectionHeaderTrigger: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    width: "100%",
+    background: "none",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    cursor: "pointer",
+    textAlign: "left",
+    font: "inherit",
+    color: "inherit",
   },
   sectionHeaderLeft: { display: "flex", alignItems: "center", gap: 12 },
   sectionIconBadge: {
@@ -561,14 +595,14 @@ const styles = {
     borderRadius: 999,
     fontSize: 12.5,
     fontWeight: 500,
-    background: "transparent",
+    background:  "rgba(255,255,255,.03)",
     border: "1px solid #26324a",
     color: "#64748b",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
   activeTab: {
-    background: "rgba(99,102,241,0.15)",
+    background: "rgba(59,130,246,0.18)" ,
     borderColor: "#6366f1",
     color: "#a5b4fc",
   },
@@ -595,22 +629,8 @@ const styles = {
     bottom: 0,
     display: "flex",
     justifyContent: "center",
-    padding: "12px 0 4px",
-  },
-  saveBtn: {
-    display: "flex",
+    
     alignItems: "center",
-    gap: 8,
-    background: "linear-gradient(135deg,#6366f1,#4f46e5)",
-    border: "none",
-    borderRadius: 14,
-    padding: "13px 28px",
-    color: "white",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
-    boxShadow: "0 8px 20px rgba(79,70,229,0.35)",
-    width: "100%",
-    justifyContent: "center",
+    padding: "12px 0 4px",
   },
 };

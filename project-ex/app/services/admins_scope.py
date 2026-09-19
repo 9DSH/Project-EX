@@ -7,15 +7,16 @@ from app.core.permissions import has_access
 from app.models.user import User
 
 
-def can_view_all_admins(admin: dict) -> bool:
-    """Master, or any admin individually granted platform.service.management."""
-    return is_master(admin) or has_access(admin, "platform.service.management")
+def can_view_all_admins(admin: dict, service_permission: Optional[str]) -> bool:
+    """Master, or any admin individually granted platform.{service}.service."""
+    return is_master(admin) or has_access(admin, service_permission)
 
 
 def resolve_admin_scope(
     admin: dict,
     db: Session,
     admin_filter: Optional[str],
+    service_permission: Optional[str],
 ) -> Tuple[bool, Optional[int]]:
     """
     Resolves the requested admin_filter query param into a query scope.
@@ -33,7 +34,7 @@ def resolve_admin_scope(
     if not admin_filter or admin_filter == "mine":
         return False, requester_id
 
-    if not can_view_all_admins(admin):
+    if not can_view_all_admins(admin, service_permission):
         raise HTTPException(403, "Not authorized to filter by other admins")
 
     if admin_filter == "all":

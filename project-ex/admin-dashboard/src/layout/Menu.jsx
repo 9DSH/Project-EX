@@ -38,10 +38,26 @@ export default function Menu({ pinned, setPinned }) {
   const isGroupActive = (paths) => paths.some((p) => location.pathname === p);
   const user = { role: localStorage.getItem("role") || "user" };
 
+  // Section visibility based on whether user has access to at least one item
+  const showPlatforms =
+    hasPermission(user, "telegram.personal.bot") ||
+    hasPermission(user, "website_personal");
+
+  const showServices =
+    hasPermission(user, "products.service") ||
+    hasPermission(user, "exchange.service") ||
+    hasPermission(user, "transfer.service");
+
+  // Transactions is always visible, so FINANCE section is always shown
+  // if any of its items are accessible (Transactions has no permission gate)
+  const showFinance = true;
+
+  const showCommunication = hasPermission(user, "send.message");
+
   const linkStyle = (active) => ({
     display: "flex",
     alignItems: "center",
-    gap: expanded ? 12 : 0, 
+    gap: expanded ? 12 : 0,
     padding: expanded ? "10px 12px" : "10px 0",
     justifyContent: expanded ? "flex-start" : "center",
     borderRadius: 9,
@@ -103,7 +119,7 @@ export default function Menu({ pinned, setPinned }) {
   });
 
   const label = (text) => {
-    if (!expanded) return null;     
+    if (!expanded) return null;
     return (
       <span
         style={{
@@ -120,7 +136,7 @@ export default function Menu({ pinned, setPinned }) {
   };
 
   const arrow = (openState) => {
-    if (!expanded) return null;      
+    if (!expanded) return null;
     return (
       <ChevronDown
         size={13}
@@ -157,112 +173,172 @@ export default function Menu({ pinned, setPinned }) {
         boxShadow: floating ? "8px 0 30px rgba(0,0,0,.55)" : "none",
       }}
     >
-
-          <Link to="/my_account" style={linkStyle(isActive("/") || isActive("/overview") || isActive("/my_account"))} title="My Account">
+      <Link
+        to="/my_account"
+        style={linkStyle(
+          isActive("/") || isActive("/overview") || isActive("/my_account")
+        )}
+        title="My Account"
+      >
         <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
         {label("My Account")}
-      </Link> 
+      </Link>
 
       <Link to="/users" style={linkStyle(isActive("/users"))} title="Users">
         <Users size={17} style={{ flexShrink: 0 }} />
         {label("Users")}
       </Link>
 
-        <div style={sectionTitleWrap}>
-          <div style={sectionTitle}>PLATFORMS</div>
-          <div style={sectionDivider} />
-        </div>
-
+      {showPlatforms && (
+        <>
+          <div style={sectionTitleWrap}>
+            <div style={sectionTitle}>PLATFORMS</div>
+            <div style={sectionDivider} />
+          </div>
 
           <div>
-          <div
-            onClick={() => expanded && toggle("platforms")}
-            style={{ ...linkStyle(!expanded && isGroupActive(["/telegram_management", "/website_management"])), cursor: "pointer" }}
-            title="Platforms"
+            <div
+              onClick={() => expanded && toggle("platforms")}
+              style={{
+                ...linkStyle(
+                  !expanded &&
+                    isGroupActive([
+                      "/telegram_management",
+                      "/website_management",
+                    ])
+                ),
+                cursor: "pointer",
+              }}
+              title="Platforms"
+            >
+              <Layers size={17} style={{ flexShrink: 0 }} />
+              {label("Platforms")}
+              {arrow(open.platforms)}
+            </div>
+
+            <div style={submenu(expanded && open.platforms)}>
+              {hasPermission(user, "telegram.personal.bot") && (
+                <Link
+                  to="/telegram_management"
+                  style={linkStyle(isActive("/telegram_management"))}
+                >
+                  <Bot size={14} style={{ flexShrink: 0 }} />
+                  {label("Telegram Management")}
+                </Link>
+              )}
+              {hasPermission(user, "website_personal") && (
+                <Link
+                  to="/website_management"
+                  style={linkStyle(isActive("/website_management"))}
+                >
+                  <Link2 size={14} style={{ flexShrink: 0 }} />
+                  {label("Website Management")}
+                </Link>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {showServices && (
+        <>
+          <div style={sectionTitleWrap}>
+            <div style={sectionTitle}>SERVICES</div>
+            <div style={sectionDivider} />
+          </div>
+
+          {hasPermission(user, "products.service") && (
+            <Link
+              to="/ProductsManagement"
+              style={linkStyle(isActive("/ProductsManagement"))}
+              title="Products"
+            >
+              <Package size={17} style={{ flexShrink: 0 }} />
+              {label("Products")}
+            </Link>
+          )}
+
+          {hasPermission(user, "exchange.service") && (
+            <Link
+              to="/exchange_dashboard"
+              style={linkStyle(isActive("/exchange_dashboard"))}
+              title="Exchange"
+            >
+              <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
+              {label("Exchange")}
+            </Link>
+          )}
+
+          {hasPermission(user, "transfer.service") && (
+            <Link
+              to="/wire_transfer"
+              style={linkStyle(isActive("/wire_transfer"))}
+              title="Wire Transfer"
+            >
+              <Landmark size={17} style={{ flexShrink: 0 }} />
+              {label("Wire Transfer")}
+            </Link>
+          )}
+        </>
+      )}
+
+      {showFinance && (
+        <>
+          <div style={sectionTitleWrap}>
+            <div style={sectionTitle}>FINANCE</div>
+            <div style={sectionDivider} />
+          </div>
+
+          {hasPermission(user, "platform.asset") && (
+            <Link
+              to="/asset_manager"
+              style={linkStyle(isActive("/asset_manager"))}
+              title="Asset Management"
+            >
+              <Wallet size={17} style={{ flexShrink: 0 }} />
+              {label("Asset Management")}
+            </Link>
+          )}
+
+          <Link
+            to="/transactions"
+            style={linkStyle(isActive("/transactions"))}
+            title="Transactions"
           >
-            <Layers size={17} style={{ flexShrink: 0 }} />
-            {label("Platforms")}
-            {arrow(open.platforms)}
+            <CreditCard size={17} style={{ flexShrink: 0 }} />
+            {label("Transactions")}
+          </Link>
+
+          {hasPermission(user, "finance.withdraw") && (
+            <Link
+              to="/withdraws"
+              style={linkStyle(isActive("/withdraws"))}
+              title="Withdrawals"
+            >
+              <Wallet size={17} style={{ flexShrink: 0 }} />
+              {label("Withdrawals")}
+            </Link>
+          )}
+        </>
+      )}
+
+      {showCommunication && (
+        <>
+          <div style={sectionTitleWrap}>
+            <div style={sectionTitle}>COMMUNICATION</div>
+            <div style={sectionDivider} />
           </div>
 
-
-          <div style={submenu(expanded && open.platforms)}>
-            {hasPermission(user, "telegram.personal.bot") && (
-              <Link to="/telegram_management" style={linkStyle(isActive("/telegram_management"))}>
-                <Bot size={14} style={{ flexShrink: 0 }} />
-                {label("Telegram Management")}
-              </Link>
-            )}
-            {hasPermission(user, "website_personal") && (
-              <Link to="/website_management" style={linkStyle(isActive("/website_management"))}>
-                <Link2 size={14} style={{ flexShrink: 0 }} />
-                {label("Website Management")}
-              </Link>
-            )}
-          </div>
-        </div>
-
-    <div style={sectionTitleWrap}>
-      <div style={sectionTitle}>SERVICES</div>
-      <div style={sectionDivider} />
-    </div>
-
-
-            {hasPermission(user, "products.service")  && (
-        <Link to="/ProductsManagement" style={linkStyle(isActive("/ProductsManagement"))} title="Products">
-          <Package size={17} style={{ flexShrink: 0 }} />
-          {label("Products")}
-        </Link>
+          <Link
+            to="/messages"
+            style={linkStyle(isActive("/messages"))}
+            title="Messages"
+          >
+            <MessageSquare size={17} style={{ flexShrink: 0 }} />
+            {label("Messages")}
+          </Link>
+        </>
       )}
-
-      {hasPermission(user, "exchange.service") && (
-        <Link to="/exchange_dashboard" style={linkStyle(isActive("/exchange_dashboard"))} title="Exchange">
-          <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
-          {label("Exchange")}
-        </Link>
-      )}
-
-      {hasPermission(user, "transfer.service") && (
-        <Link to="/wire_transfer" style={linkStyle(isActive("/wire_transfer"))} title="Wire Transfer">
-          <Landmark size={17} style={{ flexShrink: 0 }} />
-          {label("Wire Transfer")}
-        </Link>
-      )}
-
-        <div style={sectionTitleWrap}>
-          <div style={sectionTitle}>FINANCE</div>
-          <div style={sectionDivider} />
-        </div>
-      {hasPermission(user, "platform.asset") && (
-        <Link to="/asset_manager" style={linkStyle(isActive("/asset_manager"))} title="Asset Management">
-          <Wallet size={17} style={{ flexShrink: 0 }} />
-          {label("Asset Management")}
-        </Link>
-      )}
-
-      <Link to="/transactions" style={linkStyle(isActive("/transactions"))} title="Transactions">
-        <CreditCard size={17} style={{ flexShrink: 0 }} />
-        {label("Transactions")}
-      </Link>
-
-      {hasPermission(user, "finance.withdraw") && (
-        <Link to="/withdraws" style={linkStyle(isActive("/withdraws"))} title="Withdrawals">
-          <Wallet size={17} style={{ flexShrink: 0 }} />
-          {label("Withdrawals")}
-        </Link>
-      )}
-
-
-      <div style={sectionTitleWrap}>
-        <div style={sectionTitle}>COMMUNICATION</div>
-        <div style={sectionDivider} />
-      </div>
-      {hasPermission(user, "send.message") && (
-      <Link to="/messages" style={linkStyle(isActive("/messages"))} title="Messages">
-        <MessageSquare size={17} style={{ flexShrink: 0 }} />
-        {label("Messages")}
-      </Link>
-        )}
     </div>
   );
 }

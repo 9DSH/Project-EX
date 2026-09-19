@@ -17,18 +17,21 @@ from app.models.currency import Currency
 from app.models.transaction import Transaction
 from app.services.telegram_service import send_telegram_message
 from app.services.wire_transfer_expiry import expire_pending_wire_orders
-from app.services.exchange_scope import can_view_all_admins, resolve_admin_scope
+from app.services.admins_scope import can_view_all_admins, resolve_admin_scope
 from app.constants.transaction_types import WIRE_TRANSFER, WIRE_REFUND
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 
 router = APIRouter(prefix="/admin/wire-transfer", tags=["Admin Wire Transfer"])
 
 
-def get_admin(user=Depends(get_current_user)):
+def get_admin(
+    db: Session = Depends(get_db_rls),
+    user=Depends(get_current_user),
+):
     role = user.get("role")
     if role not in ("master", "admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
-    if not has_access(user, "transfer.service"):
+    if not has_access(user, "transfer.service",db):
         raise HTTPException(status_code=403, detail="Wire Transfer permission required")
     return user
 
@@ -257,7 +260,7 @@ def list_filterable_admins(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
-    if not can_view_all_admins(admin):
+    if not can_view_all_admins(admin , "platform.transfer.service"):
         raise HTTPException(403, "Access denied")
 
     candidates = db.query(User).filter(User.role.in_(["admin", "master"])).all()
@@ -293,7 +296,7 @@ def list_pairs(
     admin=Depends(get_admin),
     db: Session = Depends(get_db_rls),
 ):
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.transfer.service")
 
     query = (
         db.query(WireTransferPair)
@@ -310,8 +313,7 @@ def list_pairs(
 
 @router.post("/pairs")
 def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
 
     if body.rate <= 0:
         raise HTTPException(400, "Invalid rate")
@@ -350,8 +352,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
 
 @router.put("/pairs/{pair_id}")
 def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
 
     pair = db.query(WireTransferPair).options(
         joinedload(WireTransferPair.from_currency),
@@ -394,8 +395,7 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
 
 @router.delete("/pairs/{pair_id}")
 def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
     pair = db.query(WireTransferPair).filter(WireTransferPair.id == pair_id).first()
     if not pair:
         raise HTTPException(404, "Pair not found")
@@ -420,7 +420,7 @@ def list_orders(
 ):
     _expire_pending_orders(db)
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter)
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.transfer.service")
 
     query = (
         db.query(WireTransferOrder)
@@ -479,8 +479,7 @@ def _assert_order_owner(admin: dict, order: WireTransferOrder):
 
 @router.post("/orders/{order_id}/approve")
 async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
         joinedload(WireTransferOrder.user),
@@ -549,8 +548,7 @@ async def approve_order(order_id: int, admin=Depends(get_admin), db: Session = D
 
 @router.post("/orders/{order_id}/reject")
 async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
         joinedload(WireTransferOrder.user),
@@ -600,8 +598,7 @@ async def reject_order(order_id: int, admin=Depends(get_admin), db: Session = De
 
 @router.post("/orders/{order_id}/deliver")
 async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
     _expire_pending_orders(db)
     order = db.query(WireTransferOrder).options(
         joinedload(WireTransferOrder.user),
@@ -652,8 +649,7 @@ async def deliver_order(order_id: int, body: OrderDeliverRequest, admin=Depends(
 
 @router.post("/orders/{order_id}/fail")
 async def fail_order(order_id: int, body: OrderFailRequest, admin=Depends(get_admin), db: Session = Depends(get_db_rls)):
-    if not has_access(admin, "transfer.service"):
-        raise HTTPException(403, "Manage permission required")
+
     order = db.query(WireTransferOrder).options(
         joinedload(WireTransferOrder.user),
         joinedload(WireTransferOrder.pair).joinedload(WireTransferPair.from_currency),

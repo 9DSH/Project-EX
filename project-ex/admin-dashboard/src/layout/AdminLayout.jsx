@@ -1,7 +1,9 @@
 import { useState } from "react";
 import Menu from "./Menu";
 import TopBar from "./TopBar";
-import SupportWidget from "../components/SupportWidget";
+import SessionManager from "../components/SessionManager";
+
+
 export const TOPBAR_HEIGHT = 48;
 export const COLLAPSED_WIDTH = 54;
 export const EXPANDED_WIDTH = 250;
@@ -36,7 +38,8 @@ export default function AdminLayout({ children }) {
         </div>
       </div>
 
-      <SupportWidget />
+      <SessionManager />
+
     </div>
   );
 }

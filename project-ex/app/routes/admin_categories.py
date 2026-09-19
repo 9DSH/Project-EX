@@ -10,11 +10,14 @@ from app.core.permissions import has_access
 router = APIRouter(prefix="/admin/categories", tags=["Admin Categories"])
 
 
-def get_admin(user=Depends(get_current_user)):
+def get_admin(
+        user=Depends(get_current_user),
+        db: Session = Depends(get_db)
+        ):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not has_access(user, "categories.manage"):
+    if not has_access(user, "categories.manage", db):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
@@ -26,9 +29,7 @@ def create_category(
     db: Session = Depends(get_db),
     admin=Depends(get_admin)
 ):
-    
-    if not has_access(admin, "categories.manage"):
-        raise HTTPException(403, "Access denied")
+
     
     existing = db.query(Category).filter(Category.name == data.name).first()
 
@@ -75,8 +76,6 @@ def update_category(
     admin=Depends(get_admin)
 ):
     
-    if not has_access(admin, "categories.manage"):
-        raise HTTPException(403, "Access denied")
     
     cat = db.query(Category).filter(Category.id == category_id).first()
 
@@ -103,8 +102,6 @@ def delete_category(
     db: Session = Depends(get_db),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "categories.manage"):
-        raise HTTPException(403, "Access denied")
     cat = db.query(Category).filter(Category.id == category_id).first()
 
     if not cat:

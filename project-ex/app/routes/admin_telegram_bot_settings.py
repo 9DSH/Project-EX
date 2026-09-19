@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-
+from app.core.rls import get_db_rls
 from app.db.database import get_db
 from app.core.security import get_current_user, is_admin_or_above, is_master
 from app.core.permissions import has_access
@@ -49,7 +49,10 @@ def get_master(user=Depends(get_current_user)):
     return user
 
 
-def require_personal_bot_access(user=Depends(get_current_user)):
+def require_personal_bot_access(
+        user=Depends(get_current_user),
+        db: Session = Depends(get_db_rls)
+        ):
     """
     Gate for any admin/master managing their OWN personal bot
     (bot_kind="admin"). Master always passes (has_access short-circuits for
@@ -58,7 +61,7 @@ def require_personal_bot_access(user=Depends(get_current_user)):
     """
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not has_access(user, PERSONAL_BOT_ACCESS_POINT):
+    if not has_access(user, PERSONAL_BOT_ACCESS_POINT, db):
         raise HTTPException(status_code=403, detail="Personal Telegram bot access not granted")
     return user
 

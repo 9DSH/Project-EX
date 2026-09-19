@@ -13,6 +13,7 @@ import OrderSidebar from "../components/OrderSidebar";
 import UserSidebar from "../components/UserSidebar";
 import OrderAnalysisPanel from "../components/OrderAnalysisPanel";
 import "./ProductsManagement.css";
+import PermissionGate from "../components/PermissionGate";
 
 const COMMON_FIELDS = [
   { key: "username", label: "Username", type: "text", step: "before_order" },
@@ -44,6 +45,20 @@ const FIELD_STEPS = [
   { value: "before_order", label: "Before Order" },
   { value: "after_login",  label: "After Login" },
 ];
+
+/* ─── EMPTY STATE ─── */
+function EmptyState({ icon: Icon, title, sub, action }) {
+  return (
+    <div style={{marginTop: "100px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 20px", gap:10, textAlign:"center" }}>
+      <div style={{ width:52, height:52, borderRadius:14, background:"rgba(255,255,255,.03)", border:"1px solid #314766a7", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4 }}>
+        <Icon size={24} color="#314766ab" strokeWidth={1.5} />
+      </div>
+      <div style={{ color:"#314766ff", fontWeight:700, fontSize:15 }}>{title}</div>
+      {sub && <div style={{ color:"#41597aff", fontSize:13 }}>{sub}</div>}
+      {action}
+    </div>
+  );
+}
 
 // ── TOGGLE ────────────────────────────────────────────────────
 const Toggle = ({ checked, onChange, label, color = "#3b82f6" }) => (
@@ -504,12 +519,27 @@ const ProductForm = ({
               <Field label="Stock">
                 <input type="number" className="pm-input" value={data.stock} onChange={(e) => setData({ ...data, stock: e.target.value })} />
               </Field>
+
               <Field label="Product Owner">
-            <select className="pm-input" value={data.admin_id || ""} onChange={(e) => setData({ ...data, admin_id: e.target.value ? Number(e.target.value) : null })}>
-              {[{ user_id: "", username: "", display: "Select Owner" }, ...users].map((u) => (
-                <option key={u.user_id || "owner-default"} value={u.user_id}>{u.display ?? u.username}</option>
-              ))}
-            </select>
+                  <select 
+                  className="pm-input" 
+                  style={{
+                          opacity: isMaster ? 1 : 0.6,
+                          cursor: isMaster  ? "text" : "not-allowed"
+                        }}
+                  value={data.admin_id || ""} 
+                  disabled={!isMaster }
+                  onChange={(e) => 
+                     setData({ ...data, admin_id: e.target.value ? Number(e.target.value) : null })}>
+                    {[{ user_id: "", username: "", display: "Select Owner" }, ...users].map((u) => (
+                      <option key={u.user_id || "owner-default"} value={u.user_id}>{u.display ?? u.username}</option>
+                    ))}
+                  </select>
+                              {!isMaster && (
+              <span style={{ fontSize: 11, color: "#eab308" }}>
+                Permission Required
+              </span>
+            )}
             </Field>
             </div>
             <Field label="Product Icon">
@@ -804,6 +834,34 @@ const ProductForm = ({
   );
 };
 
+// ── PERMISSION-AWARE BUTTON ──────────────────────────────────
+// Always renders the button; disables it with a "No permission" tooltip
+// instead of hiding it outright when the user lacks the given permission.
+// Pass `allowed` directly to gate on something other than a named
+// permission (e.g. product ownership), optionally combined with `permission`.
+const PermButton = ({ user, permission, allowed, reason, style = {}, className, children, ...rest }) => {
+  const hasPerm = permission ? hasPermission(user, permission) : true;
+  const isAllowed = (allowed === undefined ? true : allowed) && hasPerm;
+  const tooltip = reason || "No permission";
+  return (
+    <button
+      {...rest}
+      className={className}
+      disabled={!isAllowed}
+      title={!isAllowed ? tooltip : undefined}
+      style={{
+        transition: "0.2s ease",
+        cursor: isAllowed ? "pointer" : "not-allowed",
+        ...style,
+        filter: isAllowed ? "none" : "grayscale(0.4)",
+        opacity: isAllowed ? 1 : 0.5,
+      }}
+    >
+      {children}
+    </button>
+  );
+};
+
 // ── PRODUCT CARD ──────────────────────────────────────────────
 const ProductCard = ({
   p, safeExtra, user, isMaster,
@@ -826,6 +884,7 @@ const ProductCard = ({
     rejected: "REJECTED",
   }[p.approval_status] || p.approval_status?.toUpperCase();
 
+  const notApproved = p.approval_status && p.approval_status !== "approved";
 
   return (
     <div className="pm-productCard">
@@ -838,7 +897,9 @@ const ProductCard = ({
             {p.is_active ? "ACTIVE" : "INACTIVE"}
           </span>
            )}
-          {(viewMode === "pending" || viewMode === "rejected") && user.role === "master" && (
+          {/* Approval status badge — shown in EVERY view (all/my/pending/rejected) whenever
+              the product isn't approved yet, so admins see it on their own products too. */}
+          {notApproved && (
             <span
               style={{
                 fontSize: 10,
@@ -887,7 +948,7 @@ const ProductCard = ({
           )}
           {/* Created by (shown in all/pending/rejected views) */}
           {p.admin_id != null && (
-            <div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>admin #{p.admin_id} {p.admin_username}</div>
+            <div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>{p.admin_username}  #{p.admin_id}</div>
           )}
         </div>
       </div>
@@ -904,8 +965,9 @@ const ProductCard = ({
         {(extra.features || []).slice(0, 2).map((f, i) => <span key={i} className="pm-typeBadge">{f}</span>)}
       </div>
 
-      {/* Rejection reason */}
-      {viewMode === "rejected" && p.rejection_reason && (
+      {/* Rejection reason — shown wherever this card renders (all/my/rejected), not just the
+          master-only "rejected" tab, so the owning admin sees why it was rejected. */}
+      {p.approval_status === "rejected" && p.rejection_reason && (
         <div style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#f87171", lineHeight: 1.5 }}>
           <span style={{ fontWeight: 700 }}>Reason: </span>{p.rejection_reason}
         </div>
@@ -922,168 +984,144 @@ const ProductCard = ({
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-          {/* Master approve/reject on pending */}
-        {viewMode === "pending" && user.role === "master" && (
+          {/* Master approve/reject on pending — this tab is master-only in the UI already,
+              so these stay hard-gated by viewMode rather than shown-disabled elsewhere. */}
+        {viewMode === "pending" && (
           <>
-            {/* EDIT BUTTON (NEW) */}
-            <button
+            <PermButton
+              user={user} allowed={isMaster} reason="Master access required"
               style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                background: "rgba(59,130,246,0.12)",
-                border: "1px solid rgba(59,130,246,0.3)",
-                borderRadius: 9,
-                padding: "7px 0",
-                color: "#60a5fa",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 12,
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.3)",
+                borderRadius: 9, padding: "7px 0", color: "#60a5fa", fontWeight: 700, fontSize: 12,
               }}
               onClick={() => onEdit(p)}
             >
               <Edit3 size={12} /> Edit
-            </button>
+            </PermButton>
 
-            {/* APPROVE */}
-            <button
+            <PermButton
+              user={user} allowed={isMaster} reason="Master access required"
               style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                background: "rgba(34,197,94,0.12)",
-                border: "1px solid rgba(34,197,94,0.3)",
-                borderRadius: 9,
-                padding: "7px 0",
-                color: "#22c55e",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 12,
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                borderRadius: 9, padding: "7px 0", color: "#22c55e", fontWeight: 700, fontSize: 12,
               }}
               onClick={() => onApprove(p)}
             >
               <CheckCircle size={12} /> Approve
-            </button>
+            </PermButton>
 
-            {/* REJECT */}
-            <button
+            <PermButton
+              user={user} allowed={isMaster} reason="Master access required"
               style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                background: "rgba(239,68,68,0.12)",
-                border: "1px solid rgba(239,68,68,0.3)",
-                borderRadius: 9,
-                padding: "7px 0",
-                color: "#ef4444",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 12,
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 9, padding: "7px 0", color: "#ef4444", fontWeight: 700, fontSize: 12,
               }}
               onClick={() => onReject(p)}
             >
               <XCircle size={12} /> Reject
-            </button>
+            </PermButton>
           </>
         )}
-           
-        {/* Resubmit on rejected (owner or master) */}
-        {viewMode === "rejected" && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              width: "100%",
-            }}
-          >
-            <button
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                background: "rgba(234,179,8,0.1)",
-                border: "1px solid rgba(234,179,8,0.25)",
-                borderRadius: 9,
-                padding: "7px 0",
-                color: "#eab308",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 12,
-              }}
-              onClick={() => onResubmit(p.id)}
-            >
-              <RefreshCcw size={12} /> Resubmit
-            </button>
 
-            <button
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                background: "rgba(59,130,246,0.12)",
-                border: "1px solid rgba(59,130,246,0.3)",
-                borderRadius: 9,
-                padding: "7px 0",
-                color: "#60a5fa",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 12,
-              }}
-              onClick={() => onEdit(p)}
-            >
-              <Edit3 size={12} /> Edit
-            </button>
-          </div>
-        )}
+        {/* Resubmit on rejected — owner or master */}
+        {viewMode === "rejected" && (() => {
+          const isOwner = p.admin_id === user.user_id;
+          const canAct = isMaster || isOwner;
+          const reason = canAct ? undefined : "You can only resubmit your own products";
+          return (
+            <div style={{ display: "flex", gap: 8, width: "100%" }}>
+              <PermButton
+                user={user} allowed={canAct} reason={reason}
+                style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.25)",
+                  borderRadius: 9, padding: "7px 0", color: "#eab308", fontWeight: 700, fontSize: 12,
+                }}
+                onClick={() => onResubmit(p.id)}
+              >
+                <RefreshCcw size={12} /> Resubmit
+              </PermButton>
 
-          {/* Edit — always shown where applicable */}
-          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.edit") && (
-            <button
-              className="pm-cardBtnEdit"
-              onClick={() => onEdit(p)}
-            >
-              <Edit3 size={12} style={{ marginRight: 5 }} /> Edit
-            </button>
-          )}
+              <PermButton
+                user={user} allowed={canAct} reason={reason}
+                style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.3)",
+                  borderRadius: 9, padding: "7px 0", color: "#60a5fa", fontWeight: 700, fontSize: 12,
+                }}
+                onClick={() => onEdit(p)}
+              >
+                <Edit3 size={12} /> Edit
+              </PermButton>
+            </div>
+          );
+        })()}
 
-          {/* Toggle active */}
-          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.service") && (
-            <button
-              className="pm-cardBtnToggle"
-              style={{
-                background: p.is_active ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
-                borderColor: p.is_active ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)",
-                color: p.is_active ? "#ef4444" : "#22c55e",
-              }}
-              onClick={() => onToggleActive(p.id, !p.is_active)}
-            >
-              <Power size={12} style={{ marginRight: 5 }} />
-              {p.is_active ? "Disable" : "Enable"}
-            </button>
-          )}
+        {(viewMode === "all" || viewMode === "my") && (() => {
+          const isOwner = p.admin_id === user.user_id;
+          const canActOnThis = isMaster || isOwner;
+          const ownerReason = "You can only manage your own products";
 
-          {/* Delete */}
-          {(viewMode === "all" || viewMode === "my") && hasPermission(user, "products.edit") && (
-            <button className="pm-cardBtnDelete" onClick={() => onDelete(p.id)}>
-              <Trash2 size={12} />
-            </button>
-          )}
+          const canEditPerm = hasPermission(user, "products.edit");
+          const editAllowed = canEditPerm && canActOnThis;
+          const editReason = !canEditPerm ? "No permission" : !canActOnThis ? ownerReason : undefined;
+
+          const canTogglePerm = hasPermission(user, "products.service");
+          const isApproved = p.approval_status === "approved";
+          const toggleAllowed = canTogglePerm && canActOnThis && isApproved;
+          const toggleReason = !canTogglePerm
+            ? "No permission"
+            : !canActOnThis
+              ? ownerReason
+              : !isApproved
+                ? "Product must be approved before it can be activated"
+                : undefined;
+
+          const deleteAllowed = canEditPerm && canActOnThis;
+          const deleteReason = editReason;
+
+          return (
+            <>
+              <PermButton
+                user={user} allowed={editAllowed} reason={editReason}
+                className="pm-cardBtnEdit"
+                onClick={() => onEdit(p)}
+              >
+                <Edit3 size={12} style={{ marginRight: 5 }} /> Edit
+              </PermButton>
+
+              <PermButton
+                user={user} allowed={toggleAllowed} reason={toggleReason}
+                className="pm-cardBtnToggle"
+                style={{
+                  background: p.is_active ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                  borderColor: p.is_active ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)",
+                  color: p.is_active ? "#ef4444" : "#22c55e",
+                }}
+                onClick={() => onToggleActive(p.id, !p.is_active)}
+              >
+                <Power size={12} style={{ marginRight: 5 }} />
+                {p.is_active ? "Disable" : "Enable"}
+              </PermButton>
+
+              <PermButton
+                user={user} allowed={deleteAllowed} reason={deleteReason}
+                className="pm-cardBtnDelete"
+                onClick={() => onDelete(p.id)}
+              >
+                <Trash2 size={12} />
+              </PermButton>
+            </>
+          );
+        })()}
         </div>
       </div>
     </div>
   );
 };
-
 // ── PRODUCT ROW (sidebar list, like exchange PairRow) ──────────
 const ProductRow = ({ p, selected, onClick }) => {
   const hasDiscount = p.discount_percent && Number(p.discount_percent) > 0;
@@ -1201,6 +1239,20 @@ const ProductDetailPanel = ({ product, categories, safeExtra, currentUser, viewM
           </span>
         </div>
         <div style={{ marginTop: 6, fontSize: 11, color: "#7c8696ff" }}>{category?.name || "Uncategorized"}</div>
+        {/* Approval status — visible to whoever opens this panel, including the owning admin */}
+        {product.approval_status && product.approval_status !== "approved" && (
+          <div style={{ marginTop: 6 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+              color: product.approval_status === "pending" ? "#eab308" : "#ef4444",
+              background: (product.approval_status === "pending" ? "#eab308" : "#ef4444") + "18",
+              border: `1px solid ${(product.approval_status === "pending" ? "#eab308" : "#ef4444")}40`,
+              borderRadius: 99, padding: "4px 10px",
+            }}>
+              {product.approval_status.toUpperCase()}
+            </span>
+          </div>
+        )}
         {product.admin_id != null && (
           <div style={{ marginTop: 3, fontSize: 11, color: "#a78bfa", display: "flex", alignItems: "center", gap: 4 }}>
             <User size={11} /> {product.admin_username || `#${product.admin_id}`}
@@ -1297,49 +1349,75 @@ const ProductDetailPanel = ({ product, categories, safeExtra, currentUser, viewM
 
       {/* footer actions */}
       <div style={{ padding: "11px 15px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
-        {viewMode === "pending" && isMaster ? (
+        {viewMode === "pending" ? (
           <>
-            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+            <PermButton user={currentUser} allowed={isMaster} reason="Master access required" className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
               <Edit3 size={11} style={{ marginRight: 5 }} />Edit
-            </button>
-            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(34,197,94,.1)", borderColor: "rgba(34,197,94,.22)", color: "#4ade80" }} onClick={() => onApprove(product)}>
+            </PermButton>
+            <PermButton user={currentUser} allowed={isMaster} reason="Master access required" className="pm-actionBtn" style={{ flex: 1, background: "rgba(34,197,94,.1)", borderColor: "rgba(34,197,94,.22)", color: "#4ade80" }} onClick={() => onApprove(product)}>
               <CheckCircle size={11} style={{ marginRight: 5 }}  />Approve
-            </button>
-            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(239,68,68,.1)", borderColor: "rgba(239,68,68,.22)", color: "#f87171" }} onClick={() => onReject(product)}>
+            </PermButton>
+            <PermButton user={currentUser} allowed={isMaster} reason="Master access required" className="pm-actionBtn" style={{ flex: 1, background: "rgba(239,68,68,.1)", borderColor: "rgba(239,68,68,.22)", color: "#f87171" }} onClick={() => onReject(product)}>
               <XCircle size={11} style={{ marginRight: 5 }}  />Reject
-            </button>
+            </PermButton>
           </>
-        ) : viewMode === "rejected" ? (
-          <>
-            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(234,179,8,.1)", borderColor: "rgba(234,179,8,.25)", color: "#eab308" }} onClick={() => onResubmit(product.id)}>
-              <RefreshCcw size={11} style={{ marginRight: 5 }} />Resubmit
-            </button>
-            <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
-              <Edit3 size={11} style={{ marginRight: 5 }}  />Edit
-            </button>
-          </>
-        ) : (
-          <>
-            {hasPermission(currentUser, "products.edit") && (
-              <button className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+        ) : viewMode === "rejected" ? (() => {
+          const isOwner = product.admin_id === currentUser.user_id;
+          const canAct = isMaster || isOwner;
+          const reason = canAct ? undefined : "You can only manage your own products";
+          return (
+            <>
+              <PermButton user={currentUser} allowed={canAct} reason={reason} className="pm-actionBtn" style={{ flex: 1, background: "rgba(234,179,8,.1)", borderColor: "rgba(234,179,8,.25)", color: "#eab308" }} onClick={() => onResubmit(product.id)}>
+                <RefreshCcw size={11} style={{ marginRight: 5 }} />Resubmit
+              </PermButton>
+              <PermButton user={currentUser} allowed={canAct} reason={reason} className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
+                <Edit3 size={11} style={{ marginRight: 5 }}  />Edit
+              </PermButton>
+            </>
+          );
+        })() : (() => {
+          const isOwner = product.admin_id === currentUser.user_id;
+          const canActOnThis = isMaster || isOwner;
+          const ownerReason = "You can only manage your own products";
+
+          const canEditPerm = hasPermission(currentUser, "products.edit");
+          const editAllowed = canEditPerm && canActOnThis;
+          const editReason = !canEditPerm ? "No permission" : !canActOnThis ? ownerReason : undefined;
+
+          const canTogglePerm = hasPermission(currentUser, "products.service");
+          const isApproved = product.approval_status === "approved";
+          const toggleAllowed = canTogglePerm && canActOnThis && isApproved;
+          const toggleReason = !canTogglePerm
+            ? "No permission"
+            : !canActOnThis
+              ? ownerReason
+              : !isApproved
+                ? "Product must be approved before it can be activated"
+                : undefined;
+
+          const deleteAllowed = canEditPerm && canActOnThis;
+          const deleteReason = editReason;
+
+          return (
+            <>
+              <PermButton user={currentUser} allowed={editAllowed} reason={editReason} className="pm-actionBtn" style={{ flex: 1, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(product)}>
                 <Edit3 size={11} style={{ marginRight: 5 }} />Edit
-              </button>
-            )}
-            {hasPermission(currentUser, "products.service") && (
-              <button
+              </PermButton>
+
+              <PermButton
+                user={currentUser} allowed={toggleAllowed} reason={toggleReason}
                 className="pm-actionBtn" style={{ flex: 1, background: product.is_active ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)", borderColor: product.is_active ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)", color: product.is_active ? "#f87171" : "#4ade80" }}
                 onClick={() => onToggleActive(product.id, !product.is_active)}
               >
                 {product.is_active ? <><PowerOff size={11} style={{ marginRight: 5 }}  />Disable</> : <> <Power size={11} style={{ marginRight: 5 }} />Enable</>}
-              </button>
-            )}
-            {hasPermission(currentUser, "products.edit") && (
-              <button className="pm-actionBtn" style={{ background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(product.id)}>
+              </PermButton>
+
+              <PermButton user={currentUser} allowed={deleteAllowed} reason={deleteReason} className="pm-actionBtn" style={{ background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(product.id)}>
                 <Trash2 size={12} />
-              </button>
-            )}
-          </>
-        )}
+              </PermButton>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
@@ -1417,6 +1495,7 @@ export default function ProductsManagement() {
   const [allProducts, setAllProducts]       = useState([]);
   const [users, setUsers] = useState([]);
   const [myProducts, setMyProducts]         = useState([]);
+  const [myActiveProducts, setMyActiveProducts] = useState([]); // own products, active only — powers the "My Products" tab
   const [pendingProducts, setPendingProducts] = useState([]);
   const [rejectedProducts, setRejectedProducts] = useState([]);
   const [categories, setCategories]         = useState([]);
@@ -1426,7 +1505,7 @@ export default function ProductsManagement() {
 
   // UI State
   const [mainView, setMainView]             = useState("products"); // "products" | "orders" | "analysis"
-  const [activeTab, setActiveTab]           = useState("all"); // "all" | "my" | "pending" | "rejected" (master only)
+  const [activeTab, setActiveTab]           = useState("my"); // "all" | "my" | "pending" | "rejected"
   // single-click cyclic sort: field is "price" | "plan" | null, dir is "asc" | "desc" | null. Default: none.
   const [sortField, setSortField]           = useState(null);
   const [sortDir, setSortDir]                = useState(null);
@@ -1487,62 +1566,67 @@ export default function ProductsManagement() {
 
   const headers = { Authorization: `Bearer ${token}` };
 
-
+  const isMaster = currentUser.role === "master";
+  const canSeeAllProducts = isMaster || hasPermission(currentUser, "platform.products.service");
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const reqs = [
-        fetch(`${API_URL}/admin/products/`, { headers }),
+        fetch(`${API_URL}/admin/products/?view=mine`, { headers }),
+        fetch(`${API_URL}/admin/products/?view=mine&is_active=true`, { headers }),
+        fetch(`${API_URL}/admin/products/?view=pending`, { headers }),
+        fetch(`${API_URL}/admin/products/?view=rejected`, { headers }),
         fetch(`${API_URL}/admin/categories/`, { headers }),
         fetch(`${API_URL}/admin/currencies/`, { headers }),
         fetch(`${API_URL}/admin/networks/`, { headers }),
-        
       ];
 
-      // Master-only approval endpoints
-      if (currentUser.role === "master") {
-        reqs.push(fetch(`${API_URL}/admin/product-approvals/pending`, { headers }));
-        reqs.push(fetch(`${API_URL}/admin/product-approvals/rejected`, { headers }));
+      // "All Products" + the admin filter dropdown both require this scope —
+      // available to master AND any admin holding platform.products.service.
+      if (canSeeAllProducts) {
+        reqs.push(fetch(`${API_URL}/admin/products/?view=all`, { headers }));
         reqs.push(fetch(`${API_URL}/admin/users/`, { headers }));
-      
       }
+
       const results = await Promise.all(reqs);
-      const [pRes, cRes, currRes, netRes, pendRes, rejRes, userRes ] = results;
- 
-      const products = await pRes.json().then(d => Array.isArray(d) ? d : d.products || []);
-      console.log("products",products)
-      setAllProducts(products);
-      // "My products" = products created by current user
-      setMyProducts(products.filter(p => Number(p.admin_id) === currentUser.user_id));
+      const [mineRes, mineActiveRes, pendRes, rejRes, cRes, currRes, netRes, ...rest] = results;
+
+      let i = 0;
+      const allRes  = canSeeAllProducts ? rest[i++] : null;
+      const userRes = canSeeAllProducts ? rest[i++] : null;
+
+      setMyProducts(await mineRes.json().then(d => Array.isArray(d) ? d : []));
+      setMyActiveProducts(await mineActiveRes.json().then(d => Array.isArray(d) ? d : []));
+      setPendingProducts(await pendRes.json().then(d => Array.isArray(d) ? d : []));
+      setRejectedProducts(await rejRes.json().then(d => Array.isArray(d) ? d : []));
       setCategories(await cRes.json().then(d => Array.isArray(d) ? d : d.categories || []));
       setCurrencies(await currRes.json().then(d => Array.isArray(d) ? d : d.currencies || []));
       setNetworks(await netRes.json().then(d => Array.isArray(d) ? d : d.networks || []));
 
-      if (currentUser.role === "master" && pendRes) setPendingProducts(await pendRes.json().then(d => Array.isArray(d) ? d : []));
-      if (currentUser.role === "master" && rejRes) setRejectedProducts(await rejRes.json().then(d => Array.isArray(d) ? d : []));
-      if (currentUser.role === "master" && userRes) setUsers(await userRes.json().then(d =>  Array.isArray(d) ? d : d.users || [] ));
+      setAllProducts(allRes ? await allRes.json().then(d => Array.isArray(d) ? d : []) : []);
+      setUsers(userRes ? await userRes.json().then(d => Array.isArray(d) ? d : d.users || []) : []);
     } catch (err) {
       console.error("loadData error:", err);
     } finally {
       setLoading(false);
     }
-  }, [token, currentUser.role === "master"]);
+  }, [token, canSeeAllProducts]);
   
   useEffect(() => { loadData(); }, []);
 
   // keep selected product in sync after reload
   useEffect(() => {
     if (!selectedProduct) return;
-    const all = [...allProducts, ...myProducts, ...pendingProducts, ...rejectedProducts];
+    const all = [...allProducts, ...myProducts, ...myActiveProducts, ...pendingProducts, ...rejectedProducts];
     const fresh = all.find(p => p.id === selectedProduct.id);
     setSelectedProduct(fresh || null);
-  }, [allProducts, myProducts, pendingProducts, rejectedProducts]);
+  }, [allProducts, myProducts, myActiveProducts, pendingProducts, rejectedProducts]);
 
   // ── ORDERS: load + filter (merged from OrdersManagement) ──
-  const isMaster = currentUser.role === "master";
-  // Non-master admins can only ever browse their own products
-  const effectiveTab = isMaster ? activeTab : "my";
+  // "all" is only meaningful when canSeeAllProducts; everyone else's "all"
+  // tab (label-only distinction, see `tabs` below) maps back to "my".
+  const effectiveTab = (activeTab === "all" && !canSeeAllProducts) ? "my" : activeTab;
 
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -1721,14 +1805,31 @@ export default function ProductsManagement() {
   };
 
   const toggleActive = async (id) => {
-    await fetch(`${API_URL}/admin/products/${id}/toggle-active`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    // optimistic UI update so the switch flips instantly
+    const patch = (list) => list.map(p => p.id === id ? { ...p, is_active: !p.is_active } : p);
+    setAllProducts(patch);
+    setMyProducts(patch);
+    setSelectedProduct(prev => (prev?.id === id ? { ...prev, is_active: !prev.is_active } : prev));
 
-    loadData();
+    try {
+      const res = await fetch(`${API_URL}/admin/products/${id}/toggle-active`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Failed to toggle product status");
+        loadData(); // revert optimistic change back to server truth
+        return;
+      }
+
+      loadData();
+    } catch (err) {
+      console.error("toggleActive error:", err);
+      alert("Network error — could not update product status.");
+      loadData(); // revert
+    }
   };
 
   const updateProduct = async () => {
@@ -1743,13 +1844,32 @@ export default function ProductsManagement() {
   };
 
   // ── APPROVAL ACTIONS ──
-  const approveProduct = async (productId, systemCommision, systemRewardPercent) => {
-    await fetch(`${API_URL}/admin/product-approvals/${productId}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ system_commision: systemCommision, system_reward_percent: systemRewardPercent }),
-    });
-    loadData();
+  const approveProduct = async (product, payload) => {
+    if (approvingIds.has(product.id)) return; // guard against double-submit
+    setApprovingIds(prev => new Set(prev).add(product.id));
+
+    try {
+      const res = await fetch(`${API_URL}/admin/product-approvals/${product.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Failed to approve product");
+        loadData(); // resync in case it actually succeeded on a prior click
+        return;
+      }
+
+      setPendingProducts(prev => prev.filter(p => p.id !== product.id)); // instant removal
+      loadData();
+    } catch (err) {
+      console.error("approve error:", err);
+      alert("Network error while approving.");
+    } finally {
+      setApprovingIds(prev => { const n = new Set(prev); n.delete(product.id); return n; });
+    }
   };
 
   const rejectProduct = async (productId, reason) => {
@@ -1834,7 +1954,7 @@ export default function ProductsManagement() {
   };
 
   const currentProducts = useMemo(() => {
-    const map = { all: allProducts, my: myProducts, pending: pendingProducts, rejected: rejectedProducts };
+    const map = { all: canSeeAllProducts ? allProducts : myProducts, my: myActiveProducts, pending: pendingProducts, rejected: rejectedProducts };
     let list = map[effectiveTab] || [];
     if (unifiedSearch.trim()) {
       const q = unifiedSearch.toLowerCase().trim();
@@ -1855,20 +1975,44 @@ export default function ProductsManagement() {
       list = list.filter(p => !p.created_at || new Date(p.created_at) <= end);
     }
     return sortProducts(list);
-  }, [effectiveTab, allProducts, myProducts, pendingProducts, rejectedProducts, sortField, sortDir,
+  }, [effectiveTab, allProducts, myProducts, myActiveProducts, pendingProducts, rejectedProducts, sortField, sortDir,
       unifiedSearch, unifiedProductType, unifiedCurrency, unifiedCategory, unifiedAdmin, unifiedStart, unifiedEnd]);
 
   // ── STATS ──
   const activeCount = useMemo(() => allProducts.filter(p => p.is_active).length, [allProducts]);
   const panelOpen   = panel !== null;
 
-  // ── TABS CONFIG (product filter, moved into Hero dropdown — master only) ──
-  const tabs = [
-    hasPermission(currentUser, "products.service") && { id: "all", label: "Products", icon: Package, count: allProducts.length, accent: "#3b82f6" },
-    { id: "my", label: "My Products", icon: ShieldCheck, count: myProducts.length, accent: "#8b5cf6" },
-    currentUser.role === "master" && { id: "pending", label: "Pending Approval", icon: Clock, count: pendingProducts.length, accent: "#eab308" },
-    currentUser.role === "master" && { id: "rejected", label: "Rejected", icon: XCircle, count: rejectedProducts.length, accent: "#ef4444" },
-  ].filter(Boolean);
+  // Distinct product owners actually present in the "all products" dataset —
+  // this is what populates the "Admins" filter, so only admins (or master)
+  // who actually own at least one product show up, instead of every
+  // registered admin regardless of whether they have products.
+  const adminFilterOptions = useMemo(() => {
+    const byId = new Map();
+    for (const p of allProducts) {
+      if (p.admin_id == null) continue;
+      const id = String(p.admin_id);
+      if (!byId.has(id)) byId.set(id, p.admin_username || `Admin #${id}`);
+    }
+    return Array.from(byId, ([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allProducts]);
+
+  // Master and admins with platform.products.service get the full 4-tab set.
+  // Admins without it never see anyone else's products, so a separate "My
+  // Products" tab would be identical to "All Products" — we drop it and just
+  // point "all" at their own catalog (see currentProducts map above).
+  const tabs = canSeeAllProducts
+    ? [
+        { id: "all",      label: "All",    icon: Package,     count: allProducts.length,     accent: "#3b82f6" },
+        { id: "my",       label: "My Active Products", icon: ShieldCheck, count: myActiveProducts.length, accent: "#8b5cf6" },
+        { id: "pending",  label: "Pending Approval", icon: Clock,       count: pendingProducts.length,  accent: "#eab308" },
+        { id: "rejected", label: "Rejected",         icon: XCircle,     count: rejectedProducts.length, accent: "#ef4444" },
+      ]
+    : [
+        { id: "all",      label: "All",     icon: Package, count: myProducts.length,       accent: "#3b82f6" },
+        { id: "pending",  label: "Pending Approval",  icon: Clock,   count: pendingProducts.length,  accent: "#eab308" },
+        { id: "rejected", label: "Rejected",          icon: XCircle, count: rejectedProducts.length, accent: "#ef4444" },
+      ];
 
   // ── MAIN VIEW TABS (like ExchangeDashboard's right-side Orders/Sweeps/Analysis) ──
   const MAIN_TABS = [
@@ -1877,17 +2021,6 @@ export default function ProductsManagement() {
     { key: "analysis", label: "Analysis", icon: BarChart3, count: null },
   ];
 
-  // Permission button
-  const PermButton = ({ permission, style = {}, children, ...props }) => {
-    const allowed = hasPermission(currentUser, permission);
-    return (
-      <button {...props} disabled={!allowed} title={!allowed ? "No permission" : undefined}
-        style={{ transition: "0.2s ease", cursor: allowed ? "pointer" : "not-allowed", ...style, filter: allowed ? "none" : "grayscale(0.4)", opacity: allowed ? 1 : 0.85 }}>
-        {children}
-      </button>
-    );
-  };
-  
   return (
     <div style={{
       display: "flex",
@@ -1914,9 +2047,9 @@ export default function ProductsManagement() {
               "Search products, plan, type…",
           }}
           dropdowns={[
-            // slot 1 — order status (Orders) / product tab filter (Products, master only).
+            // slot 1 — order status (Orders) / product status filter (Products, everyone — options come from `tabs`, which already differ by role).
             // Not shown on Analysis — its "Sold vs Income" metric lives back inside the Analytics panel itself.
-            (mainView === "orders" || (mainView === "products" && isMaster)) && {
+            (mainView === "orders" || mainView === "products") && {
               key: "status",
               label: "Status",
               visible: true,
@@ -1942,10 +2075,10 @@ export default function ProductsManagement() {
               onChange: setUnifiedProductType,
               placeholder: "All",
               options: [
-                { label: "Subscription", value: "subscription" },
+                { label: "Subscription", value: "Subscription" },
+                { label: "Premium Account", value: "Premium Account" },
                 { label: "VPN", value: "VPN" },
                 { label: "Gift Card", value: "Gift Cards" },
-                { label: "Account", value: "account" },
                 { label: "Service", value: "service" },
               ],
             },
@@ -1967,15 +2100,19 @@ export default function ProductsManagement() {
               placeholder: "All",
               options: categories.map(c => ({ label: c.name, value: c.name })),
             },
-            // slot 5 — admin/owner, master only, "admin" role only (regular admins only ever see their own data anyway)
-            isMaster && {
+            // slot 5 — admin/owner. Visible to master AND admins with
+            // platform.products.service (both can see cross-admin data).
+            // Options are derived from the actual owners present in the
+            // "all products" dataset, so only admins/master who actually
+            // have products show up here — not every registered admin.
+            canSeeAllProducts && {
               key: "admin",
               label: "Admins", 
               visible: true, 
               value: unifiedAdmin, 
               onChange: setUnifiedAdmin,
               placeholder: "All",
-              options: users.filter(u => u.role === "admin").map(u => ({ label: u.username, value: String(u.user_id) })),
+              options: adminFilterOptions,
             },
           ].filter(Boolean)}
           datePicker={{
@@ -2070,6 +2207,7 @@ export default function ProductsManagement() {
 
             {/* Right: Add button */}
             <PermButton
+              user={currentUser}
               permission="products.service"
               onClick={() =>
                 setPanel(panel === "add-product" ? null : "add-product")
@@ -2313,8 +2451,10 @@ export default function ProductsManagement() {
                 display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
               }}>
                 {effectiveTab === "pending"
-                  ? <><Clock size={13} color="#eab308" /><span style={{ color: "#a3935a", fontSize: 12 }}>Products below are awaiting your approval. You must set <strong style={{ color: "#eab308" }}>system commission</strong> and <strong style={{ color: "#eab308" }}>reward percent</strong> before approving.</span></>
-                  : <><XCircle size={13} color="#ef4444" /><span style={{ color: "#a36060", fontSize: 12 }}>These products were rejected. Admins can resubmit them after making corrections.</span></>
+                  ? (isMaster
+                      ? <><Clock size={13} color="#eab308" /><span style={{ color: "#a3935a", fontSize: 12 }}>Products below are awaiting your approval. You must set <strong style={{ color: "#eab308" }}>system commission</strong> and <strong style={{ color: "#eab308" }}>reward percent</strong> before approving.</span></>
+                      : <><Clock size={13} color="#eab308" /><span style={{ color: "#a3935a", fontSize: 12 }}>These products are awaiting master's approval.</span></>)
+                  : <><XCircle size={13} color="#ef4444" /><span style={{ color: "#a36060", fontSize: 12 }}>These products were rejected. {isMaster ? "Admins" : "You"} can resubmit them after making corrections.</span></>
                 }
               </div>
             )}
@@ -2360,7 +2500,7 @@ export default function ProductsManagement() {
                     ))}
                   </div>
                 ) : filteredOrders.length === 0 ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 40, minHeight: 400, textAlign: "center", color: "#64748b" }}>No orders found</div>
+                    <EmptyState icon={FileText} title="No orders found" sub="Try adjusting your filters" />
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {filteredOrders.map((o) => (

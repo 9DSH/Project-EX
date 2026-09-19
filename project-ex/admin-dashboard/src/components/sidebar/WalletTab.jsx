@@ -6,10 +6,12 @@ import {
   ChevronDown,
   Wallet,
   Link2,
+  Banknote,
   Landmark,
   User,
   CreditCard,
   Building2,
+  ArrowLeftRight,
   Hash,
 } from "lucide-react";
 
@@ -233,296 +235,304 @@ export default function WalletTab({
 
   return (
     <>
-{/* Balance List */}
-<div style={styles.walletList}>
-  {user.balances?.length ? (
-    user.balances.map((b, idx) => {
-      const walletKey = getWalletKey(b);
-      const isOpen = expandedWalletKey === walletKey;
-      const isIrt = b.currency === "IRT";
-      const walletDetails = walletPairDetails[walletKey];
-      const walletDraft = walletPairDrafts[walletKey] || {
-        deposit_address: "",
-        external_wallet_address: "",
-      };
-      const isLoadingWallet = walletPairLoading[walletKey];
-      const savingField = walletPairSaving[walletKey];
-      const walletMessage = walletPairMessages[walletKey];
-      const canDeleteBalance = Number(b.available || 0) === 0 && Number(b.frozen || 0) === 0;
-      const coinLabel = (b.currency || "?").slice(0, 3).toUpperCase();
+              {/* Balance List */}
+              <div style={styles.walletList}>
+                {user.balances?.length ? (
+                  user.balances.map((b, idx) => {
+                    const walletKey = getWalletKey(b);
+                    const isOpen = expandedWalletKey === walletKey;
+                    const isIrt = b.currency === "IRT";
+                    const walletDetails = walletPairDetails[walletKey];
+                    const walletDraft = walletPairDrafts[walletKey] || {
+                      deposit_address: "",
+                      external_wallet_address: "",
+                    };
+                    const isLoadingWallet = walletPairLoading[walletKey];
+                    const savingField = walletPairSaving[walletKey];
+                    const walletMessage = walletPairMessages[walletKey];
+                    const canDeleteBalance = Number(b.available || 0) === 0 && Number(b.frozen || 0) === 0;
+                    const coinLabel = (b.currency || "?").slice(0, 3).toUpperCase();
 
-      return (
-        <div
-          key={`${walletKey}-${idx}`}
-          style={{ ...styles.walletRowCard, borderColor: isOpen ? "#2c3a56" : "#1e293b" }}
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            style={styles.walletRowButton}
-            onClick={() => toggleWalletRow(b)}
-          >
-            <div style={styles.walletRowMain}>
-              <div style={styles.walletRowLeft}>
-                <div style={{ ...styles.walletCoinBadge, ...(isIrt ? styles.walletCoinBadgeIrt : styles.walletCoinBadgeCrypto) }}>
-                  {isIrt ? <Landmark size={18} /> : coinLabel.slice(0, 2)}
-                </div>
-                <div style={styles.walletRowLabels}>
-                  <div style={styles.walletRowTitleRow}>
-                    <span style={styles.walletRowTitle}>{b.currency}</span>
-                    {!isIrt && (
-                      <span style={styles.walletNetworkChip}>
-                        {b.network_chain || b.network || "No network"}
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.walletRowMeta}>
-                    {isIrt ? "Internal toman balance" : b.network || "Wallet pair"}
-                  </div>
-                </div>
-              </div>
+                    return (
+                      <div
+                        key={`${walletKey}-${idx}`}
+                        style={{ ...styles.walletRowCard, borderColor: isOpen ? "#2c3a56" : "#1e293b" }}
+                      >
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          style={styles.walletRowButton}
+                          onClick={() => toggleWalletRow(b)}
+                        >
+                          <div style={styles.walletRowMain}>
+                            <div style={styles.walletRowLeft}>
+                              <div style={{ ...styles.walletCoinBadge, ...(isIrt ? styles.walletCoinBadgeIrt : styles.walletCoinBadgeCrypto) }}>
+                                {isIrt ? <Landmark size={18} /> : coinLabel.slice(0, 2)}
+                              </div>
+                              <div style={styles.walletRowLabels}>
+                                <div style={styles.walletRowTitleRow}>
+                                  <span style={styles.walletRowTitle}>{b.currency}</span>
+                                  {!isIrt && (
+                                    <span style={styles.walletNetworkChip}>
+                                      {b.network_chain || b.network || "No network"}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={styles.walletRowMeta}>
+                                  {isIrt ? "Internal toman balance" : b.network || "Wallet pair"}
+                                </div>
+                              </div>
+                            </div>
 
-              <div style={styles.walletAmounts}>
-                <div style={styles.walletAmountItem}>
-                  <span style={styles.balanceLabel}>Available</span>
-                  <span style={styles.availableValue}>{formatBalance(b.available)}</span>
-                </div>
-                <div style={styles.walletAmountDivider} />
-                <div style={styles.walletAmountItem}>
-                  <span style={styles.balanceLabel}>Frozen</span>
-                  <span style={styles.frozenValue}>{formatBalance(b.frozen)}</span>
-                </div>
-                <span
-                  style={{
-                    ...styles.walletExpandIcon,
-                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  }}
-                >
-                  <ChevronDown size={16} />
-                </span>
-              </div>
-            </div>
-          </button>
+                            <div style={styles.walletAmounts}>
+                              <div style={styles.walletAmountItem}>
+                                <span style={styles.balanceLabel}>Available</span>
+                                <span style={styles.availableValue}>{formatBalance(b.available)}</span>
+                              </div>
+                              <div style={styles.walletAmountDivider} />
+                              <div style={styles.walletAmountItem}>
+                                <span style={styles.balanceLabel}>Frozen</span>
+                                <span style={styles.frozenValue}>{formatBalance(b.frozen)}</span>
+                              </div>
+                              <span
+                                style={{
+                                  ...styles.walletExpandIcon,
+                                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                }}
+                              >
+                                <ChevronDown size={16} />
+                              </span>
+                            </div>
+                          </div>
+                        </button>
 
-          {isOpen && (
-            <div style={styles.walletDetailsPanel}>
-              {isIrt ? (
-                /* ---- IRT bank details ---- */
-                <div style={styles.irtPanel}>
-                  <div style={styles.irtPanelHeader}>
-                    <div style={styles.irtPanelHeaderIcon}>
-                      <Landmark size={16} />
-                    </div>
-                    <div>
-                      <div style={styles.irtPanelTitle}>Bank account details</div>
-                      <div style={styles.irtPanelSub}>Used to verify IRT deposits and withdrawals</div>
-                    </div>
-                  </div>
+                        {isOpen && (
+                          <div style={styles.walletDetailsPanel}>
+                            {isIrt ? (
+                              /* ---- IRT bank details ---- */
+                              <div style={styles.irtPanel}>
+                                <div style={styles.irtPanelHeader}>
+                                  <div style={styles.irtPanelHeaderIcon}>
+                                    <Landmark size={16} />
+                                  </div>
+                                  <div>
+                                    <div style={styles.irtPanelTitle}>Bank account details</div>
+                                    <div style={styles.irtPanelSub}>Used to verify IRT deposits and withdrawals</div>
+                                  </div>
+                                </div>
 
-                  {irtBankMessage && (
-                    <div
-                      style={
-                        irtBankMessage.type === "error"
-                          ? styles.walletMessageError
-                          : styles.walletMessageSuccess
-                      }
-                    >
-                      {irtBankMessage.text}
-                    </div>
-                  )}
+                                {irtBankMessage && (
+                                  <div
+                                    style={
+                                      irtBankMessage.type === "error"
+                                        ? styles.walletMessageError
+                                        : styles.walletMessageSuccess
+                                    }
+                                  >
+                                    {irtBankMessage.text}
+                                  </div>
+                                )}
 
-                  <div style={styles.irtGrid}>
-                    {[
-                      ["bank_holder_name", "Bank holder name", User],
-                      ["bank_card_number", "Bank card number", CreditCard],
-                      ["bank_name", "Bank name", Building2],
-                      ["bank_sheba", "Bank Sheba (IBAN)", Hash],
-                    ].map(([field, fieldLabel, FieldIcon]) => (
-                      <div key={field} style={styles.irtFieldCard}>
-                        <label style={styles.irtFieldLabel}>
-                          <FieldIcon size={13} />
-                          {fieldLabel}
-                        </label>
-                        {canManageBalance ? (
-                          <input
-                            value={irtBankDraft[field]}
-                            onChange={(e) =>
-                              setIrtBankDraft((prev) => ({ ...prev, [field]: e.target.value }))
-                            }
-                            style={styles.irtFieldInput}
-                            placeholder={`Enter ${fieldLabel.toLowerCase()}`}
-                          />
-                        ) : (
-                          <div style={styles.walletReadOnlyValue}>
-                            {irtBankDraft[field] || "Not set yet"}
+                                <div style={styles.irtGrid}>
+                                  {[
+                                    ["bank_holder_name", "Bank holder name", User],
+                                    ["bank_card_number", "Bank card number", CreditCard],
+                                    ["bank_name", "Bank name", Building2],
+                                    ["bank_sheba", "Bank Sheba (IBAN)", Hash],
+                                  ].map(([field, fieldLabel, FieldIcon]) => (
+                                    <div key={field} style={styles.irtFieldCard}>
+                                      <label style={styles.irtFieldLabel}>
+                                        <FieldIcon size={13} />
+                                        {fieldLabel}
+                                      </label>
+                                      {canManageBalance ? (
+                                        <input
+                                          value={irtBankDraft[field]}
+                                          onChange={(e) =>
+                                            setIrtBankDraft((prev) => ({ ...prev, [field]: e.target.value }))
+                                          }
+                                          style={styles.irtFieldInput}
+                                          placeholder={`Enter ${fieldLabel.toLowerCase()}`}
+                                        />
+                                      ) : (
+                                        <div style={styles.walletReadOnlyValue}>
+                                          {irtBankDraft[field] || "Not set yet"}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div style={styles.walletDetailActions}>
+                                  <span style={styles.walletDetailsHint}>
+                                    Editable by admin for user corrections or support.
+                                  </span>
+                                  {canManageBalance && (
+                                    <button
+                                      type="button"
+                                      className="primaryBtn"
+                                      style={styles.walletSaveBtn}
+                                      onClick={saveIrtBankInfo}
+                                      disabled={irtBankSaving}
+                                    >
+                                      {irtBankSaving ? "Saving…" : "Save bank info"}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ) : isLoadingWallet ? (
+                              <div style={styles.walletLoadingState}>
+                                <span style={styles.walletSpinnerDot} />
+                                Loading wallet details…
+                              </div>
+                            ) : (
+                              <>
+                                {walletMessage && (
+                                  <div
+                                    style={
+                                      walletMessage.type === "error"
+                                        ? styles.walletMessageError
+                                        : styles.walletMessageSuccess
+                                    }
+                                  >
+                                    {walletMessage.text}
+                                  </div>
+                                )}
+
+                                {canManageBalance ? (
+                                  <PermissionGate allowed={canManageBalance}>
+                                    <div style={styles.walletPairGrid}>
+                                      <div style={styles.walletAddressCard}>
+                                        <div style={styles.walletAddressHeader}>
+                                          <span style={styles.walletAddressIcon}>
+                                            <Wallet size={14} />
+                                          </span>
+                                          <span style={styles.walletAddressTitle}>Deposit wallet</span>
+                                        </div>
+                                        <input
+                                          value={walletDraft.deposit_address}
+                                          onChange={(e) =>
+                                            handleWalletDraftChange(walletKey, "deposit_address", e.target.value)
+                                          }
+                                          style={styles.walletAddressInput}
+                                          placeholder={walletDetails?.deposit_address ? "" : "Not set yet"}
+                                        />
+                                        <div style={styles.walletDetailActions}>
+                                          <span style={styles.walletDetailsHint}>
+                                            { "Deposit address for this currency/network."}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="primaryBtn"
+                                            style={styles.walletSaveBtn}
+                                            onClick={() => saveWalletField(b, "deposit_address")}
+                                            disabled={savingField === "deposit_address"}
+                                          >
+                                            {savingField === "deposit_address" ? "Saving…" : "Save"}
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div style={styles.walletAddressCard}>
+                                        <div style={styles.walletAddressHeader}>
+                                          <span style={styles.walletAddressIcon}>
+                                            <Link2 size={14} />
+                                          </span>
+                                          <span style={styles.walletAddressTitle}>External wallet</span>
+                                        </div>
+                                        <input
+                                          value={walletDraft.external_wallet_address}
+                                          onChange={(e) =>
+                                            handleWalletDraftChange(walletKey, "external_wallet_address", e.target.value)
+                                          }
+                                          style={styles.walletAddressInput}
+                                          placeholder={walletDetails?.external_wallet_address ? "" : "Not set yet"}
+                                        />
+                                        <div style={styles.walletDetailActions}>
+                                          <span style={styles.walletDetailsHint}>
+                                            User withdrawal destination for this currency/network.
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="primaryBtn"
+                                            style={styles.walletSaveBtn}
+                                            onClick={() => saveWalletField(b, "external_wallet_address")}
+                                            disabled={savingField === "external_wallet_address"}
+                                          >
+                                            {savingField === "external_wallet_address" ? "Saving…" : "Save"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div style={styles.walletDangerBlock}>
+                                      <div>
+                                        <div style={styles.walletDangerTitle}>Delete balance row</div>
+                                        <div style={styles.walletDangerHint}>
+                                          Removes this pair from the user sidebar only if available and frozen balances are both zero and the pair has no transaction history.
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          ...styles.walletDeleteBtn,
+                                          opacity: canDeleteBalance ? 1 : 0.45,
+                                          cursor: canDeleteBalance ? "pointer" : "not-allowed",
+                                        }}
+                                        disabled={!canDeleteBalance}
+                                        onClick={() => deleteBalancePair?.(b)}
+                                        title={canDeleteBalance ? "Delete zero unused balance" : "Only zero balances can be deleted"}
+                                      >
+                                        <Trash2 size={14} />
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </PermissionGate>
+                                ) : (
+                                  <div style={styles.walletPairGrid}>
+                                    <div style={styles.walletAddressCard}>
+                                      <div style={styles.walletAddressHeader}>
+                                        <span style={styles.walletAddressIcon}>
+                                          <Wallet size={14} />
+                                        </span>
+                                        <span style={styles.walletAddressTitle}>Deposit wallet</span>
+                                      </div>
+                                      <div style={styles.walletReadOnlyValue}>
+                                        {walletDetails?.deposit_address || "Not set yet"}
+                                      </div>
+                                    </div>
+                                    <div style={styles.walletAddressCard}>
+                                      <div style={styles.walletAddressHeader}>
+                                        <span style={styles.walletAddressIcon}>
+                                          <Link2 size={14} />
+                                        </span>
+                                        <span style={styles.walletAddressTitle}>External wallet</span>
+                                      </div>
+                                      <div style={styles.walletReadOnlyValue}>
+                                        {walletDetails?.external_wallet_address || "Not set yet"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
-                    ))}
+                    );
+                  })
+                ) : (
+                  <div style={styles.emptyBalances}>No balances available</div>
+                )}
+              </div>
+
+
+                              <div style={styles.ordersDivider}>
+                    <div style={styles.ordersDividerLine} />
+                    <div style={styles.ordersDividerText}>BALANCE OPERATIONS</div>
+                    <div style={styles.ordersDividerLine} />
                   </div>
 
-                  <div style={styles.walletDetailActions}>
-                    <span style={styles.walletDetailsHint}>
-                      Editable by admin for user corrections or support.
-                    </span>
-                    {canManageBalance && (
-                      <button
-                        type="button"
-                        className="primaryBtn"
-                        style={styles.walletSaveBtn}
-                        onClick={saveIrtBankInfo}
-                        disabled={irtBankSaving}
-                      >
-                        {irtBankSaving ? "Saving…" : "Save bank info"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : isLoadingWallet ? (
-                <div style={styles.walletLoadingState}>
-                  <span style={styles.walletSpinnerDot} />
-                  Loading wallet details…
-                </div>
-              ) : (
-                <>
-                  {walletMessage && (
-                    <div
-                      style={
-                        walletMessage.type === "error"
-                          ? styles.walletMessageError
-                          : styles.walletMessageSuccess
-                      }
-                    >
-                      {walletMessage.text}
-                    </div>
-                  )}
-
-                  {canManageBalance ? (
-                    <PermissionGate allowed={canManageBalance}>
-                      <div style={styles.walletPairGrid}>
-                        <div style={styles.walletAddressCard}>
-                          <div style={styles.walletAddressHeader}>
-                            <span style={styles.walletAddressIcon}>
-                              <Wallet size={14} />
-                            </span>
-                            <span style={styles.walletAddressTitle}>Deposit wallet</span>
-                          </div>
-                          <input
-                            value={walletDraft.deposit_address}
-                            onChange={(e) =>
-                              handleWalletDraftChange(walletKey, "deposit_address", e.target.value)
-                            }
-                            style={styles.walletAddressInput}
-                            placeholder={walletDetails?.deposit_address ? "" : "Not set yet"}
-                          />
-                          <div style={styles.walletDetailActions}>
-                            <span style={styles.walletDetailsHint}>
-                              { "Deposit address for this currency/network."}
-                            </span>
-                            <button
-                              type="button"
-                              className="primaryBtn"
-                              style={styles.walletSaveBtn}
-                              onClick={() => saveWalletField(b, "deposit_address")}
-                              disabled={savingField === "deposit_address"}
-                            >
-                              {savingField === "deposit_address" ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div style={styles.walletAddressCard}>
-                          <div style={styles.walletAddressHeader}>
-                            <span style={styles.walletAddressIcon}>
-                              <Link2 size={14} />
-                            </span>
-                            <span style={styles.walletAddressTitle}>External wallet</span>
-                          </div>
-                          <input
-                            value={walletDraft.external_wallet_address}
-                            onChange={(e) =>
-                              handleWalletDraftChange(walletKey, "external_wallet_address", e.target.value)
-                            }
-                            style={styles.walletAddressInput}
-                            placeholder={walletDetails?.external_wallet_address ? "" : "Not set yet"}
-                          />
-                          <div style={styles.walletDetailActions}>
-                            <span style={styles.walletDetailsHint}>
-                              User withdrawal destination for this currency/network.
-                            </span>
-                            <button
-                              type="button"
-                              className="primaryBtn"
-                              style={styles.walletSaveBtn}
-                              onClick={() => saveWalletField(b, "external_wallet_address")}
-                              disabled={savingField === "external_wallet_address"}
-                            >
-                              {savingField === "external_wallet_address" ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={styles.walletDangerBlock}>
-                        <div>
-                          <div style={styles.walletDangerTitle}>Delete balance row</div>
-                          <div style={styles.walletDangerHint}>
-                            Removes this pair from the user sidebar only if available and frozen balances are both zero and the pair has no transaction history.
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          style={{
-                            ...styles.walletDeleteBtn,
-                            opacity: canDeleteBalance ? 1 : 0.45,
-                            cursor: canDeleteBalance ? "pointer" : "not-allowed",
-                          }}
-                          disabled={!canDeleteBalance}
-                          onClick={() => deleteBalancePair?.(b)}
-                          title={canDeleteBalance ? "Delete zero unused balance" : "Only zero balances can be deleted"}
-                        >
-                          <Trash2 size={14} />
-                          Delete
-                        </button>
-                      </div>
-                    </PermissionGate>
-                  ) : (
-                    <div style={styles.walletPairGrid}>
-                      <div style={styles.walletAddressCard}>
-                        <div style={styles.walletAddressHeader}>
-                          <span style={styles.walletAddressIcon}>
-                            <Wallet size={14} />
-                          </span>
-                          <span style={styles.walletAddressTitle}>Deposit wallet</span>
-                        </div>
-                        <div style={styles.walletReadOnlyValue}>
-                          {walletDetails?.deposit_address || "Not set yet"}
-                        </div>
-                      </div>
-                      <div style={styles.walletAddressCard}>
-                        <div style={styles.walletAddressHeader}>
-                          <span style={styles.walletAddressIcon}>
-                            <Link2 size={14} />
-                          </span>
-                          <span style={styles.walletAddressTitle}>External wallet</span>
-                        </div>
-                        <div style={styles.walletReadOnlyValue}>
-                          {walletDetails?.external_wallet_address || "Not set yet"}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      );
-    })
-  ) : (
-    <div style={styles.emptyBalances}>No balances available</div>
-  )}
-</div>
 
                 {/*  BALANCE MANAGEMENT  */}
                 <PermissionGate allowed={hasPermission(user, "balance.manage")}>
@@ -533,7 +543,9 @@ export default function WalletTab({
                     onClick={() => setBalanceOpen((v) => !v)}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={styles.transferIcon}></div>
+                      <div style={styles.transferIcon}> 
+                         <Banknote size={17} />
+                      </div>
 
                       <div>
                         <div style={styles.transferHeaderLabel}>
@@ -545,10 +557,14 @@ export default function WalletTab({
                         </div>
                       </div>
                     </div>
-
-                    <span style={{ color: "#64748b", fontSize: 11 }}>
-                      {balanceOpen ? "v" : ">"}
-                    </span>
+                              <span
+                                style={{
+                                  ...styles.walletExpandIcon,
+                                  transform: balanceOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                }}
+                              >
+                                <ChevronDown size={16} />
+                              </span>
                   </div>
 
                   {/* BODY */}
@@ -657,15 +673,22 @@ export default function WalletTab({
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={styles.transferIcon}></div>
+                        <div style={styles.transferIcon}>
+                          <ArrowLeftRight size={17} />
+                        </div>
                         <div>
                           <div style={styles.transferHeaderLabel}>Internal Transfer</div>
                           <div style={styles.transferHeaderSub}>Move this user's balance to another user</div>
                         </div>
                       </div>
-                      <span style={{ color: "#64748b", fontSize: 11 }}>
-                        {transferOpen ? "" : ""}
-                      </span>
+                              <span
+                                style={{
+                                  ...styles.walletExpandIcon,
+                                  transform: transferOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                }}
+                              >
+                                <ChevronDown size={16} />
+                              </span>
                     </div>
 
                     {/* BODY */}

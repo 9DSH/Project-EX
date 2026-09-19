@@ -4,6 +4,7 @@ from sqlalchemy import func, desc
 from pydantic import BaseModel
 from typing import Optional
 from app.core.rls import get_db_rls
+from app.routes.utilts.shared_functions import _reassert_master_rls
 from app.models.user import User
 from app.models.messages import Conversation, Message
 from app.core.security import get_current_user, is_master, is_admin_or_above
@@ -27,11 +28,14 @@ class AdminSendMessage(BaseModel):
 
 
 
-def get_admin(user=Depends(get_current_user)):
+def get_admin(
+    db: Session = Depends(get_db_rls),
+    user=Depends(get_current_user),
+):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not has_access(user, "send.message"):
+    if not has_access(user, "send.message", db):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
@@ -63,9 +67,6 @@ async def admin_send_message(
     admin=Depends(get_admin)
 ):  
     
-    if not has_access(admin, "send.message"):
-        raise HTTPException(403, "Access denied")
-
     conversation = db.query(Conversation).filter(
         Conversation.id == payload.conversation_id
     ).first()
@@ -180,13 +181,11 @@ def get_conversations(
     admin=Depends(get_admin)
 ):  
     
-    if not has_access(admin, "send.message"):
-        raise HTTPException(403, "Access denied")
-
     query = (
         db.query(Conversation)
         .join(Message, Message.conversation_id == Conversation.id)
         .join(User, User.user_id == Conversation.user_id)
+        .filter(Conversation.kind != "internal")
     )
 
     # Master sees every conversation; other admins only see
@@ -243,8 +242,6 @@ async def get_conversation_messages(
     admin=Depends(get_admin)
 ):  
     
-    if not has_access(admin, "send.message"):
-        raise HTTPException(403, "Access denied")
     
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id
@@ -271,6 +268,7 @@ async def get_conversation_messages(
     ).update({"is_read": True})
 
     db.commit()
+    _reassert_master_rls(db)
 
     return {
         "conversation_id": conversation_id,
@@ -307,8 +305,6 @@ def start_conversation(
     admin=Depends(get_admin)
 ):  
     
-    if not has_access(admin, "send.message"):
-        raise HTTPException(403, "Access denied")
     
     # 1️⃣ check if conversation already exists
     conv = (
@@ -348,7 +344,7 @@ def get_users(
     admin=Depends(get_admin)
 ):  
     
-    if has_access(admin, "all.users.view"):
+    if has_access(admin, "all.users.view" ,db):
         users = (
             db.query(User)
             .filter(

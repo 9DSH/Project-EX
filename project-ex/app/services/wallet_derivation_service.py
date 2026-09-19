@@ -4,8 +4,10 @@ Uses BIP44 derivation with different indices for each currency/network combinati
 """
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.user import UserWallet, User
 from app.models.currency_network import CurrencyNetwork
+from app.routes.utilts.shared_functions import  _reassert_master_rls
 from app.services.tatum_service import derive_address, create_address_subscription
 import logging
 import os
@@ -125,6 +127,7 @@ def get_or_create_wallet_for_pair(
     
     try:
         db.commit()
+        _reassert_master_rls(db)
         db.refresh(wallet)
     except Exception as e:
         db.rollback()

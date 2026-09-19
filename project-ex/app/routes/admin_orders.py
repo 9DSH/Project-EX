@@ -31,11 +31,14 @@ class AdminCreateOrderRequest(BaseModel):
     input_data: Optional[Dict[str, Any]] = None
 
 
-def get_admin(user=Depends(get_current_user)):
+def get_admin(
+    db: Session = Depends(get_db_rls),
+    user=Depends(get_current_user),
+    ):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not has_access(user, "orders.view"):
+    if not has_access(user, "orders.view", db):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return user
@@ -208,7 +211,7 @@ def create_order_for_user(
     # -------------------------
     # ADMIN CHECK
     # -------------------------
-    if not has_access(admin, "orders.create"):
+    if not has_access(admin, "orders.create", db):
         raise HTTPException(403, "Access denied")
 
     # -------------------------
@@ -346,7 +349,7 @@ def get_pending_orders(
     # -------------------------
     # ADMIN CHECK
     # -------------------------
-    if not has_access(admin, "orders.manage"):
+    if not has_access(admin, "orders.manage", db):
         raise HTTPException(403, "Access denied")
     include_buyer_detail = has_access(admin, "all.users.view") 
     orders = db.query(OrderItem).filter(OrderItem.status == "pending").order_by(OrderItem.created_at.desc()).all()
@@ -361,12 +364,8 @@ def get_all_orders(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    # -------------------------
-    # ADMIN CHECK
-    # -------------------------
-    if not has_access(admin, "orders.view"):
-        raise HTTPException(403, "Access denied")
-    include_buyer_detail = has_access(admin, "all.users.view") 
+    
+    include_buyer_detail = has_access(admin, "all.users.view", db) 
     orders = db.query(OrderItem).order_by(OrderItem.created_at.desc()).all()
     return [build_order_response(o, db, include_buyer_detail) for o in orders]
 
@@ -381,7 +380,7 @@ def approve_order(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "orders.manage"):
+    if not has_access(admin, "orders.manage", db):
         raise HTTPException(403, "Access denied")
 
     order_item = db.query(OrderItem).filter(OrderItem.id == order_id).first()
@@ -456,7 +455,7 @@ def reject_order(
     # -------------------------
     # ADMIN CHECK
     # -------------------------
-    if not has_access(admin, "orders.manage"):
+    if not has_access(admin, "orders.manage", db):
         raise HTTPException(403, "Access denied")
     # -------------------------
     # ORDER CHECK
@@ -570,7 +569,7 @@ async def deliver_order(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not has_access(admin, "orders.manage"):
+    if not has_access(admin, "orders.manage", db):
         raise HTTPException(403, "Access denied")
     
     order_item = db.query(OrderItem).filter(
@@ -674,7 +673,7 @@ def update_order_price(
     # -------------------------
     # ADMIN CHECK
     # -------------------------
-    if not has_access(admin, "orders.manage"):
+    if not has_access(admin, "orders.manage", db):
         raise HTTPException(403, "Access denied")
 
     order_item = db.query(OrderItem).filter(OrderItem.id == order_id).first()
@@ -701,7 +700,7 @@ def get_all_transactions(
     # -------------------------
     # ADMIN CHECK
     # -------------------------
-    if not has_access(admin, "transactions.view"):
+    if not has_access(admin, "transactions.view", db):
         raise HTTPException(403, "Access denied")
 
     if admin["role"] == "master":
@@ -991,8 +990,7 @@ def get_product_analytics(
       - admin_id     : user_id of product owning admin
       - is_admin_product : True when creator has role admin or master
     """
-    if not has_access(admin, "orders.view"):
-        raise HTTPException(403, "Access denied")
+
  
     # Aggregate delivered orders per product
     q = (

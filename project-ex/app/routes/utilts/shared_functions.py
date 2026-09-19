@@ -1,5 +1,6 @@
 from app.models.user import User , TelegramBotSettings
 from sqlalchemy.orm import Session
+from sqlalchemy import  text
 from typing import Optional, Dict, Any
 
 ADMIN_ROLES = ("admin", "master")  
@@ -55,3 +56,16 @@ def _admin_telegram_displayName_map(db: Session, admin_ids: set[int]):
     display_map = {r.admin_id: r.display_name for r in display_rows}
 
     return {aid: display_map.get(aid, usernames.get(aid)) for aid in admin_ids}
+
+def _reassert_master_rls(db: Session):
+    """
+    Several helper functions (sync_master_grants, get_or_create_wallet_for_pair,
+    enroll_free_plan_on_signup, grant_access, etc.) call db.commit() internally.
+    Since app.is_master / app.current_admin_id are SET LOCAL (transaction-scoped),
+    any internal commit wipes them — and every table this touches has
+    FORCE ROW LEVEL SECURITY, so subsequent writes in the same request get
+    silently rejected. Call this after any such helper, before issuing more
+    writes in the same request.
+    """
+    db.execute(text("SET LOCAL app.is_master = 'true'"))
+    db.execute(text("SET LOCAL app.current_admin_id = ''"))

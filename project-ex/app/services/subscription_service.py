@@ -20,10 +20,10 @@ Core of the admin subscription/access-point monetization system.
 import json
 from datetime import datetime, timedelta
 from typing import Optional
-
+from app.routes.utilts.shared_functions import _reassert_master_rls
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-
+from sqlalchemy import text
 from app.models.user import User
 from app.models.user_balance import UserBalance
 from app.models.transaction import Transaction
@@ -56,17 +56,21 @@ ACTIVE_LIKE_STATUSES = ("active", "grace")  # access is still considered "held" 
 # ACCESS PROVENANCE
 # =========================================================
 def recompute_access_points(db: Session, admin_id: int) -> list[str]:
+    db.execute(text("SET LOCAL app.is_master = 'true'"))
+    db.execute(text("SET LOCAL app.current_admin_id = ''"))
     rows = db.query(AdminAccessGrant.access_point_key).filter(
         AdminAccessGrant.admin_id == admin_id
     ).distinct().all()
-
+    print("grant Row:", rows)  
+    print("admin id:", admin_id)
     keys = sorted({r[0] for r in rows})
 
     user = db.query(User).filter(User.user_id == admin_id).first()
+    print("user", user)
     if user:
         user.access_points = keys
         db.commit()
-
+        _reassert_master_rls(db)
     return keys
 
 
@@ -86,7 +90,7 @@ def grant_access(db: Session, admin_id: int, key: str, source: str, source_id: O
             source_id=source_id,
         ))
         db.commit()
-
+        _reassert_master_rls(db)
     recompute_access_points(db, admin_id)
 
 
@@ -98,7 +102,7 @@ def revoke_access(db: Session, admin_id: int, key: str, source: str, source_id: 
         AdminAccessGrant.source_id == source_id,
     ).delete()
     db.commit()
-
+    _reassert_master_rls(db)
     recompute_access_points(db, admin_id)
 
 
@@ -109,7 +113,7 @@ def revoke_all_for_source(db: Session, admin_id: int, source: str, source_id: Op
         AdminAccessGrant.source_id == source_id,
     ).delete()
     db.commit()
-
+    _reassert_master_rls(db)
     recompute_access_points(db, admin_id)
 
 

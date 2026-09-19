@@ -11,7 +11,7 @@ export default function ConversationList({
 
                 return (
                     <div
-                        key={c.conversation_id}
+                        key={`${c.kind || "support"}-${c.conversation_id}`}
                         onClick={() => setActiveChat(c)}
                         style={{
                             padding: "12px 14px",

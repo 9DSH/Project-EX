@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
-from app.core.permissions import ROLE_PERMISSIONS
+from app.core.permissions import ROLE_PERMISSIONS , has_access
 from pydantic import BaseModel
 from app.core.rls import get_db_rls, get_db_master
 from app.models.user import User
@@ -16,6 +16,7 @@ from app.schemas.user import UserCreate
 from app.constants.transaction_types import ADMIN_DEPOSIT,ADMIN_WITHDRAW, MASTER_DEPOSIT, MASTER_WITHDRAW 
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 import uuid
+from app.models.subscription import AdminAccessGrant
 from app.core.security import hash_password
 from sqlalchemy import func, or_, text
 from app.models.messages import Conversation, Message
@@ -27,7 +28,7 @@ from app.models.wire_transfer_order import WireTransferOrder
 from app.services.auth_service import reset_user_password 
 from app.services.wallet_derivation_service import get_or_create_wallet_for_pair, create_default_wallets_for_user
 from app.routes.admin_orders import  build_order_response
-from app.routes.utilts.shared_functions import get_admin_username
+from app.routes.utilts.shared_functions import get_admin_username, _reassert_master_rls
 from app.services.subscription_service import sync_master_grants, enroll_free_plan_on_signup
 
 router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
@@ -72,33 +73,13 @@ class InternalTransferPayload(BaseModel):
 class ResetPasswordRequest(BaseModel):
     new_password: Optional[str] = None
 
-
-def has_access(user, permission: str):
-    role = user.get("role")
-
-    if role == "master":
-        return True
-
-    allowed = ROLE_PERMISSIONS.get(role, [])
-
-    if allowed == "*":
-        return True
-
-    return permission in allowed
+class WalletPairUpdate(BaseModel):
+    currency_id: int
+    network_id: int
+    deposit_address: str | None = None
+    external_wallet_address: str | None = None
 
 
-def _reassert_master_rls(db: Session):
-    """
-    Several helper functions (sync_master_grants, get_or_create_wallet_for_pair,
-    enroll_free_plan_on_signup, grant_access, etc.) call db.commit() internally.
-    Since app.is_master / app.current_admin_id are SET LOCAL (transaction-scoped),
-    any internal commit wipes them — and every table this touches has
-    FORCE ROW LEVEL SECURITY, so subsequent writes in the same request get
-    silently rejected. Call this after any such helper, before issuing more
-    writes in the same request.
-    """
-    db.execute(text("SET LOCAL app.is_master = 'true'"))
-    db.execute(text("SET LOCAL app.current_admin_id = ''"))
 
 # -------------------------
 # SHARED USER SERIALIZER
@@ -125,7 +106,7 @@ def serialize_user(u, db):
         .join(Conversation, Conversation.id == Message.conversation_id)\
         .filter(
             Conversation.user_id == u.user_id,
-            Message.sender == "user",
+            Message.sender != "master",
             Message.is_read == False
         ).scalar()
 
@@ -169,7 +150,13 @@ def serialize_user(u, db):
         "admin_id": u.admin_id,  
         "admin_username": admin_username,         
         "created_date": u.created_date, 
-        "access_points": u.access_points,
+        "access_points": [
+                r[0] for r in db.query(AdminAccessGrant.access_point_key)
+                    .filter(AdminAccessGrant.admin_id == u.user_id)
+                    .distinct()
+                    .order_by(AdminAccessGrant.access_point_key)
+                    .all()
+            ],
         "bank_info": {
             "bank_holder_name": bank_info.bank_holder_name if bank_info else None,
             "bank_card_number": bank_info.bank_card_number if bank_info else None,
@@ -304,7 +291,7 @@ def get_users(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "all.users.view"):
+    if not has_access(user, "all.users.view", db):
         raise HTTPException(403, "Access denied")
 
     if is_master(user):
@@ -455,7 +442,7 @@ def create_user(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.manage"):
+    if not has_access(user, "users.manage", db):
         raise HTTPException(403, "Access denied")
     
     access_points = []
@@ -587,7 +574,7 @@ def internal_transfer(
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.internal.transfer"):
+    if not has_access(user, "users.internal.transfer", db):
         raise HTTPException(403, "Access denied")
 
     if payload.amount <= 0:
@@ -719,7 +706,7 @@ def get_user_orders(user_id: int, db: Session = Depends(get_db_rls), user=Depend
         raise HTTPException(403, "Not authorized")
     
         
-    if not has_access(user, "orders.view"):
+    if not has_access(user, "orders.view", db):
         raise HTTPException(403, "Access denied")
 
     orders = db.query(OrderItem).filter(OrderItem.user_id == user_id)\
@@ -740,7 +727,7 @@ def get_user_transactions(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(admin, "transactions.view"):
+    if not has_access(admin, "transactions.view", db):
         raise HTTPException(403, "Access denied")
 
     transactions = db.query(Transaction).filter(Transaction.user_id == user_id)\
@@ -783,7 +770,7 @@ def update_balance(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(admin, "balance.manage"):
+    if not has_access(admin, "balance.manage", db):
         raise HTTPException(403, "Access denied")
 
     if payload.action not in ["deposit", "withdraw"]:
@@ -928,7 +915,7 @@ def delete_balance(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "balance.manage"):
+    if not has_access(admin, "balance.manage", db):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -1016,7 +1003,7 @@ def get_user_wallet_pair(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "balance.manage"):
+    if not has_access(admin, "balance.manage", db):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -1069,11 +1056,6 @@ def get_user_wallet_pair(
     }
 
 
-class WalletPairUpdate(BaseModel):
-    currency_id: int
-    network_id: int
-    deposit_address: str | None = None
-    external_wallet_address: str | None = None
 
 
 @router.put("/{user_id}/wallet-pair")
@@ -1093,7 +1075,7 @@ def update_user_wallet_pair(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "balance.manage"):
+    if not has_access(admin, "balance.manage", db):
         raise HTTPException(403, "Access denied")
 
     user_obj = db.query(User).filter(User.user_id == user_id).first()
@@ -1180,7 +1162,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db_
         raise HTTPException(403, "Not authorized")
 
 
-    if not has_access(user, "users.manage"):
+    if not has_access(user, "users.manage", db):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -1222,11 +1204,14 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db_
     # PERMISSIONS
     # =========================
     db.commit()
+    _reassert_master_rls(db)
 
     # =========================
     # PERMISSIONS (routed through provenance layer — only master-sourced
     # grants are touched; plan/addon-sourced access points are untouched)
     # =========================
+    print("user id", db_user.user_id)
+    print("Access:", payload.access_points)
     if payload.access_points is not None:
         sync_master_grants(db, db_user.user_id, payload.access_points)
 
@@ -1241,7 +1226,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db_rls), user=Depends(ge
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
     
-    if not has_access(user, "users.delete"):
+    if not has_access(user, "users.delete", db):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -1330,7 +1315,7 @@ def reset_password(
     if not is_admin_or_above(admin):
         raise HTTPException(403, "Not authorized")
 
-    if not has_access(admin, "users.manage"):
+    if not has_access(admin, "users.manage", db):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -1356,6 +1341,8 @@ def reset_password(
         "username": result["username"],
         "new_password": result["new_password"]
     }
+
+
 @router.put("/{user_id}/bank-info")
 def update_user_bank_info(
     user_id: int,
@@ -1365,7 +1352,7 @@ def update_user_bank_info(
 ):
     if not is_admin_or_above(user):
         raise HTTPException(403, "Not authorized")
-    if not (has_access(user, "users.manage") or has_access(user, "balance.manage")):
+    if not (has_access(user, "users.manage", db) or not has_access(user, "balance.manage", db)):
         raise HTTPException(403, "Access denied")
 
     db_user = db.query(User).filter(User.user_id == user_id).first()

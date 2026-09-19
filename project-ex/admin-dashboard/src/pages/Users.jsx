@@ -3,9 +3,20 @@ import UserSidebar from "../components/UserSidebar";
 import HeroHub from "../components/HeroHub";
 import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../constants/AccessPoints"
 import { API_URL } from "../config";
-import { Users as UsersIcon, X, UserPlus, Shield, User } from "lucide-react";
+
 import { hasPermission } from "../utils/permissions";
 import "./Users.css";
+  import {
+  Users as UsersIcon,
+  X,
+  UserPlus,
+  Shield,
+  User,
+  MessageSquare,
+  ShoppingCart,
+  Landmark,
+  Banknote,
+} from "lucide-react";
 
 // ── Field wrapper (matches Products style) ────────────────────
 const Field = ({ label, children }) => (
@@ -74,6 +85,7 @@ export default function Users() {
   const canViewAllUsers = isMaster || hasPermission(currentUser, "all.users.view");
   const canViewAdmins = isMaster || hasPermission(currentUser, "admins.view");
 
+  
   // Admins without all.users.view access only ever see their own users —
   // keep viewMode pinned there so the (hidden) filter can't drift.
   useEffect(() => {
@@ -531,19 +543,22 @@ export default function Users() {
 
                   <div className="users-activity-cell">
                     <div className="users-activity-icons">
-                      {[
-                        ["💬", u.unread_messages, "#ef4444"],
-                        ["📦", (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
-                        ["🏦", u.pending_wire_transfers || 0, "#3b82f6"],
-                        ["💵", u.pending_withdrawals || 0, "#a855f7"],
-                      ].map(([icon, count, color], i) => (
-                        <div key={i} className="users-activity-icon">
-                          {icon}
-                          {count > 0 && (
-                            <span className="users-activity-count" style={{ "--count-color": color }}>{count}</span>
-                          )}
-                        </div>
-                      ))}
+                    {[
+                      [MessageSquare, u.unread_messages, "#22c55e" ],
+                      [ShoppingCart, (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
+                      [Landmark, u.pending_wire_transfers || 0, "#3b82f6"],
+                      [Banknote, u.pending_withdrawals || 0, "#ef4444"],
+                    ].map(([Icon, count, color], i) => (
+                      <div 
+                         key={i} 
+                         className={`users-activity-icon${count > 0 ? " is-active" : ""}`}
+                         style={count > 0 ? { "--count-color": color } : undefined} >
+                        {<Icon size={14} color={"#535c7a"} />}
+                        {count > 0 && (
+                          <span className="users-activity-count" style={{ "--count-color": color }}>{count}</span>
+                        )}
+                      </div>
+                    ))}
                     </div>
                   </div>
 

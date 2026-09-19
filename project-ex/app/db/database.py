@@ -644,11 +644,11 @@ def ensure_rls_policies():
         GLOBAL_BOT_TABLES = {"products", "exchange_pairs", "wire_transfer_pairs"}
 
         for table in _BUCKET_A_TABLES:
-            if table == "users":
                 # admin_id may be NULL for master/top-level admin rows —
                 # fall back to checking the row's own user_id in that case.
+            if table == "users":
                 using_sql = (
-                    f"{is_master} OR admin_id = {cur_admin} "
+                    f"{is_master} OR admin_id = {cur_admin} OR user_id = {cur_admin} "
                     f"OR ({is_global_bot} AND is_admin_global_eligible(COALESCE(admin_id, user_id)))"
                 )
             elif table in GLOBAL_BOT_TABLES:

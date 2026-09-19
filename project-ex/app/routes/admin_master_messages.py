@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, text
 from typing import Optional
-
+from app.routes.utilts.shared_functions import  _reassert_master_rls
 from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master
 from app.models.user import User
@@ -19,6 +19,14 @@ UPLOADS_DIR = "uploads/internal"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 INTERNAL_KIND = "internal"
+
+
+class SendMessage(BaseModel):
+    content: Optional[str] = None
+    media_type: Optional[str] = None      # "photo" | "receipt" | "document"
+    media_file: Optional[str] = None      # base64
+
+
 
 
 def get_admin(user=Depends(get_current_user)):
@@ -41,20 +49,22 @@ def _get_or_create_conversation(db: Session, user_id: int) -> Conversation:
         if conv.kind != INTERNAL_KIND:
             conv.kind = INTERNAL_KIND
             db.commit()
+            _reassert_master_rls(db)
         return conv
 
     conv = Conversation(user_id=user_id, kind=INTERNAL_KIND)
     db.add(conv)
     try:
         db.commit()
+        _reassert_master_rls(db)
         db.refresh(conv)
     except IntegrityError:
         db.rollback()
+        _reassert_master_rls(db)
         conv = db.query(Conversation).filter(Conversation.user_id == user_id).first()
         if not conv:
             raise
     return conv
-
 
 def _save_base64_file(base64_data: str, media_type: str) -> str:
     if "," in base64_data:
@@ -68,10 +78,26 @@ def _save_base64_file(base64_data: str, media_type: str) -> str:
     return f"/uploads/internal/{filename}"
 
 
-class SendMessage(BaseModel):
-    content: Optional[str] = None
-    media_type: Optional[str] = None      # "photo" | "receipt" | "document"
-    media_file: Optional[str] = None      # base64
+
+@router.get("/summary")
+def get_my_summary(db: Session = Depends(get_db_rls), admin=Depends(get_admin)):
+    """Read-only preview for the admin's own thread with master — never marks anything read."""
+    conv = _get_or_create_conversation(db, admin["user_id"])
+    last_msg = db.query(Message).filter(
+        Message.conversation_id == conv.id
+    ).order_by(desc(Message.created_at)).first()
+    unread = db.query(func.count(Message.id)).filter(
+        Message.conversation_id == conv.id,
+        Message.sender == "master",
+        Message.is_read == False,
+    ).scalar()
+    return {
+        "conversation_id": conv.id,
+        "last_message": last_msg.content if last_msg else None,
+        "last_media_type": last_msg.media_type if last_msg else None,
+        "last_time": last_msg.created_at if last_msg else None,
+        "unread_count": unread or 0,
+    }
 
 
 # =========================
@@ -97,7 +123,7 @@ def get_my_messages(db: Session = Depends(get_db_rls), admin=Depends(get_admin))
         Message.is_read == False,
     ).update({"is_read": True})
     db.commit()
-
+    _reassert_master_rls(db)
     return {
         "conversation_id": conv.id,
         "messages": [
@@ -130,6 +156,7 @@ def send_as_admin(payload: SendMessage, db: Session = Depends(get_db_rls), admin
     )
     db.add(msg)
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(msg)
     return {"success": True, "message_id": msg.id, "media_url": media_url}
 
@@ -189,7 +216,7 @@ def master_view_conversation(conversation_id: int, db: Session = Depends(get_db_
         Message.is_read == False,
     ).update({"is_read": True})
     db.commit()
-
+    _reassert_master_rls(db)
     return {
         "conversation_id": conv.id,
         "admin_id": conv.user_id,
@@ -228,5 +255,6 @@ def master_reply(conversation_id: int, payload: SendMessage, db: Session = Depen
     )
     db.add(msg)
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(msg)
     return {"success": True, "message_id": msg.id, "media_url": media_url}

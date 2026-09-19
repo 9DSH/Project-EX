@@ -9,18 +9,21 @@ import OrdersTab from "./sidebar/OrdersTab";
 import TransactionsTab from "./sidebar/TransactionsTab";
 import { hasPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
-
+import {
+  User,
+  Wallet,
+  ShoppingCart,
+  Package,
+  Receipt,
+  MessageSquare,
+} from "lucide-react";
 
 const TABS = [
-  { key: "profile", label: "👤 Profile" },
-
-  { key: "wallet", label: "💰 Wallet" },
-
-  { key: "orders", label: "📦 Orders"},
-
-  { key: "transactions", label: "🧾 Transactions" },
-
-  { key: "messages", label: "💬 Messages" },
+  { key: "profile", label: "Profile", Icon: User },
+  { key: "wallet", label: "Wallet", Icon: Wallet },
+  { key: "orders", label: "Orders", Icon: ShoppingCart },
+  { key: "transactions", label: "Transactions", Icon: Receipt },
+  { key: "messages", label: "Messages", Icon: MessageSquare },
 ];
 
 function calculateProductPricing(product,  targetUser, bonusPercent = 0) {
@@ -241,14 +244,13 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
   }), [currentUser]);
 
 
-
+ 
 
   // =====================================================
   // INIT
   // =====================================================
   useEffect(() => {
     if (!user) return;
-    
     setUsername(user.username || "");
     setStatus(user.status || "active");
     setRole(user.role || "user");
@@ -441,14 +443,21 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
 
     try {
       const res = await fetch(
-        `${API_URL}/products/by-category/${categoryId}`
+        `${API_URL}/admin/products/by-category/${categoryId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const data = await res.json();
+      if (!res.ok) {
+        console.error("Failed loading products", res.status, await res.text());
+        setProducts([]);
+        return;
+      }
 
+      const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed loading products", err);
+      setProducts([]);
     }
   };
 
@@ -1009,7 +1018,6 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
         return;
       }
 
-      console.log(data)
 
       setExchangePreview(data);
     } catch (err) {
@@ -1199,13 +1207,14 @@ export default function UserSidebar({ user, onClose, onRefresh }) {
 
         {/* TABS */}
         <div style={styles.tabs}>
-          {TABS.map(tabItem => (
+          {TABS.map(({ key, label, Icon }) => (
             <button
-              key={tabItem.key}
-              style={tab === tabItem.key ? styles.activeTab : styles.tab}
-              onClick={() => setTab(tabItem.key)}
+              key={key}
+              style={tab === key ? styles.activeTab : styles.tab}
+              onClick={() => setTab(key)}
             >
-              {tabItem.label}
+              <Icon size={14} style={{ marginRight: 6, verticalAlign: "middle" }} />
+              {label}
             </button>
           ))}
         </div>
@@ -1501,7 +1510,7 @@ const styles = {
     padding: "10px 14px",
     borderRadius: 12,
     border: "1px solid #1e293b",
-    background: "#111827",
+    background: "rgba(255,255,255,.03)",
     color: "#94a3b8",
     cursor: "pointer",
     whiteSpace: "nowrap",
@@ -1511,7 +1520,7 @@ const styles = {
     padding: "10px 14px",
     borderRadius: 12,
     border: "1px solid #2563eb",
-    background: "#1d4fd871",
+    background: "rgba(59,130,246,0.18)" ,
     color: "white",
     cursor: "pointer",
     whiteSpace: "nowrap",

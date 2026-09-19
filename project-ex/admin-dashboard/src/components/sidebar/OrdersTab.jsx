@@ -1,4 +1,11 @@
-import { AlignCenterVerticalIcon, AlignEndVertical, ListVideo } from "lucide-react";
+import { 
+  AlignCenterVerticalIcon, 
+  AlignEndVertical, 
+  ListVideo,
+ ChevronDown,
+ ShoppingCart,
+ ArrowLeftRight,
+ } from "lucide-react";
 import PermissionGate from "../../components/PermissionGate";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -396,15 +403,22 @@ const BigNumber = ({ value, style = {} }) => {
                     onClick={() => setCreateOrderOpen(!createOrderOpen)}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={styles.transferIcon}>➕</div>
+                      <div style={styles.transferIcon}>
+                        <ShoppingCart size={17} />
+                      </div>
                       <div>
                         <div style={styles.transferHeaderLabel}>New Order</div>
                         <div style={styles.transferHeaderSub}>Place an order for this user</div>
                       </div>
                     </div>
-                    <span style={{ color: "#64748b", fontSize: 11 }}>
-                      {createOrderOpen ? "▲" : "▼"}
-                    </span>
+                              <span
+                                style={{
+                                  ...styles.walletExpandIcon,
+                                  transform: createOrderOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                }}
+                              >
+                                <ChevronDown size={16} />
+                              </span>
                   </div>
 
                   {/*--------------- New Order container -------------------- */}
@@ -937,22 +951,30 @@ const BigNumber = ({ value, style = {} }) => {
                       onClick={() => setExchangeOpen(!exchangeOpen)}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={styles.transferIcon}>💱</div>
+                        <div style={styles.transferIcon}>
+                          <ArrowLeftRight size={17} />
+                        </div>
                         <div>
                           <div style={styles.transferHeaderLabel}>Exchange for User</div>
                           <div style={styles.transferHeaderSub}>Execute an exchange for this user</div>
                         </div>
                       </div>
-                      <span style={{ color: "#64748b", fontSize: 11 }}>
-                        {exchangeOpen ? "▲" : "▼"}
-                      </span>
-                    </div>
+                          <span
+                                style={{
+                                  ...styles.walletExpandIcon,
+                                  transform: exchangeOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                }}
+                              >
+                                <ChevronDown size={16} />
+                          </span>
+                     </div>
                     
 
 
                     {exchangeOpen && (
                       <div style={styles.createOrderBody}>
-                        <div>
+                        <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ flex: 1 }}>
                           <label style={styles.label}>From Currency</label>
                           <select
                             style={styles.input}
@@ -976,7 +998,9 @@ const BigNumber = ({ value, style = {} }) => {
                               </option>
                             ))}
                           </select>
+                             </div>
 
+                          <div style={{ flex: 1 }}>
                           <label style={styles.label}>From Network</label>
                           <select
                             style={styles.input}
@@ -1008,7 +1032,12 @@ const BigNumber = ({ value, style = {} }) => {
                               </option>
                             ))}
                           </select>
+                          </div>
 
+                           </div>
+                          
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ flex: 1 }}>
                           <label style={styles.label}>To Currency</label>
                           <select
                             style={styles.input}
@@ -1042,7 +1071,9 @@ const BigNumber = ({ value, style = {} }) => {
                               </option>
                             ))}
                           </select>
+                          </div>
 
+                          <div style={{ flex: 1 }}>
                           <label style={styles.label}>To Network</label>
                           <select
                             style={styles.input}
@@ -1071,6 +1102,8 @@ const BigNumber = ({ value, style = {} }) => {
                             ))}
                           </select>
                         </div>
+                        </div>
+                        
                         
                         <div>
                           <label style={styles.label}>
@@ -1399,37 +1432,6 @@ const styles = {
     background: "#111827",
     color: "white",
     cursor: "pointer",
-  },
-
-  tabs: {
-    display: "flex",
-    gap: 8,
-    padding: 14,
-    overflowX: "auto",
-    borderBottom: "1px solid #1e293b",
-    scrollbarWidth: "thin",
-    scrollbarColor: "#64748b #1e293b",
-  },
-
-  tab: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "1px solid #1e293b",
-    background: "#111827",
-    color: "#94a3b8",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-
-  activeTab: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "1px solid #2563eb",
-    background: "#1d4fd871",
-    color: "white",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    fontWeight: 600,
   },
 
   content: {
@@ -1934,7 +1936,7 @@ featuredBadge: {
     padding: "8px 12px",
     borderRadius: 12,
     border: "1px solid #1e293b",
-    background: "#0b1220",
+    background: "rgba(255,255,255,.03)",
     color: "#94a3b8",
     cursor: "pointer",
   },
@@ -1943,7 +1945,7 @@ featuredBadge: {
     padding: "8px 12px",
     borderRadius: 12,
     border: "1px solid #2563eb",
-    background: "#1d4fd871",
+    background: "rgba(59,130,246,0.18)",
     color: "white",
     fontWeight: 600,
     cursor: "pointer",
@@ -1993,6 +1995,14 @@ txPillLabel: {
   fontSize: 11,
   color: "#94a3b8",
 },
+  walletExpandIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#64748b",
+    minWidth: 18,
+    transition: "transform 0.2s",
+  },
 
   ordersDivider: { display: "flex", alignItems: "center", gap: 12, marginTop: 18, marginBottom: 18 },
   ordersDividerLine: { flex: 1, height: 1, background: "linear-gradient(90deg, transparent, #334155, transparent)" },

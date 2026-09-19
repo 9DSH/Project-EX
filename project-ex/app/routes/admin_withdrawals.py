@@ -31,10 +31,13 @@ router = APIRouter(
 )
 
 
-def _get_admin_user(user=Depends(get_current_user)):
+def get_admin(
+    db: Session = Depends(get_db_rls),
+    user=Depends(get_current_user),
+):
     if not is_admin_or_above(user):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not has_access(user, "balance.manage"):
+    if not has_access(user, "balance.manage", db):
         raise HTTPException(status_code=403, detail="Access denied")
     return user
 
@@ -45,7 +48,7 @@ def _get_admin_user(user=Depends(get_current_user)):
 @router.get("/pending")
 def get_pending_withdrawals(
     db: Session = Depends(get_db_rls),
-    admin=Depends(_get_admin_user)
+    admin=Depends(get_admin)
 ):
 
     txs = (
@@ -100,7 +103,7 @@ def get_pending_withdrawals(
 def approve_withdrawal(
     tx_id: int,
     db: Session = Depends(get_db_rls),
-    admin=Depends(_get_admin_user)
+    admin=Depends(get_admin)
 ):
 
     tx = (
@@ -286,7 +289,7 @@ def approve_withdrawal(
 def reject_withdrawal(
     tx_id: int,
     db: Session = Depends(get_db_rls),
-    admin=Depends(_get_admin_user)
+    admin=Depends(get_admin)
 ):
 
     tx = (

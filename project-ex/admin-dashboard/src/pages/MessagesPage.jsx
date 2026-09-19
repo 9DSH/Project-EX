@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import ConversationList from "../components/ConversationList";
 import ChatWindow from "../components/ChatWindow";
 import API from "../api/client";
@@ -387,6 +387,9 @@ function NewChatDropdown({ users, search, setSearch, onStart, onClose, dropdownR
 // ── Main Component ────────────────────────────────────────────
 export default function MessagesPage() {
     const [conversations, setConversations] = useState([]);
+    // Internal admin<->master thread(s) — master: one row per admin;
+    // regular admin: a single synthetic row for their own thread with master.
+    const [internalItems, setInternalItems] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
     const [users, setUsers] = useState([]);
     const [search, setSearch] = useState("");
@@ -399,6 +402,8 @@ export default function MessagesPage() {
 
     const rawAccessPoints = localStorage.getItem("access_points");
     const currentAdminId = Number(localStorage.getItem("user_id")) || null;
+    const role = localStorage.getItem("role");
+    const isMaster = role === "master";
 
     let accessPoints = rawAccessPoints;
 
@@ -410,10 +415,54 @@ export default function MessagesPage() {
     const canViewAllUsers = hasPermission(accessPoints, "all.users.view");
     const canBroadcast =  hasPermission(accessPoints, "broadcast.message");
 
+    // ── Load internal admin<->master thread(s) ──
+    const loadInternal = useCallback(async () => {
+        if (!token) return;
+        try {
+            if (isMaster) {
+                const res = await API.get("/admin-master-messages/inbox", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const rows = (res.data || []).map(row => ({
+                    conversation_id: row.conversation_id,
+                    user_id: row.admin_id,
+                    username: row.username || `Admin #${row.admin_id}`,
+                    kind: "internal",
+                    last_message: row.last_message,
+                    last_time: row.last_time,
+                    unread_count: row.unread_count || 0,
+                }));
+                setInternalItems(rows);
+            } else {
+                const res = await API.get("/admin-master-messages/summary", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setInternalItems([{
+                    conversation_id: res.data.conversation_id,
+                    user_id: "master",
+                    username: "Master",
+                    kind: "internal",
+                    last_message: res.data.last_message,
+                    last_time: res.data.last_time,
+                    unread_count: res.data.unread_count || 0,
+                }]);
+            }
+        } catch (err) {
+            console.log(err);
+        }
+    }, [token, isMaster]);
+
+    // ── Derived merged list (support + internal) ──
+    const allConversations = useMemo(() => {
+        const merged = [...conversations, ...internalItems];
+        return merged.sort(
+            (a, b) => new Date(b.last_time || 0) - new Date(a.last_time || 0)
+        );
+    }, [conversations, internalItems]);
 
     // ── Derived stats ──
-    const totalUnread = conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-    const activeConvs = conversations.filter(c => c.last_time).length;
+    const totalUnread = allConversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+    const activeConvs = allConversations.filter(c => c.last_time).length;
 
     // ── Load conversations ──
     const loadConversations = useCallback(async () => {
@@ -429,6 +478,11 @@ export default function MessagesPage() {
             setLoadingConvs(false);
         }
     }, [token]);
+
+    // ── Combined refresh (used after sending a message, on socket events) ──
+    const refreshAll = useCallback(async () => {
+        await Promise.all([loadConversations(), loadInternal()]);
+    }, [loadConversations, loadInternal]);
 
     // ── Load users ──
     const loadUsers = async () => {
@@ -452,8 +506,16 @@ export default function MessagesPage() {
     useEffect(() => {
         if (!token) return;
         loadConversations();
+        loadInternal();
         loadUsers();
-    }, [token, loadConversations]);
+    }, [token, loadConversations, loadInternal]);
+
+    // ── Light periodic refresh for the internal badge count / list ──
+    useEffect(() => {
+        if (!token) return;
+        const interval = setInterval(loadInternal, 5000);
+        return () => clearInterval(interval);
+    }, [token, loadInternal]);
 
     // ── Outside click handler ──
     useEffect(() => {
@@ -505,6 +567,7 @@ export default function MessagesPage() {
                 conversation_id: res.conversation_id,
                 user_id: user.user_id,
                 username: user.username,
+                kind: "support",
                 last_message: "",
                 unread_count: 0,
             });
@@ -555,10 +618,10 @@ export default function MessagesPage() {
     const normalizedConvSearch = convSearch.trim().toLowerCase();
 
     const filteredConversations = normalizedConvSearch
-        ? conversations.filter(c => c.username?.toLowerCase().includes(normalizedConvSearch))
-        : conversations;
+        ? allConversations.filter(c => c.username?.toLowerCase().includes(normalizedConvSearch))
+        : allConversations;
 
-    const conversationUserIds = new Set(conversations.map(c => c.user_id));
+    const conversationUserIds = new Set(allConversations.map(c => c.user_id));
     const matchingNewUsers = normalizedConvSearch
         ? users.filter(u =>
             u.user_id !== undefined &&
@@ -574,13 +637,14 @@ export default function MessagesPage() {
                 conversation_id: `new-${u.user_id}`,
                 user_id: u.user_id,
                 username: u.username,
+                kind: "support",
                 last_message: "Start a new conversation",
                 last_time: null,
                 unread_count: 0,
                 isNew: true,
             })),
           ]
-        : conversations;
+        : allConversations;
 
     return (
 
@@ -607,7 +671,7 @@ export default function MessagesPage() {
                 }}
                 statPills={[
                     { key: "users", icon: Users, label: "Active Users", value: activeUsers.length, accent: "#3b82f6", loadingConvs },
-                    { key: "orders", icon: MessagesSquare, label: "Conversations", value: conversations.length, accent: "#a78bfa", loading: loadingConvs },
+                    { key: "orders", icon: MessagesSquare, label: "Conversations", value: allConversations.length, accent: "#a78bfa", loading: loadingConvs },
                     { key: "value", icon: Bell, label: "Unread", value: totalUnread, accent: "#eb0f0b", loading: loadingConvs },
                 ]}
                 />
@@ -771,14 +835,24 @@ export default function MessagesPage() {
                                             return;
                                         }
                                          setActiveChat(conv);
-                                         // Mark as read
-                                         setConversations(prev =>
-                                             prev.map(c =>
-                                                 c.conversation_id === conv.conversation_id
-                                                     ? { ...c, unread_count: 0 }
-                                                     : c
-                                             )
-                                         );
+                                         // Mark as read (local optimistic update)
+                                         if (conv.kind === "internal") {
+                                             setInternalItems(prev =>
+                                                 prev.map(c =>
+                                                     c.conversation_id === conv.conversation_id
+                                                         ? { ...c, unread_count: 0 }
+                                                         : c
+                                                 )
+                                             );
+                                         } else {
+                                             setConversations(prev =>
+                                                 prev.map(c =>
+                                                     c.conversation_id === conv.conversation_id
+                                                         ? { ...c, unread_count: 0 }
+                                                         : c
+                                                 )
+                                             );
+                                         }
                                      }}
                                  />
                              )}
@@ -799,7 +873,7 @@ export default function MessagesPage() {
                         <ChatWindow
                             activeChat={activeChat}
                             token={token}
-                            refreshConversations={loadConversations}
+                            refreshConversations={refreshAll}
                             mode="message"
                         />
                     ) : (

@@ -71,6 +71,9 @@ export default function MyAccount() {
   const isMaster = role === "master" || role === "superadmin";
 
   const sections = sectionsBase;
+
+  
+  console.log("user:", profile)
   // =========================================================
   // PROFILE
   // =========================================================
