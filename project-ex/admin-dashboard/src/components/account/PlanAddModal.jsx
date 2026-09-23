@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
-import { S, T } from "./subscriptionTheme";
+import { S, T } from "./SubscriptionTheme";
 
 export default function PlanAddModal({ onClose, onCreate }) {
   const [name, setName] = useState("");

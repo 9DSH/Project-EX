@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { API_URL } from "../config";
+import { API_URL } from "../../config";
 import UserBalanceSidebar from "./UserBalanceSidebar";
 
 const api = axios.create({ baseURL: API_URL });

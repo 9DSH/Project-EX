@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "../config";
-import UserSidebar from "../components/UserSidebar";
-import OrderSidebar from "../components/OrderSidebar";
+import UserSidebar from "../components/usersidebar/UserSidebar";
+import OrderSidebar from "../components/products/OrderSidebar";
 import HeroHub from "../components/HeroHub";
 import { SlidersHorizontal, Wallet } from "lucide-react";
 import "./Transactions.css";

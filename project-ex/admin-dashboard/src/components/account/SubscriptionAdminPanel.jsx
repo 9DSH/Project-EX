@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownAZ, ArrowDownUp, Clock, Pencil, Plus, Power, RefreshCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
-import { API_URL } from "../config";
-import ACCESS_OPTIONS from "../constants/AccessPoints";
+import { API_URL } from "../../config";
+import ACCESS_OPTIONS from "../../constants/AccessPoints";
 import PlanCard from "./PlanCard";
 import PlanAddModal from "./PlanAddModal";
 import PlanEditModal from "./PlanEditModal";
 import AccessPointCard from "./AccessPointCard";
 import { AccessPointAddModal, AccessPointEditModal } from "./AccessPointModals";
-import { S, T, accentFor, statusColor, fmtDateShort, fmtMoney } from "./subscriptionTheme";
+import { S, T, accentFor, statusColor, fmtDateShort, fmtMoney } from "./SubscriptionTheme";
 
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
 

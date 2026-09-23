@@ -15,9 +15,10 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response && err.response.status === 401) {
+    const isAuthEndpoint = err.config?.url?.includes("/auth/login");
+    if (err.response && err.response.status === 401 && !isAuthEndpoint) {
       localStorage.clear();
-      window.location.reload();
+      window.location.href = "/";
     }
     return Promise.reject(err);
   }

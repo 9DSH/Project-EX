@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Crown, Plus, Trash2, X } from "lucide-react";
-import { S, T, fmtMoney } from "./subscriptionTheme";
+import { S, T, fmtMoney } from "./SubscriptionTheme";
 
 const EDIT_TABS = [
   { key: "details", label: "Details" },

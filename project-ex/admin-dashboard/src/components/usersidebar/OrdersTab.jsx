@@ -594,7 +594,6 @@ const BigNumber = ({ value, style = {} }) => {
                           user,
                           Number(bonusPercent || 0)
                         );
-
                         return (
                           <div
                             style={{
@@ -676,13 +675,13 @@ const BigNumber = ({ value, style = {} }) => {
                                   display: "flex",
                                   justifyContent: "space-between",
                                   color: "#a8ccebff",
-                                  fontSize: 13,
-                                  fontWeight: 600,
+                                  fontSize: 12,
+                                  fontWeight: 500,
                                 }}
                               >
-                                <span>Total Saved</span>
+                                <span>Total Fee & Discount ({pricing.effectiveDiscount.toFixed(2)}%)</span>
                                 <span>
-                                  {pricing.totalSaved.toFixed(2)} {prod.currency}
+                                  -{pricing.totalSaved.toFixed(2)} {prod.currency}
                                 </span>
                               </div>
 
@@ -691,13 +690,13 @@ const BigNumber = ({ value, style = {} }) => {
                                   display: "flex",
                                   justifyContent: "space-between",
                                   color: "#a8ccebff",
-                                  fontSize: 13,
-                                  fontWeight: 600,
+                                  fontSize: 12,
+                                  fontWeight: 500,
                                 }}
                               >
-                                <span>Effective Discount</span>
+                                <span>Owner Receives ({prod.admin_username})</span>
                                 <span>
-                                  {pricing.effectiveDiscount.toFixed(2)}%
+                                  {pricing.finalDue.toFixed(2)} {prod.currency}
                                 </span>
                               </div>
 
@@ -713,9 +712,9 @@ const BigNumber = ({ value, style = {} }) => {
                                   color: "#22c55e",
                                 }}
                               >
-                                <span>Final Due</span>
+                                <span>Final Due for user</span>
                                 <span>
-                                  {pricing.finalDue.toFixed(2)} {prod.currency}
+                                  {pricing.finalForUser.toFixed(2)} {prod.currency}
                                 </span>
                               </div>
                             </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Upload, Plus, Layers, RefreshCcw, Edit3, Trash2, Power, PowerOff, Package,
   X, Tag, Grid3X3, Clock, CheckCircle, XCircle,ShieldCheck,
@@ -9,9 +10,9 @@ import { API_URL } from "../config";
 import { hasPermission } from "../utils/permissions";
 import API from "../api/client";
 import HeroHub from "../components/HeroHub";
-import OrderSidebar from "../components/OrderSidebar";
-import UserSidebar from "../components/UserSidebar";
-import OrderAnalysisPanel from "../components/OrderAnalysisPanel";
+import OrderSidebar from "../components/products/OrderSidebar";
+import UserSidebar from "../components/usersidebar/UserSidebar";
+import OrderAnalysisPanel from "../components/products/OrderAnalysisPanel";
 import "./ProductsManagement.css";
 import PermissionGate from "../components/PermissionGate";
 
@@ -1490,6 +1491,15 @@ const ProductGrid = ({ products, categories, safeExtra, user, isMaster, onEdit, 
 // ── MAIN COMPONENT ────────────────────────────────────────────
 export default function ProductsManagement() {
   const token = localStorage.getItem("token");
+  const location = useLocation();
+
+  // Deep-link support: Topbar's "Pending orders" notification links here with
+  // ?tab=orders&status=pending#orders-panel. Read once, synchronously, so the
+  // very first render already lands on the right tab (avoids a visible flash
+  // of the default "products" view before an effect would correct it).
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialTab = initialParams.get("tab");
+  const initialStatus = initialParams.get("status");
 
   // Data
   const [allProducts, setAllProducts]       = useState([]);
@@ -1504,7 +1514,9 @@ export default function ProductsManagement() {
   const [loading, setLoading]               = useState(false);
 
   // UI State
-  const [mainView, setMainView]             = useState("products"); // "products" | "orders" | "analysis"
+  const [mainView, setMainView]             = useState(
+    ["products", "orders", "analysis"].includes(initialTab) ? initialTab : "products"
+  ); // "products" | "orders" | "analysis"
   const [activeTab, setActiveTab]           = useState("my"); // "all" | "my" | "pending" | "rejected"
   // single-click cyclic sort: field is "price" | "plan" | null, dir is "asc" | "desc" | null. Default: none.
   const [sortField, setSortField]           = useState(null);
@@ -1517,7 +1529,7 @@ export default function ProductsManagement() {
 
   // ── UNIFIED HERO FILTERS — one shared filter set, applied across Products / Orders / Analysis ──
   const [unifiedSearch, setUnifiedSearch]       = useState("");
-  const [statusFilter, setStatusFilter]         = useState("all");       // order status (Orders tab)
+  const [statusFilter, setStatusFilter]         = useState(initialStatus || "all");       // order status (Orders tab)
   const [unifiedProductType, setUnifiedProductType] = useState("all");   // product_type (all tabs)
   const [unifiedCurrency, setUnifiedCurrency]   = useState("all");       // currency (all tabs)
   const [unifiedCategory, setUnifiedCategory]   = useState("all");       // category name (all tabs)
@@ -1531,6 +1543,7 @@ export default function ProductsManagement() {
   const [form, setForm]                     = useState(emptyForm());
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [approvingIds, setApprovingIds]     = useState(new Set()); // product ids currently mid-approval, guards double-submit
   const [categoryName, setCategoryName]     = useState("");
   const [featureInput, setFeatureInput]     = useState("");
 
@@ -1583,7 +1596,7 @@ export default function ProductsManagement() {
       ];
 
       // "All Products" + the admin filter dropdown both require this scope —
-      // available to master AND any admin holding platform.products.service.
+      // available to master AND any admin holding platform.product.service.
       if (canSeeAllProducts) {
         reqs.push(fetch(`${API_URL}/admin/products/?view=all`, { headers }));
         reqs.push(fetch(`${API_URL}/admin/users/`, { headers }));
@@ -1614,6 +1627,26 @@ export default function ProductsManagement() {
   }, [token, canSeeAllProducts]);
   
   useEffect(() => { loadData(); }, []);
+
+  // Re-sync from the URL on every navigation to this page (not just first
+  // mount) — clicking "Pending orders" in Topbar while already here updates
+  // the URL but doesn't remount this component, so the lazy useState
+  // initializers above won't fire again on their own.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const status = params.get("status");
+
+    if (["products", "orders", "analysis"].includes(tab)) setMainView(tab);
+    if (status) setStatusFilter(status);
+
+    if (location.hash) {
+      // wait a tick for the tab switch above to render before scrolling
+      requestAnimationFrame(() => {
+        document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [location.search, location.hash]);
 
   // keep selected product in sync after reload
   useEffect(() => {
@@ -1844,15 +1877,15 @@ export default function ProductsManagement() {
   };
 
   // ── APPROVAL ACTIONS ──
-  const approveProduct = async (product, payload) => {
-    if (approvingIds.has(product.id)) return; // guard against double-submit
-    setApprovingIds(prev => new Set(prev).add(product.id));
+  const approveProduct = async (productId, commission, reward) => {
+    if (approvingIds.has(productId)) return; // guard against double-submit
+    setApprovingIds(prev => new Set(prev).add(productId));
 
     try {
-      const res = await fetch(`${API_URL}/admin/product-approvals/${product.id}/approve`, {
+      const res = await fetch(`${API_URL}/admin/product-approvals/${productId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ system_commision: commission, system_reward_percent: reward }),
       });
 
       if (!res.ok) {
@@ -1862,13 +1895,13 @@ export default function ProductsManagement() {
         return;
       }
 
-      setPendingProducts(prev => prev.filter(p => p.id !== product.id)); // instant removal
+      setPendingProducts(prev => prev.filter(p => p.id !== productId)); // instant removal
       loadData();
     } catch (err) {
       console.error("approve error:", err);
       alert("Network error while approving.");
     } finally {
-      setApprovingIds(prev => { const n = new Set(prev); n.delete(product.id); return n; });
+      setApprovingIds(prev => { const n = new Set(prev); n.delete(productId); return n; });
     }
   };
 
@@ -1997,7 +2030,7 @@ export default function ProductsManagement() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [allProducts]);
 
-  // Master and admins with platform.products.service get the full 4-tab set.
+  // Master and admins with platform.product.service get the full 4-tab set.
   // Admins without it never see anyone else's products, so a separate "My
   // Products" tab would be identical to "All Products" — we drop it and just
   // point "all" at their own catalog (see currentProducts map above).
@@ -2055,7 +2088,7 @@ export default function ProductsManagement() {
               visible: true,
               value: mainView === "orders" ? statusFilter : activeTab,
               onChange: mainView === "orders" ? setStatusFilter : setActiveTab,
-              placeholder: mainView === "orders" ? "All" : "Products",
+              placeholder: mainView === "orders" ? "All" : "",
               options:
                 mainView === "orders"
                   ? [
@@ -2101,7 +2134,7 @@ export default function ProductsManagement() {
               options: categories.map(c => ({ label: c.name, value: c.name })),
             },
             // slot 5 — admin/owner. Visible to master AND admins with
-            // platform.products.service (both can see cross-admin data).
+            // platform.product.service (both can see cross-admin data).
             // Options are derived from the actual owners present in the
             // "all products" dataset, so only admins/master who actually
             // have products show up here — not every registered admin.
@@ -2482,7 +2515,7 @@ export default function ProductsManagement() {
 
         {/* ── ORDERS VIEW (merged from OrdersManagement) ── */}
         {mainView === "orders" && (
-          <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", padding: "0 20px 20px 25px" }}>
+          <div id="orders-panel" style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", padding: "0 20px 20px 25px" }}>
             <div style={{ background: "#060d1a", border: "1px solid #313d58bc", borderRadius: 15, overflow: "hidden", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ overflowY: "auto", flex: 1, padding: 14 }}>
                 {ordersLoading ? (

@@ -11,13 +11,21 @@ from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.models.wire_transfer_pair import WireTransferPair
 from app.models.wire_transfer_order import WireTransferOrder
 from app.models.user import User
-from app.routes.utilts.shared_functions import _admin_telegram_displayName_map
+from app.routes.utilts.shared_functions import _admin_telegram_displayName_map, _reassert_master_rls
 from app.models.user_balance import UserBalance
 from app.models.currency import Currency
 from app.models.transaction import Transaction
 from app.services.telegram_service import send_telegram_message
 from app.services.wire_transfer_expiry import expire_pending_wire_orders
-from app.services.admins_scope import can_view_all_admins, resolve_admin_scope
+from sqlalchemy import text
+from app.services.admins_scope import can_view_all_admins, resolve_admin_scope, resolve_own_scope
+
+PLATFORM_PERM = "platform.transfer.service"
+
+
+def _elevate_rls(db: Session):
+    """Call ONLY after the permission check has already passed (pairs / filter-admins)."""
+    db.execute(text("SET LOCAL app.is_master = 'true'"))
 from app.constants.transaction_types import WIRE_TRANSFER, WIRE_REFUND
 from app.constants.transaction_status import COMPLETED, FAILED, FROZEN, REJECTED
 
@@ -260,8 +268,10 @@ def list_filterable_admins(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
-    if not can_view_all_admins(admin , "platform.transfer.service"):
+    if not can_view_all_admins(admin, PLATFORM_PERM, db):
         raise HTTPException(403, "Access denied")
+
+    _elevate_rls(db)
 
     candidates = db.query(User).filter(User.role.in_(["admin", "master"])).all()
 
@@ -274,6 +284,8 @@ def list_filterable_admins(
             or role_default == "*"
             or "transfer.service" in role_default
             or "transfer.service" in access_points
+            or PLATFORM_PERM in role_default
+            or PLATFORM_PERM in access_points
         )
         if eligible:
             result.append({
@@ -296,7 +308,10 @@ def list_pairs(
     admin=Depends(get_admin),
     db: Session = Depends(get_db_rls),
 ):
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.transfer.service")
+    if admin_filter and admin_filter != "mine" and can_view_all_admins(admin, PLATFORM_PERM, db):
+        _elevate_rls(db)
+
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, PLATFORM_PERM)
 
     query = (
         db.query(WireTransferPair)
@@ -340,6 +355,7 @@ def create_pair(body: WirePairCreate, admin=Depends(get_admin), db: Session = De
     )
     db.add(pair)
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(pair)
     # reload relationships
     pair = db.query(WireTransferPair).options(
@@ -384,6 +400,7 @@ def update_pair(pair_id: int, body: WirePairUpdate, admin=Depends(get_admin), db
         pair.required_fields = _encode_pair_config(sender_fields, receiver_methods)
 
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(pair)
     pair = db.query(WireTransferPair).options(
         joinedload(WireTransferPair.from_currency),
@@ -405,6 +422,7 @@ def delete_pair(pair_id: int, admin=Depends(get_admin), db: Session = Depends(ge
 
     db.delete(pair)
     db.commit()
+
     return {"ok": True}
 
 
@@ -420,7 +438,7 @@ def list_orders(
 ):
     _expire_pending_orders(db)
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.transfer.service")
+    scope_all, scope_admin_id = resolve_own_scope(admin, db, admin_filter)
 
     query = (
         db.query(WireTransferOrder)
@@ -455,7 +473,7 @@ def get_order(order_id: int, admin=Depends(get_admin), db: Session = Depends(get
     if not order:
         raise HTTPException(404, "Order not found")
 
-    if not is_master(admin) and order.admin_id != admin["user_id"] and not can_view_all_admins(admin):
+    if not is_master(admin) and order.admin_id != admin["user_id"]:
         raise HTTPException(403, "Not authorized to view this order")
 
     admins_map = _admin_telegram_displayName_map(db, {order.admin_id})

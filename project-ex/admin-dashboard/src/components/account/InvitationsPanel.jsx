@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { RefreshCcw, Plus, Ban } from "lucide-react";
-import { API_URL } from "../config";
+import { API_URL } from "../../config";
 
 const api = axios.create({ baseURL: API_URL });
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });

@@ -1,14 +1,14 @@
 import { useEffect, useState, useCallback, useRef,  useMemo } from "react";
 import { createPortal } from "react-dom";
-import { API_URL } from "../config";
-import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../constants/AccessPoints";
-import ChatWindow from "../components/ChatWindow";
-import ProfileTab from "./sidebar/ProfileTab";
-import WalletTab from "./sidebar/WalletTab";
-import OrdersTab from "./sidebar/OrdersTab";
-import TransactionsTab from "./sidebar/TransactionsTab";
-import { hasPermission } from "../utils/permissions";
-import PermissionGate from "../components/PermissionGate";
+import { API_URL } from "../../config";
+import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../../constants/AccessPoints";
+import ChatWindow from "../ChatWindow";
+import ProfileTab from "./ProfileTab";
+import WalletTab from "./WalletTab";
+import OrdersTab from "./OrdersTab";
+import TransactionsTab from "./TransactionsTab";
+import { hasPermission } from "../../utils/permissions";
+import PermissionGate from "../PermissionGate";
 import {
   User,
   Wallet,
@@ -16,6 +16,7 @@ import {
   Package,
   Receipt,
   MessageSquare,
+  UsersRound,
 } from "lucide-react";
 
 const TABS = [
@@ -28,9 +29,9 @@ const TABS = [
 
 function calculateProductPricing(product,  targetUser, bonusPercent = 0) {
   const originalPrice = Number(product.price || 0);
-
+  const userOwner = targetUser?.admin_username
   let current = originalPrice;
-
+  let finalForUser = originalPrice;
   const steps = [];
 
   // Product Discount
@@ -38,8 +39,9 @@ function calculateProductPricing(product,  targetUser, bonusPercent = 0) {
     const percent = Number(product.discount_percent);
     const deducted = current * (percent / 100);
 
-    current -= deducted;
 
+    current -= deducted;
+    finalForUser -= deducted
     steps.push({
       label: "Product Discount",
       percent,
@@ -91,7 +93,7 @@ function calculateProductPricing(product,  targetUser, bonusPercent = 0) {
     const deducted = current * (percent / 100);
 
     current -= deducted;
-
+    finalForUser -= deducted
     steps.push({
       label: "Admin Bonus",
       percent,
@@ -113,9 +115,11 @@ function calculateProductPricing(product,  targetUser, bonusPercent = 0) {
   return {
     originalPrice,
     finalDue,
+    finalForUser,
     totalSaved,
     effectiveDiscount,
     steps,
+    userOwner
   };
 }
 

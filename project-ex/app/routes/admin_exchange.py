@@ -7,26 +7,32 @@ from app.core.rls import get_db_rls
 from app.core.security import get_current_user, is_master, is_admin_or_above
 from app.core.permissions import has_access, ROLE_PERMISSIONS
 from app.services.exchange_service import execute_exchange, get_exchange_rate, normalize_db_rate
-from app.services.admins_scope import can_view_all_admins, resolve_admin_scope
+from app.services.admins_scope import can_view_all_admins, resolve_admin_scope, resolve_own_scope
 from app.models.currency import Currency
 from app.models.failed_sweeps import FailedSweep
 from app.models.exchange_pair import ExchangePair
 from app.models.exchange_order import ExchangeOrder
 from app.models.exchange_analysis import ExchangeRateHistory
 from app.models.user import User  
-from app.routes.utilts.shared_functions import _admin_telegram_displayName_map , get_admin_username, get_admin_usernames
+from sqlalchemy import text
+from app.routes.utilts.shared_functions import _admin_telegram_displayName_map , get_admin_username, get_admin_usernames, _reassert_master_rls
 from sqlalchemy.orm import joinedload
 from decimal import Decimal, getcontext
 
 getcontext().prec = 28
+
 
 router = APIRouter(
     prefix="/admin/exchange",
     tags=["Admin Exchange"]
 )
 
+PLATFORM_PERM = "platform.exchange.service"
 
 
+def _elevate_rls(db: Session):
+    """Call ONLY after the permission check has passed (pairs list / admin list)."""
+    db.execute(text("SET LOCAL app.is_master = 'true'"))
 
 def get_admin(
     db: Session = Depends(get_db_rls),
@@ -397,8 +403,10 @@ def list_filterable_admins(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin),
 ):
-    if not can_view_all_admins(admin , "platfrom.exchange.service"):
+    if not can_view_all_admins(admin , PLATFORM_PERM, db):
         raise HTTPException(403, "Access denied")
+
+    _elevate_rls(db)
 
     candidates = db.query(User).filter(User.role.in_(["admin", "master"])).all()
 
@@ -437,7 +445,10 @@ def get_pairs(
     if not has_access(admin, "exchange.service", db):
         raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
+    if admin_filter and admin_filter != "mine" and can_view_all_admins(admin, PLATFORM_PERM, db):
+        _elevate_rls(db)
+
+    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, PLATFORM_PERM)
 
     query = db.query(ExchangePair)
     if not scope_all:
@@ -532,6 +543,7 @@ def create_pair(
 
     db.add(pair)
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(pair)
 
     return {"success": True, "id": pair.id}
@@ -643,8 +655,7 @@ def admin_all_orders(
     if not has_access(admin, "exchange.service",db):
         raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
-
+    scope_all, scope_admin_id = resolve_own_scope(admin, db, admin_filter)
     query = (
         db.query(ExchangeOrder)
         .options(
@@ -781,11 +792,10 @@ def get_failed_sweeps(
     db: Session = Depends(get_db_rls),
     admin=Depends(get_admin)
 ):
-    if not (has_access(admin, "exchange.service",db) and not has_access(admin, "balance.manage",db)):
+    if not (has_access(admin, "exchange.service",db) and has_access(admin, "balance.manage",db)):
         raise HTTPException(403, "Access denied")
 
-    scope_all, scope_admin_id = resolve_admin_scope(admin, db, admin_filter, "platform.exchange.service")
-
+    scope_all, scope_admin_id = resolve_own_scope(admin, db, admin_filter)
     # LEFT JOIN: sweeps created before exchange_order_id was wired up (or
     # any future non-exchange sweep) have no linked order — for those we
     # fall back to the buyer's own admin_id so nothing silently disappears,

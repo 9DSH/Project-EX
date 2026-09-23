@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowRight, X } from "lucide-react";
-import { S, T, fmtMoney } from "./subscriptionTheme";
+import { S, T, fmtMoney } from "./SubscriptionTheme";
 
 export default function PlanSwitchModal({ currentPlanName, plan, onClose, onConfirm }) {
   const isFree = plan.is_default;

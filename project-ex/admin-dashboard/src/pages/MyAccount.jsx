@@ -5,13 +5,13 @@ import {
   Send, ShieldCheck, KeyRound, Ticket, Wallet, X,
 } from "lucide-react";
 import { API_URL } from "../config";
-import BalancesPanel from "../components/BalancesPanel";
-import InvitationsPanel from "../components/InvitationsPanel";
-import SubscriptionAdminPanel from "../components/SubscriptionAdminPanel";
-import PlanCard from "../components/PlanCard";
-import AccessPointCard from "../components/AccessPointCard";
-import PlanSwitchModal from "../components/PlanSwitchModal";
-import { S as SS, T, accentFor, statusColor, fmtDateShort, fmtMoney, daysRemaining } from "../components/subscriptionTheme";
+import BalancesPanel from "../components/account/BalancesPanel";
+import InvitationsPanel from "../components/account/InvitationsPanel";
+import SubscriptionAdminPanel from "../components/account/SubscriptionAdminPanel";
+import PlanCard from "../components/account/PlanCard";
+import AccessPointCard from "../components/account/AccessPointCard";
+import PlanSwitchModal from "../components/account/PlanSwitchModal";
+import { S as SS, T, accentFor, statusColor, fmtDateShort, fmtMoney, daysRemaining } from "../components/account/subscriptionTheme";
 
 const api = axios.create({ baseURL: API_URL });
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });

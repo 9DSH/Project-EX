@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import API from "../api/client";
+import API from "../../api/client";
 import {
   BarChart3, X, Package, DollarSign, LayoutGrid,
   Search, ChevronDown, User, Trophy, TrendingUp, Calendar

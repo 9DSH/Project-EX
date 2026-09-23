@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { API_URL } from "../../config";
-import PermissionGate from "../../components/PermissionGate";
+import PermissionGate from "../PermissionGate";
 import {
   Trash2,
   ChevronDown,

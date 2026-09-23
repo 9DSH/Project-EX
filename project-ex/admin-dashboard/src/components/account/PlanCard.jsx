@@ -1,5 +1,5 @@
 import { Check, Clock, Layers, Pencil, Power, Sparkles } from "lucide-react";
-import { T, fmtMoney } from "./subscriptionTheme";
+import { T, fmtMoney } from "./SubscriptionTheme";
 
 /**
  * plan            — serialized plan object from the API

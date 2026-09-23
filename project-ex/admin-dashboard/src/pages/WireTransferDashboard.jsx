@@ -1003,7 +1003,7 @@ function PairRow({ p, selected, onClick, showOwner }) {
 }
 
 // ─── PAIR DETAIL PANEL ────────────────────────────────────────
-function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
+function PairDetail({ pair, readOnly, onEdit, onToggle, onDelete, onRateUpdate }) {
   const [localRate, setLocalRate] = useState(pair.rate ?? "");
   useEffect(() => setLocalRate(pair.rate ?? ""), [pair.id]);
 
@@ -1047,15 +1047,17 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
         </div>
 
         {/* quick rate */}
-        <div>
-          <div style={{ fontSize: 10, color: "#7c8696ff", fontWeight: 700, letterSpacing: ".07em", margin: "10px 0 8px 0" }}>QUICK RATE UPDATE</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input type="number" value={localRate} onChange={e => setLocalRate(e.target.value)} style={{ ...S.input, flex: 1, padding: "7px 10px", fontSize: 12 }} placeholder="New rate..." />
-            <button onClick={() => onRateUpdate(pair.id, localRate)} style={{ background: "rgba(59,130,246,.18)", border: "1px solid rgba(59,130,246,.35)", borderRadius: 8, padding: "7px 12px", color: "#93c5fd", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-              <Save size={13} />Save
-            </button>
+        {!readOnly && (
+          <div>
+            <div style={{ fontSize: 10, color: "#7c8696ff", fontWeight: 700, letterSpacing: ".07em", margin: "10px 0 8px 0" }}>QUICK RATE UPDATE</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input type="number" value={localRate} onChange={e => setLocalRate(e.target.value)} style={{ ...S.input, flex: 1, padding: "7px 10px", fontSize: 12 }} placeholder="New rate..." />
+              <button onClick={() => onRateUpdate(pair.id, localRate)} style={{ background: "rgba(59,130,246,.18)", border: "1px solid rgba(59,130,246,.35)", borderRadius: 8, padding: "7px 12px", color: "#93c5fd", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <Save size={13} />Save
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* required fields preview */}
         {Object.keys(reqFields).length > 0 && (
@@ -1079,17 +1081,23 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
         )}
       </div>
 
-      <div style={{ padding: "11px 15px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", gap: 6, flexShrink: 0 }}>
-        <button style={{ flex: 1, ...S.actionBtn, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(pair)}>
-          <Edit3 size={11} />Edit
-        </button>
-        <button style={{ flex: 1, ...S.actionBtn, background: pair.is_active ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)", borderColor: pair.is_active ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)", color: pair.is_active ? "#f87171" : "#4ade80" }} onClick={() => onToggle(pair)}>
-          {pair.is_active ? <><PowerOff size={11} />Disable</> : <><Power size={11} />Enable</>}
-        </button>
-        <button style={{ ...S.actionBtn, background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(pair.id)}>
-          <Trash2 size={12} />
-        </button>
-      </div>
+      {!readOnly ? (
+        <div style={{ padding: "11px 15px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", gap: 6, flexShrink: 0 }}>
+          <button style={{ flex: 1, ...S.actionBtn, background: "rgba(59,130,246,.1)", borderColor: "rgba(59,130,246,.22)", color: "#60a5fa" }} onClick={() => onEdit(pair)}>
+            <Edit3 size={11} />Edit
+          </button>
+          <button style={{ flex: 1, ...S.actionBtn, background: pair.is_active ? "rgba(239,68,68,.08)" : "rgba(34,197,94,.08)", borderColor: pair.is_active ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)", color: pair.is_active ? "#f87171" : "#4ade80" }} onClick={() => onToggle(pair)}>
+            {pair.is_active ? <><PowerOff size={11} />Disable</> : <><Power size={11} />Enable</>}
+          </button>
+          <button style={{ ...S.actionBtn, background: "rgba(239,68,68,.07)", borderColor: "rgba(239,68,68,.15)", color: "#ef4444", padding: "8px 10px" }} onClick={() => onDelete(pair.id)}>
+            <Trash2 size={12} />
+          </button>
+        </div>
+      ) : (
+        <div style={{ padding: "11px 15px", borderTop: "1px solid rgba(255,255,255,.05)", fontSize: 11, color: "#64748b", textAlign: "center", flexShrink: 0 }}>
+          View only — owned by another admin
+        </div>
+      )}
     </div>
   );
 }
@@ -1218,7 +1226,15 @@ export default function WireTransferDashboard() {
   const [unifiedStart, unifiedEnd] = unifiedDateRange;
 
   const currentUsername = localStorage.getItem("username") || "Me";
-  const showOwnerColumns = canFilterAdmins && adminFilter !== "mine";
+  const myId = String(localStorage.getItem("user_id") || "");
+  const isMaster = localStorage.getItem("role") === "master";
+  const canEditPair = (p) => isMaster || String(p.admin_id) === myId;
+
+  // Pairs list: any admin with platform.transfer.service can browse other
+  // admins' pairs (read-only). Orders/sweeps/analysis stay admin-own-only,
+  // so their "owner" column/badges only make sense for master.
+  const showPairOwner    = canFilterAdmins && adminFilter !== "mine";
+  const showOwnerColumns = isMaster && adminFilter !== "mine";
 
   // fiat-only currencies for the pair selects
   const fiatCurrencies = useMemo(() => currencies.filter(isFiat), [currencies]);
@@ -1248,11 +1264,11 @@ export default function WireTransferDashboard() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/admin/wire-transfer/orders`, { ...auth(), params: { admin_filter: adminFilter } });
+      const r = await axios.get(`${API}/admin/wire-transfer/orders`, { ...auth(), params: { admin_filter: isMaster ? adminFilter : "mine" } });
       setOrders(r.data);
       setOrdersLoading(false);
     } catch { setOrdersLoading(false); }
-  }, [adminFilter]);
+  }, [adminFilter, isMaster]);
 
   const fetchCurrencies = useCallback(async () => {
     try {
@@ -1380,7 +1396,7 @@ export default function WireTransferDashboard() {
     let list = !q ? pairs : pairs.filter(p =>
       p.from_currency?.symbol?.toLowerCase().includes(q) ||
       p.to_currency?.symbol?.toLowerCase().includes(q) ||
-      (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
+      (showPairOwner && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)))
     );
 
     if (pairSortField && pairSortDir) {
@@ -1391,7 +1407,7 @@ export default function WireTransferDashboard() {
       });
     }
     return list;
-  }, [pairs, pairSearch, showOwnerColumns, pairSortField, pairSortDir]);
+  }, [pairs, pairSearch, showPairOwner, pairSortField, pairSortDir]);
 
   // "From Currency" options — restricted to currencies that actually exist as a from_currency on a pair
   const currencyOptions = useMemo(() => {
@@ -1485,7 +1501,7 @@ export default function WireTransferDashboard() {
             visible: true,
             value: unifiedSearch,
             onChange: setUnifiedSearch,
-            placeholder: showOwnerColumns ? "Search user, order ID or admin…" : "Search user or order ID…",
+            placeholder: (showOwnerColumns || showPairOwner) ? "Search user, order ID or admin…" : "Search user or order ID…",
           }}
           dropdowns={[
             {
@@ -1591,7 +1607,7 @@ export default function WireTransferDashboard() {
               ) : filteredPairs.length === 0 ? (
                 <div style={{ color: "#475569", textAlign: "center", paddingTop: 30, fontSize: 12 }}>No pairs found.</div>
               ) : filteredPairs.map(p => (
-                <PairRow key={p.id} p={p} selected={selectedPair?.id === p.id} showOwner={showOwnerColumns} onClick={() => setSelectedPair(prev => (prev?.id === p.id ? null : p))} />
+                <PairRow key={p.id} p={p} selected={selectedPair?.id === p.id} showOwner={showPairOwner} onClick={() => setSelectedPair(prev => (prev?.id === p.id ? null : p))} />
               ))}
             </div>
           </div>
@@ -1644,6 +1660,7 @@ export default function WireTransferDashboard() {
           {selectedPair && (
             <PairDetail
               pair={selectedPair}
+              readOnly={!canEditPair(selectedPair)}
               onEdit={p => setEditPair(p)}
               onToggle={togglePair}
               onDelete={deletePair}

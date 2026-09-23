@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import UserSidebar from "../components/UserSidebar";
+import UserSidebar from "../components/usersidebar/UserSidebar";
 import HeroHub from "../components/HeroHub";
 import ACCESS_OPTIONS, { ACCESS_GROUPS } from "../constants/AccessPoints"
 import { API_URL } from "../config";

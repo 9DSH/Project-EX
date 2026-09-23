@@ -7,7 +7,7 @@ import {
   Activity, RefreshCw, CheckCircle2, XCircle, Clock, Filter, ChevronDown, Users,
   ArrowUpDown, Wallet,
 } from "lucide-react";
-import AnalysisTab from "./AnalysisTab";
+import AnalysisTab from "../components/exchange/AnalysisTab";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import HeroHub from "../components/HeroHub";
@@ -316,7 +316,7 @@ function PairRow({ p, selected, onClick, showOwner }) {
 }
 
 /* ─── PAIR DETAIL PANEL ─── */
-function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
+function PairDetail({ pair, readOnly, onEdit, onToggle, onDelete, onRateUpdate }) {
   const [localRate, setLocalRate] = useState(pair.rate ?? "");
   useEffect(() => setLocalRate(pair.rate ?? ""), [pair.id]);
   const pairRate = pair?.from_currency?.symbol === "IRT" && Number(pair?.rate) > 0 ? 1 / Number(pair.rate) : Number(pair.rate);
@@ -369,7 +369,7 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
         </div>
 
         {/* quick rate */}
-        <div>
+        {!readOnly && ( <div>
           <div style={{ fontSize:10, color:"#7c8696ff", fontWeight:700, letterSpacing:".07em", margin: "15px 0 10px 0" }}>QUICK RATE UPDATE</div>
           <div style={{ display:"flex", gap:6 }}>
             <div style={{ display: "flex", gap: 6 }}>
@@ -410,10 +410,11 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* footer actions */}
-      <div style={{ padding:"11px 15px", borderTop:"1px solid rgba(255,255,255,.05)", display:"flex", gap:6, flexShrink:0 }}>
+      {!readOnly ? ( <div style={{ padding:"11px 15px", borderTop:"1px solid rgba(255,255,255,.05)", display:"flex", gap:6, flexShrink:0 }}>
         <button style={{ flex:1, ...S.actionBtn, background:"rgba(59,130,246,.1)", borderColor:"rgba(59,130,246,.22)", color:"#60a5fa" }} onClick={() => onEdit(pair)}>
           <Edit3 size={11} />Edit
         </button>
@@ -427,6 +428,11 @@ function PairDetail({ pair, onEdit, onToggle, onDelete, onRateUpdate }) {
           <Trash2 size={12} />
         </button>
       </div>
+      ) : (
+                <div style={{ padding:"11px 15px", borderTop:"1px solid rgba(255,255,255,.05)", fontSize:11, color:"#64748b", textAlign:"center" }}>
+          View only — owned by another admin
+        </div>
+      )}
     </div>
   );
 }
@@ -687,9 +693,11 @@ export default function ExchangeDashboard() {
   const token   = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
   const currentUsername = localStorage.getItem("username") || "Me";
-
-  const showOwnerColumns = canFilterAdmins && adminFilter !== "mine";
-
+  const myId = String(localStorage.getItem("user_id") || "");
+  const isMaster = localStorage.getItem("role") === "master";
+  const canEditPair = (p) => isMaster || String(p.admin_id) === myId;
+  const showPairOwner = canFilterAdmins && adminFilter !== "mine";   // pairs list only
+  const showOwnerColumns = isMaster && adminFilter !== "mine";       // orders / sweeps
   function emptyForm() {
     return { from_currency_id:"", to_currency_id:"", rate:"", fee_percent:0, min_amount:0, max_amount:"", is_active:true };
   }
@@ -711,19 +719,20 @@ export default function ExchangeDashboard() {
   /* ── LOAD ── */
   const loadAll = useCallback(async () => {
     setLoading(true);
-    try {
-      const params = { admin_filter: adminFilter };
-      const [pR, oR, cR, sR] = await Promise.all([
-        api.get("/admin/exchange/", { headers, params }),
-        api.get("/admin/exchange/orders", { headers, params }),
-        api.get("/admin/currencies/", { headers }),
-        api.get("/admin/exchange/failed-sweeps", { headers, params: { ...params, resolved: false } }),
-      ]);
-      setPairs(pR.data || []);
-      setOrders(oR.data || []);
-      setCurrencies(cR.data || []);
-      setFailedSweeps(sR.data || []);
-    } catch { showToast("Failed to load data", false); }
+    const params = { admin_filter: adminFilter };
+    const ownParams = { admin_filter: isMaster ? adminFilter : "mine" };
+    const [pR, oR, cR, sR] = await Promise.allSettled([
+      api.get("/admin/exchange/", { headers, params }),
+      api.get("/admin/exchange/orders", { headers, params: ownParams }),
+      api.get("/admin/currencies/", { headers }),
+      api.get("/admin/exchange/failed-sweeps", { headers, params: { ...ownParams, resolved: false } }),
+    ]);
+    const val = (r) => (r.status === "fulfilled" ? r.value.data || [] : []);
+    setPairs(val(pR));
+    setOrders(val(oR));
+    setCurrencies(val(cR));
+    setFailedSweeps(val(sR));
+    if ([pR, oR, cR, sR].some(r => r.status === "rejected")) showToast("Some data failed to load", false);
     setLoading(false);
   }, [adminFilter]);
 
@@ -824,7 +833,7 @@ export default function ExchangeDashboard() {
         const hit =
           p.from_currency?.symbol?.toLowerCase().includes(q) ||
           p.to_currency?.symbol?.toLowerCase().includes(q) ||
-          (showOwnerColumns && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)));
+          (showPairOwner && (p.admin_username?.toLowerCase().includes(q) || String(p.admin_id).includes(q)));
         if (!hit) return false;
       }
       if (unifiedFromCurrency !== "all" && p.from_currency?.symbol !== unifiedFromCurrency) return false;
@@ -845,7 +854,7 @@ export default function ExchangeDashboard() {
       });
     }
     return list;
-  }, [pairs, unifiedSearch, unifiedFromCurrency, unifiedStart, unifiedEnd, showOwnerColumns, pairSortField, pairSortDir]);
+  }, [pairs, unifiedSearch, unifiedFromCurrency, unifiedStart, unifiedEnd, showPairOwner, pairSortField, pairSortDir]);
 
   const filteredOrders = useMemo(() => {
     const q = unifiedSearch.toLowerCase().trim();
@@ -1010,10 +1019,9 @@ export default function ExchangeDashboard() {
               label: "Admins",
               value: adminFilter, 
               onChange: setAdminFilter,
-              placeholder: "All",
               options: [
-                { label: `${currentUsername}`, value: "mine" },
                 { label: "All", value: "all" },
+                { label: `${currentUsername}`, value: "mine" },
                 ...filterAdmins.map(a => ({ label: a.username, value: String(a.user_id) })),
               ],
             },
@@ -1144,7 +1152,7 @@ export default function ExchangeDashboard() {
                         key={p.id}
                         p={p}
                         selected={selectedPair?.id === p.id}
-                        showOwner={showOwnerColumns}
+                        showOwner={showPairOwner}
                         onClick={() =>
                           setSelectedPair(prev => (prev?.id === p.id ? null : p))
                         }
@@ -1226,6 +1234,7 @@ export default function ExchangeDashboard() {
                 <PairDetail
                   key={selectedPair.id}
                   pair={selectedPair}
+                  readOnly={!canEditPair(selectedPair)}
                   onEdit={setEditPair}
                   onToggle={togglePair}
                   onDelete={deletePair}
@@ -1332,8 +1341,12 @@ export default function ExchangeDashboard() {
 
               {/* ANALYSIS */}
                {rightTab === RIGHT_TABS.ANALYSIS && (
-              <div key={`${RIGHT_TABS.ANALYSIS}-${adminFilter}`} style={{ height:"100%" }}>
-                <AnalysisTab pairs={pairs} headers={headers} adminFilter={adminFilter} />
+              <div key={`${RIGHT_TABS.ANALYSIS}-${isMaster ? adminFilter : "mine"}`} style={{ height:"100%" }}>
+                <AnalysisTab
+                  pairs={isMaster ? pairs : pairs.filter(p => String(p.admin_id) === myId)}
+                  headers={headers}
+                  adminFilter={isMaster ? adminFilter : "mine"}
+                />
               </div>
                )}
 

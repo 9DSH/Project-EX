@@ -18,7 +18,7 @@ import { TOPBAR_HEIGHT } from "./AdminLayout";
 const WS_BASE = "ws://localhost:8000";
 
 const INDICATOR_CONFIG = [
-  { key: "orders", icon: ShoppingCart, label: "Pending orders", toastLabel: "New order", path: "/ProductsManagement", accent: "#f59e0b" },
+  { key: "orders", icon: ShoppingCart, label: "Pending orders", toastLabel: "New order", path: "/ProductsManagement?tab=orders&status=pending#orders-panel", accent: "#f59e0b" },
   { key: "messages", icon: MessageSquare, label: "Unread messages", toastLabel: "New message", path: "/messages", accent:"#22c55e"  },
   { key: "wire_transfer", icon: Landmark, label: "Pending wire transfers", toastLabel: "New wire transfer", path: "/wire_transfer", accent:"#3b82f6" },
   { key: "withdrawals", icon: Banknote, label: "Pending withdrawals", toastLabel: "New withdrawal", path: "/withdraws", accent: "#ef4444" },

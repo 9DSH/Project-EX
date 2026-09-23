@@ -4,16 +4,43 @@ import {
     CrosshairMode,
     CandlestickSeries,
     PriceScaleMode,
+    TickMarkType,
 } from "lightweight-charts";
 
-const smartPrice = (price) =>
-    Number(price).toLocaleString(undefined, {
+// Adaptive precision: big rates (IRT) need 0 decimals, small rates need many.
+const smartPrice = (price) => {
+    const n = Number(price);
+    if (!isFinite(n)) return "—";
+    const a = Math.abs(n);
+    const maxDigits = a >= 1000 ? 0 : a >= 1 ? 4 : a >= 0.01 ? 6 : 8;
+    return n.toLocaleString(undefined, {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
+        maximumFractionDigits: maxDigits,
+    });
+};
+
+// Lightweight-charts renders the time axis in UTC by default — force local.
+const tickFormatter = (time, type) => {
+    const d = new Date(time * 1000);
+    switch (type) {
+        case TickMarkType.Year:
+            return String(d.getFullYear());
+        case TickMarkType.Month:
+            return d.toLocaleDateString(undefined, { month: "short" });
+        case TickMarkType.DayOfMonth:
+            return String(d.getDate());
+        default:
+            return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+    }
+};
+
+const crosshairTimeFormatter = (time) =>
+    new Date(time * 1000).toLocaleString(undefined, {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
     });
 
 export default function TradingViewCandles({
-    to_symbol,
+    invert = false,          // true when the stored rate must be shown as 1/rate (from-currency IRT)
     candles,
     timeframe,
     height = 360,
@@ -21,7 +48,8 @@ export default function TradingViewCandles({
     const containerRef = useRef(null);
     const chartRef     = useRef(null);
     const seriesRef    = useRef(null);
-    const [tooltip, setTooltip] = useState(null); // { x, y, open, high, low, close, time }
+    const fitKeyRef    = useRef(null);
+    const [tooltip, setTooltip] = useState(null);
 
     // ─────────────────────────────────────────────
     // 1. CREATE CHART (ONLY ONCE)
@@ -44,6 +72,7 @@ export default function TradingViewCandles({
             rightPriceScale: {
                 mode: PriceScaleMode.Logarithmic,
                 borderColor: "#22334d",
+                minimumWidth: 80,
                 scaleMargins: { top: 0.2, bottom: 0.2 },
             },
             timeScale: {
@@ -53,9 +82,11 @@ export default function TradingViewCandles({
                 rightOffset:    5,
                 barSpacing:     12,
                 minBarSpacing:  8,
+                tickMarkFormatter: tickFormatter,
             },
             localization: {
                 priceFormatter: smartPrice,
+                timeFormatter:  crosshairTimeFormatter,
             },
         });
 
@@ -69,11 +100,10 @@ export default function TradingViewCandles({
             priceFormat: {
                 type:      "custom",
                 formatter: smartPrice,
-                minMove:   0.01,
+                minMove:   0.00000001,
             },
         });
 
-        // ── OHLC tooltip on crosshair move ──
         chart.subscribeCrosshairMove((param) => {
             if (
                 !param ||
@@ -117,77 +147,52 @@ export default function TradingViewCandles({
 
     // ─────────────────────────────────────────────
     // 2. UPDATE CANDLES WHEN DATA CHANGES
+    //    Inverting a price flips the ordering, so the inverted high is
+    //    1/low and the inverted low is 1/high.
     // ─────────────────────────────────────────────
     useEffect(() => {
         if (!seriesRef.current || !chartRef.current) return;
         if (!candles?.length) return;
 
-        const shouldInvert = to_symbol === "USDT";
+        const inv = (v) => (v && invert ? 1 / v : v);
 
         seriesRef.current.setData(
-            candles.map((c) => {
-                const inv = (v) => (v && shouldInvert ? 1 / v : v);
-                return {
-                    time:  Math.floor(c.ts / 1000),
-                    open:  inv(c.open),
-                    high:  inv(shouldInvert ? c.low  : c.high),
-                    low:   inv(shouldInvert ? c.high : c.low),
-                    close: inv(c.close),
-                };
-            })
+            candles.map((c) => ({
+                time:  Math.floor(c.ts / 1000),
+                open:  inv(c.open),
+                high:  inv(invert ? c.low  : c.high),
+                low:   inv(invert ? c.high : c.low),
+                close: inv(c.close),
+            }))
         );
 
-        chartRef.current.priceScale("right").applyOptions({ autoScale: true });
-        chartRef.current.timeScale().fitContent();
-    }, [candles, to_symbol]);
+        // Only re-fit on first load / timeframe / orientation change —
+        // never on periodic refreshes, so the user's zoom & scroll stay put.
+        const fitKey = `${timeframe}|${invert}`;
+        if (fitKeyRef.current !== fitKey) {
+            chartRef.current.timeScale().fitContent();
+            fitKeyRef.current = fitKey;
+        }
+    }, [candles, invert, timeframe]);
 
     // ─────────────────────────────────────────────
-    // 3. UPDATE PRICE FORMAT WHEN SYMBOL CHANGES
-    // ─────────────────────────────────────────────
-    useEffect(() => {
-        if (!chartRef.current || !seriesRef.current) return;
-
-        seriesRef.current.applyOptions({
-            priceFormat: {
-                type:      "custom",
-                formatter: smartPrice,
-                minMove:   0.01,
-            },
-        });
-
-        chartRef.current.applyOptions({
-            rightPriceScale: {
-                borderColor:  "#22334d",
-                visible:       true,
-                minimumWidth:  80,
-                scaleMargins: { top: 0.2, bottom: 0.2 },
-            },
-            localization: {
-                priceFormatter: smartPrice,
-            },
-        });
-    }, [to_symbol]);
-
-    // ─────────────────────────────────────────────
-    // 4. UPDATE TIMEFRAME
+    // 3. UPDATE TIMEFRAME
     // ─────────────────────────────────────────────
     useEffect(() => {
         if (!chartRef.current) return;
         chartRef.current.applyOptions({
             timeScale: {
-                borderColor:    "#22334d",
                 timeVisible:    timeframe !== "1d" && timeframe !== "1w",
                 secondsVisible: false,
             },
         });
     }, [timeframe]);
 
-    // ── format unix timestamp for tooltip ──
     const fmtTime = (unixSec) => {
         const d = new Date(unixSec * 1000);
         if (timeframe === "1d" || timeframe === "1w")
             return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-        return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
     };
 
     const isUp = tooltip && tooltip.close >= tooltip.open;
@@ -195,7 +200,6 @@ export default function TradingViewCandles({
     return (
         <div ref={containerRef} style={{ width: "100%", height, position: "relative" }}>
 
-            {/* ── OHLC Tooltip ── */}
             {tooltip && (
                 <div style={{
                     position:      "absolute",

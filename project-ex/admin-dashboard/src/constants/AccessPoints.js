@@ -30,7 +30,7 @@ const ACCESS_OPTIONS = [
   { key: "exchange.service", label: "Manage Exchanges", group: "exchange" },
   { key: "exchange.view", label: "View Exchange History", group: "exchange" },
   { key: "exchange.create", label: "Exchange for Users", group: "exchange" },  
-  { key: "platfrom.exchange.service", label: "View Platfrom Exchanges", group: "exchange" },
+  { key: "platform.exchange.service", label: "View Platfrom Exchanges", group: "exchange" },
 
 
   // ───────────────── WIRE TRANSFER

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
-import { S, T, fmtMoney } from "./subscriptionTheme";
-import ACCESS_OPTIONS from "../constants/AccessPoints";
+import { S, T, fmtMoney } from "./SubscriptionTheme";
+import ACCESS_OPTIONS from "../../constants/AccessPoints";
 
 // =========================================================
 // ADD — single modal: key, label, minimum-plan requirements,

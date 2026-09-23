@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { API_URL } from "../config";
-import { hasPermission } from "../utils/permissions";
+import { API_URL } from "../../config";
+import { hasPermission } from "../../utils/permissions";
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Send, User as UserIcon, X } from "lucide-react";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");

@@ -15,7 +15,7 @@ import {
     ReferenceLine,
 } from "recharts";
 
-import TradingViewCandles from "../components/TradingViewCandles";
+import TradingViewCandles from "./TradingViewCandles";
 import { TrendingUp, TrendingDown, DollarSign, Layers, Activity, RefreshCcw, AlertTriangle } from "lucide-react";
 
 const API = "http://127.0.0.1:8000";
@@ -39,8 +39,9 @@ const C = {
   grid:        "#141f33",
   axis:        "#4b5b78",
   text:        "#e6ecf6",
-  textDim:     "#5d718d",
+  textDim:     "#3e5a82",
   blue:        "#3b82f6",
+  darkBlue:     "rgba(59,130,246,.13)",
   bull:        "#26a69a",
   bear:        "#ef5350",
   amber:       "#f0b429",
@@ -49,9 +50,9 @@ const C = {
 
 const T = {
   panel: {
-    background:   "linear-gradient(180deg, #071127ff 0%, #101317ff 100%)",
+    background:   "linear-gradient(180deg, #0b1220 0%, rgba(13, 19, 26, 0.66) 100%)",
     border:       `1px solid ${C.panelBorder}`,
-    borderRadius: 18,
+    borderRadius: 8,
     padding:      18,
   },
   filterInput: {
@@ -124,7 +125,7 @@ function SegmentedControl({ options, value, onChange }) {
       display:      "flex",
       background:   "#070d1c",
       border:       `1px solid ${C.panelBorder}`,
-      borderRadius: 10,
+      borderRadius: 8,
       padding:      3,
       gap:          2,
     }}>
@@ -135,15 +136,15 @@ function SegmentedControl({ options, value, onChange }) {
             key={opt.key}
             onClick={() => onChange(opt.key)}
             style={{
-              border:       "none",
-              borderRadius: 7,
+              border:       active ?  `1px solid ${C.blue}` : "none",
+              borderRadius: 8,
               padding:      "5px 11px",
               fontSize:     11,
               fontWeight:   700,
               cursor:       "pointer",
               letterSpacing: 0.3,
-              background:   active ? C.blue : "transparent",
-              color:        active ? "white" : C.textDim,
+              background:   active ? C.darkBlue : "transparent",
+              color:        active ? "#b7b7b7" : C.textDim,
               transition:   "all 0.15s",
             }}
           >
@@ -162,7 +163,7 @@ function StatCard({ icon: Icon, label, value, sub, accent, loading }) {
       display:    "flex",
       alignItems: "center",
       gap:        14,
-      padding:    "16px 18px",
+      padding:    "10px",
       position:   "relative",
       overflow:   "hidden",
     }}>
@@ -172,7 +173,7 @@ function StatCard({ icon: Icon, label, value, sub, accent, loading }) {
         background: `radial-gradient(circle, ${accent}22 -50%, transparent 70%)`,
       }} />
       <div style={{
-        width: 42, height: 42, borderRadius: 12,
+        width: 42, height: 42, borderRadius: 8,
         background: accent + "16",
         border:     `1px solid ${accent}30`,
         color:      accent,
@@ -225,7 +226,9 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
   const [loading,   setLoading]   = useState(false);
 
   useEffect(() => {
-    setSelectedPairId(pairs?.length ? pairs[0].id : null);
+    setSelectedPairId((cur) =>
+      pairs?.some((p) => p.id === cur) ? cur : (pairs?.length ? pairs[0].id : null)
+    );
   }, [pairs]);
 
   const baseCurrencyOptions = useMemo(() => {
@@ -238,16 +241,16 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
     return Array.from(s);
   }, [pairs]);
 
-  const dateRange = useMemo(() => {
-    const to   = new Date();
-    const from = new Date();
-    from.setDate(from.getDate() - Number(range));
-    return { from: from.toISOString(), to: to.toISOString() };
-  }, [range]);
-
   const loadAnalysis = useCallback(async () => {
     if (!selectedPairId) return;
     setLoading(true);
+
+    // computed on every call so "to" is always NOW (never stale)
+    const to   = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - Number(range));
+    const dateRange = { from: from.toISOString(), to: to.toISOString() };
+
     try {
       const [ohlcRes, pnlRes, invRes, volRes] = await Promise.all([
         api.get("/admin/exchange/analysis/rate-ohlc", {
@@ -275,9 +278,15 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
       /* keep last good data on screen */
     }
     setLoading(false);
-  }, [selectedPairId, timeframe, dateRange, baseCurrency, headers, adminFilter]);
+  }, [selectedPairId, timeframe, range, baseCurrency, headers?.Authorization, adminFilter]);
 
   useEffect(() => { loadAnalysis(); }, [loadAnalysis]);
+
+  // live refresh every 30s
+  useEffect(() => {
+    const t = setInterval(loadAnalysis, 30000);
+    return () => clearInterval(t);
+  }, [loadAnalysis]);
 
   // Map candles to { index, ts, open, high, low, close, updates }
   // No padding needed — backend now sends every bucket.
@@ -427,7 +436,7 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
               </select>
             </div>
         {latestCandle && (() => {
-          const shouldInvert = selectedPair?.to_currency?.symbol === "USDT";
+          const shouldInvert = selectedPair?.from_currency?.symbol === "IRT";
           const displayClose = shouldInvert ? 1 / latestCandle.close : latestCandle.close;
           const displayOpen  = shouldInvert ? 1 / latestCandle.open  : latestCandle.open;
           const change = ((displayClose - displayOpen) / displayOpen) * 100;
@@ -458,9 +467,9 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
         </div>
 
         {candleData.length > 0 ? (
-        <TradingViewCandles 
+        <TradingViewCandles
             key={selectedPairId}
-            to_symbol   = {selectedPair.to_currency.symbol}
+            invert={selectedPair?.from_currency?.symbol === "IRT"}
             candles={candleData}
             timeframe={timeframe}
             height={360}

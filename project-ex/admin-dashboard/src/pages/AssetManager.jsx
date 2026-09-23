@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "../config";
+import HeroHub from "../components/HeroHub";
 import {
   Plus, Edit3, Trash2, Power, PowerOff, Coins, Network, GitCompare,
   ArrowDownCircle, ArrowUpCircle, RefreshCcw, X, Check,
@@ -513,24 +514,22 @@ export default function AssetManager() {
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+                {/* ── HERO HUB (title/subtitle + users filter + search + stat pill) ── */}
+        <div  style={S.header}>
+          <HeroHub
+            title="Asset Management"
+            subtitle="Manage currencies, networks and pairs"
+            statPills={[
+                { key: "currecny", icon: Coins, label: "Active Currencies", value: stats.activeCurrencies, accent: "#34d399", loading: loading },
+                { key: "network", icon: Network, label: "Active Networks", value: stats.activeNetworks, accent: "#fbbf24", loading: loading },
+                { key: "pair", icon: GitCompare, label: "Active Pairs", value: stats.activePairs, accent: "#3b82f6", loading: loading },
+            ]}
+            onRefresh={loadAll}
+            refreshing={loading}
+          />
+        </div>
         
-              {/* ── HEADER ── */}
-      <div style={S.header}>
-        <div style={S.headerLeft}>
-
-          <div>
-            <div style={S.title}>Asset Management</div>
-            <div style={S.subtitle}>Manage currencies, networks and pairs</div>
-          </div>
-            <StatPill icon={Coins} label="Active Currencies" value={`${stats.activeCurrencies} / ${stats.currencies}`} accent="#34d399" loading={loading} />
-            <StatPill icon={Network} label="Active Networks" value={`${stats.activeNetworks} / ${stats.networks}`} accent="#fbbf24" loading={loading} />
-            <StatPill icon={GitCompare} label="Active Pairs" value={`${stats.activePairs} / ${stats.pairs}`} accent="#3b82f6" loading={loading} />
-        </div>
-
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button onClick={loadAll} style={S.refreshBtn}>Refresh</button>
-        </div>
-      </div>
 
 
         {/* 3-column layout */}
@@ -639,7 +638,7 @@ const S = {
   subtitle: { color: "#64748b", fontSize: 13, margin: "2px 0 0" },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: 14,  padding :"10px 0 20px 20px",  flexWrap: "wrap"
+    gap: 14,  flexWrap: "wrap"
   },
   refreshBtn: {
     display: "flex",

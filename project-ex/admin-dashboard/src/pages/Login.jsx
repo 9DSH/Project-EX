@@ -35,8 +35,9 @@ export default function Login({ onLogin, onBack }) {
 
       onLogin();
     } catch (err) {
-      setError("Login failed. Check your credentials.");
-      console.log(err.response?.data || err.message);
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Login failed. Check your credentials.");
+      console.error("Login error:", err.response?.data || err.message);
     }
   };
 

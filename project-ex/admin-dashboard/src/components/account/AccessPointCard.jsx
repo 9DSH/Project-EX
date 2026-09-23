@@ -1,5 +1,5 @@
 import { Lock, ShieldCheck } from "lucide-react";
-import { T, fmtMoney } from "./subscriptionTheme";
+import { T, fmtMoney } from "./SubscriptionTheme";
 
 export default function AccessPointCard({
   ap,
