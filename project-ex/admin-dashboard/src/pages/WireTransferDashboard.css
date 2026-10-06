@@ -1,0 +1,156 @@
+/* ══════════════════════════════════════════════════════════════
+   WireTransferDashboard — extracted shell + mobile responsive rules.
+
+   NOTE ON SCOPE: this page is ~1700 lines, almost entirely inline-styled,
+   including deep form builders (StepBuilder, ReceiverMethodsBuilder,
+   WirePairForm's field grids, StatusTimeline, Fail/DeliverModal). Those are
+   left as inline styles for now — they're already flex-wrap based and
+   usable at any width. This file covers what actually needed to change for
+   responsiveness: the page shell, the Pairs sidebar/detail on desktop vs.
+   the mobile Pairs tab + Add/Detail/Edit/Order-detail sheets (all using the
+   same bottom-sheet mechanism as ExchangeDashboard).
+   ══════════════════════════════════════════════════════════════ */
+
+/* PairRow's left/right padding — was inline (padding:"9px 16px") and not
+   responsive at all; now a normal CSS rule with its own mobile override. */
+.wtx-pairRow { padding: 9px 16px; }
+@media (max-width: 640px) {
+  .wtx-pairRow { padding: 9px 22px; } /* ← change 12px to taste */
+}
+
+.wtx-scope .wtx-addBtn {
+  display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,.14);
+  border: 1px solid rgba(59,130,246,.28); color: #93c5fd; border-radius: 7px; padding: 7px 9px;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.wtx-scope .wtx-closeIconBtn {
+  background: #0b1525; border: 1px solid #313d58; color: #475569; width: 32px; height: 32px;
+  border-radius: 8px; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Tab bar — mobile only in its entirety (desktop keeps its original
+     plain Orders header, unchanged). Same pill styling as
+     ExchangeDashboard's .ex-tabbar/.ex-tab/.ex-tab-count. ── */
+.wtx-tabbar {
+  display: none; /* shown only inside the mobile media query below */
+  padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.08);
+  gap: 6px; align-items: center; flex-shrink: 0; background: #060c18; overflow-x: auto;
+}
+.wtx-scope .wtx-tab {
+  display: flex; align-items: center; gap: 7px; background: rgba(59,130,246,.12);
+  border: 1px solid rgba(59,130,246,.3); border-radius: 8px; padding: 6px 10px; color: #64748b;
+  cursor: pointer; font-weight: 500; font-size: 12px; transition: all .18s;
+}
+.wtx-scope .wtx-tab.is-active { background: rgba(59,130,246,.13); border-color: #3b82f6; color: white; font-weight: 700; }
+.wtx-tab-count { background: rgba(255,255,255,.12); color: #a2a8b1; border-radius: 99px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+.wtx-tab.is-active .wtx-tab-count { background: rgba(96,165,250,.18); color: #60a5fa; }
+/* must out-specificity ".wtx-scope .wtx-tab" so it reliably hides on desktop
+   even though the array already excludes it there (belt & suspenders,
+   same fix that was needed on ExchangeDashboard) */
+.wtx-scope .wtx-tab.wtx-mobileTab { display: none; }
+
+/* ── Edit-pair modal: centered on desktop, bottom sheet on mobile ── */
+.wtx-modal-overlay {
+  position: fixed; inset: 0; background: rgba(2,6,23,.6); display: flex; justify-content: center;
+  align-items: center; z-index: 9999; backdrop-filter: blur(1px);
+}
+.wtx-modal-card {
+  width: 92%; max-width: 560px; background: #0d1424; border-radius: 22px; padding: 26px 28px;
+  border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column;
+  max-height: 90vh; overflow: auto; box-shadow: 0 32px 80px rgba(0,0,0,.6);
+}
+.wtx-modal-scroll { flex: 1; overflow: visible; }
+
+/* ── Order detail (WireSidebar): fixed right drawer on desktop,
+     bottom sheet on mobile — same treatment as the Edit modal above. ── */
+/* high z-index so this sits above the app's own top bar too */
+.wtx-sidebar-backdrop { position: fixed; inset: 0; background: rgba(2,6,23,.6); z-index: 99998; }
+.wtx-sidebar-panel {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 440px; background: #0b1220;
+  border-left: 1px solid rgba(255,255,255,.08); z-index: 99999; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── mobile-only bottom sheet used by Pairs Add/Detail (identical to
+     ExchangeDashboard's MobileOverlay) ── */
+.wtx-mobileOverlay {
+  /* high z-index so this sits above the app's own top bar too */
+  position: fixed; inset: 0; z-index: 99998;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+  /* delay hiding until AFTER the .3s slide-down transition finishes, instead
+     of snapping invisible instantly (which cut the close animation short) */
+  visibility: hidden;
+  transition: visibility 0s linear .3s;
+}
+.wtx-mobileOverlay.is-open {
+  pointer-events: auto;
+  visibility: visible;
+  transition: none; /* show immediately when opening — only delay on close */
+}
+.wtx-mobileOverlay-backdrop { position: absolute; inset: 0; background: rgba(2,6,23,.6); backdrop-filter: blur(1px); opacity: 0; transition: opacity .25s ease; }
+.wtx-mobileOverlay.is-open .wtx-mobileOverlay-backdrop { opacity: 1; }
+.wtx-mobileOverlay-panel {
+  position: relative; width: 100%; max-height: 100%;
+  background: #0d1424; border-radius: 20px 20px 0 0; border: 1px solid rgba(255,255,255,.08);
+  border-bottom: none; box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.wtx-mobileOverlay.is-open .wtx-mobileOverlay-panel { transform: translateY(0); }
+.wtx-mobileOverlay-head { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.wtx-mobileOverlay-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wtx-mobileOverlay-title { color: white; font-weight: 700; font-size: 16px; flex: 1; }
+.wtx-mobileOverlay-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; }
+.wtx-mobileOverlay-body > * { flex: 1; }
+
+/* ═══════════ MOBILE ≤ 640 ═══════════ */
+@media (max-width: 640px) {
+  .wtx-body { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+
+  /* desktop sidebar/detail are replaced by the mobile Pairs tab + sheets.
+     !important is required here: both elements carry an inline
+     style={{ display: "flex" }} (needed for the desktop layout), and inline
+     styles always beat an external stylesheet rule regardless of media
+     query or specificity — !important is the only thing that overrides it. */
+  .wtx-left { display: none !important; }
+  .wtx-detail { display: none !important; }
+
+  .wtx-tabbar { display: flex; }
+  .wtx-scope .wtx-tab.wtx-mobileTab { display: flex; }
+  .wtx-main { flex: 1; min-height: 0; }
+
+  /* Edit modal → bottom sheet, 60% height, flush to true screen bottom
+     (bounded via inline sheetBoundsStyle passed from the component) */
+  .wtx-modal-overlay { align-items: flex-end; padding: 0; animation: wtxFadeIn .25s ease; }
+  .wtx-modal-card {
+    width: 100%; max-width: 100%; max-height: 60%; height: 60%;
+    border-radius: 20px 20px 0 0; padding: 20px 16px;
+    animation: wtxSlideUp .3s cubic-bezier(.4,0,.2,1); overflow: hidden;
+  }
+  .wtx-modal-scroll { overflow-y: auto; }
+
+  /* Order detail (WireSidebar) → same bottom-sheet treatment */
+  .wtx-sidebar-backdrop { animation: wtxFadeIn .25s ease; }
+  .wtx-sidebar-panel {
+    left: 0; top: auto; height: 60%; width: 100%;
+    border-left: none; border-top: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px 20px 0 0;
+    animation: wtxSlideUp .3s cubic-bezier(.4,0,.2,1);
+  }
+
+  .wtx-mobileOverlay-panel { height: 60%; }
+
+  /* Closing state: PairEditModal / WireSidebar unmount on React state
+     change, so there's no "is-open" toggle to reverse-transition — instead
+     the component holds itself mounted for one animation cycle (see the
+     .jsx) and adds this class right before calling the real onClose. */
+  .wtx-modal-overlay.is-closing { animation: wtxFadeOut .25s ease forwards; }
+  .wtx-modal-card.is-closing { animation: wtxSlideDown .3s cubic-bezier(.4,0,.2,1) forwards; }
+  .wtx-sidebar-backdrop.is-closing { animation: wtxFadeOut .25s ease forwards; }
+  .wtx-sidebar-panel.is-closing { animation: wtxSlideDown .3s cubic-bezier(.4,0,.2,1) forwards; }
+}
+
+@keyframes wtxSlideUp   { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes wtxSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes wtxFadeIn    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wtxFadeOut   { from { opacity: 1; } to { opacity: 0; } }

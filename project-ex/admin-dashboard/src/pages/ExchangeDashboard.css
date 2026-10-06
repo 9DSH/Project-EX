@@ -1,0 +1,533 @@
+/* ── ExchangeDashboard — static styles + responsive (640 / 1024) ── */
+
+@keyframes skpulse { 0%,100% { opacity: .4 } 50% { opacity: .8 } }
+@keyframes spin { to { transform: rotate(360deg) } }
+
+/* toast is appended to <body>, so it is not scoped under .ex-page */
+.ex-toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 99999;
+  padding: 12px 20px; border-radius: 12px; font-weight: 600; font-size: 13px;
+  color: white; pointer-events: none; opacity: 0; transform: translateY(8px);
+  transition: all .25s ease; max-width: calc(100vw - 48px);
+}
+.ex-toast.is-ok { background: #16a34a; box-shadow: 0 8px 32px rgba(22,163,74,.35); }
+.ex-toast.is-err { background: #dc2626; box-shadow: 0 8px 32px rgba(220,38,38,.35); }
+.ex-toast.is-show { opacity: 1; transform: translateY(0); }
+
+/* ── page shell ── */
+.ex-page {
+  /* Fills whatever height its parent layout gives it (flex:1 / height:100%
+     slot), rather than assuming it owns the whole viewport — that
+     assumption is what floated the bottom sheet away from the real
+     screen edge when an app topbar sits above this component.
+     Requires the parent mount point to size this element (e.g. give it
+     flex:1 or height:100% in the layout that renders <ExchangeDashboard/>). */
+  background: #060c18; height: 100%; min-height: 0; display: flex; flex-direction: column;
+  overflow: hidden; color: white; box-sizing: border-box;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.ex-page * { box-sizing: border-box; }
+.ex-page ::-webkit-scrollbar { width: 4px; }
+.ex-page ::-webkit-scrollbar-track { background: transparent; }
+.ex-page ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+.ex-page select option { background: #0d1424; color: white; }
+.ex-page input[type=number]::-webkit-inner-spin-button { opacity: .4; }
+
+.ex-hero { padding: 0 0 10px; flex-shrink: 0; }
+.ex-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* ── shared controls (prefixed .ex-scope so they beat global button:hover / input:hover) ── */
+.ex-scope .ex-input {
+  background: #060c18; border: 1px solid rgba(255,255,255,.1); color: white;
+  padding: 9px 11px; border-radius: 9px; outline: none; font-size: 13px; width: 100%;
+  transition: border-color .15s;
+}
+.ex-scope .ex-input:hover { background: #060c18; border-color: rgba(255,255,255,.18); }
+.ex-scope .ex-input:focus { border-color: #3b82f6; }
+.ex-scope .ex-input-sm { padding: 7px 10px; font-size: 12px; flex: 1; }
+
+.ex-scope .ex-primaryBtn {
+  display: flex; align-items: center; justify-content: center; flex: 1;
+  background: rgba(37,99,235,.22); border: 1px solid rgba(59,130,246,.38); color: #93c5fd;
+  padding: 10px 18px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px;
+}
+.ex-scope .ex-primaryBtn:hover { background: rgba(37,99,235,.32); }
+
+.ex-scope .ex-cancelBtn {
+  display: flex; align-items: center; justify-content: center; background: transparent;
+  border: 1px solid rgba(255,255,255,.08); color: #4b5563; padding: 10px 14px;
+  border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap;
+}
+.ex-scope .ex-cancelBtn:hover { background: rgba(255,255,255,.04); }
+
+.ex-scope .ex-iconBtn {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); color: #6b7280;
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.ex-scope .ex-closeIconBtn {
+  background: #0b1525; border: 1px solid #313d58; color: #475569; width: 32px; height: 32px;
+  border-radius: 8px; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+}
+.ex-scope .ex-actionBtn {
+  display: flex; align-items: center; justify-content: center; gap: 5; gap: 5px;
+  border: 1px solid; border-radius: 8px; padding: 8px 0; cursor: pointer; font-weight: 600; font-size: 11px;
+}
+.ex-scope .ex-actionBtn.is-blue { flex: 1; background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.22); color: #60a5fa; }
+.ex-scope .ex-actionBtn.is-red-soft { flex: 1; background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.2); color: #f87171; }
+.ex-scope .ex-actionBtn.is-green-soft { flex: 1; background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.2); color: #4ade80; }
+.ex-scope .ex-actionBtn.is-delete { background: rgba(239,68,68,.07); border-color: rgba(239,68,68,.15); color: #ef4444; padding: 8px 10px; }
+.ex-scope .ex-stepBtn {
+  width: 25px; background: #0f172a; color: #94a3b8; font-size: 12px; font-weight: 700; cursor: pointer;
+  border: none; border-radius: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+  transition: all .15s ease;
+}
+.ex-scope .ex-addBtn {
+  display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,.14);
+  border: 1px solid rgba(59,130,246,.28); color: #93c5fd; border-radius: 7px; padding: 7px 9px;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.ex-scope .ex-sortBtn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  background: #060c18; border: 1px solid rgba(255,255,255,.07); color: #94a3b8;
+  border-radius: 7px; padding: 6px 0; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.ex-scope .ex-sortBtn.is-active { background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.4); color: #60a5fa; }
+.ex-scope .ex-retryBtn {
+  background: #1d4ed8; border: none; color: white; border-radius: 7px; padding: 5px 10px;
+  font-weight: 700; font-size: 11px; cursor: pointer; display: flex; gap: 4px; align-items: center;
+}
+.ex-scope .ex-retryBtn:disabled { opacity: .6; }
+.ex-scope .ex-saveRateBtn {
+  background: rgba(59,130,246,.18); border: 1px solid rgba(59,130,246,.35); border-radius: 8px;
+  padding: 7px 12px; color: #93c5fd; font-size: 11px; font-weight: 700; cursor: pointer;
+  white-space: nowrap; display: flex; align-items: center; gap: 5px;
+}
+.ex-scope .ex-tab {
+  display: flex; align-items: center; gap: 7px; background: rgba(59,130,246,.12);
+  border: 1px solid rgba(59,130,246,.3); border-radius: 8px; padding: 6px 10px; color: #64748b;
+  cursor: pointer; font-weight: 500; font-size: 12px; transition: all .18s;
+}
+.ex-scope .ex-tab.is-active { background: rgba(59,130,246,.13); border-color: #3b82f6; color: white; font-weight: 700; }
+.ex-scope .ex-toggle {
+  display: flex; align-items: center; gap: 10px; background: transparent;
+  border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 13px;
+  cursor: pointer; text-align: left; transition: all .2s;
+}
+.ex-scope .ex-toggle.is-on { border-color: rgba(34,197,94,.25); }
+.ex-toggle-track {
+  width: 38px; height: 22px; border-radius: 11px; background: #1f2937; border: 1px solid #374151;
+  position: relative; flex-shrink: 0; transition: all .25s;
+}
+.ex-toggle.is-on .ex-toggle-track { background: #22c55e; border-color: #22c55e; }
+.ex-toggle-thumb {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #4b5563; transition: left .25s;
+}
+.ex-toggle.is-on .ex-toggle-thumb { left: 18px; background: white; }
+.ex-toggle-label { color: #6b7280; font-size: 13px; font-weight: 600; }
+.ex-toggle.is-on .ex-toggle-label { color: #d1fae5; }
+
+/* ── field / form ── */
+.ex-field { display: flex; flex-direction: column; gap: 5px; }
+.ex-field-label { color: #6b7280; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.ex-form { display: flex; flex-direction: column; height: 100%; }
+.ex-form-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.ex-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.ex-form-footer { display: flex; gap: 7px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.05); }
+.ex-error {
+  background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #f87171;
+  padding: 9px 13px; border-radius: 9px; font-size: 12px; margin-bottom: 12px;
+}
+
+/* ── modal ── */
+.ex-modal-overlay {
+  position: fixed; inset: 0; background: rgba(2,6,23,.6); display: flex; justify-content: center;
+  align-items: center; z-index: 9999; backdrop-filter: blur(1px);
+}
+.ex-modal-card {
+  width: 92%; max-width: 460px; background: #0d1424; border-radius: 22px; padding: 26px 28px;
+  border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column;
+  max-height: 85vh; overflow: auto; box-shadow: 0 32px 80px rgba(0,0,0,.6);
+}
+.ex-modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
+.ex-modal-title { color: white; font-weight: 700; font-size: 17px; }
+.ex-modal-sub { color: #4b5563; font-size: 13px; margin-top: 3px; }
+
+/* ── skeleton / status badge / empty ── */
+.ex-sk { width: 100%; height: 14px; border-radius: 6px; background: #111827; animation: skpulse 1.5s ease infinite; }
+.ex-sk-wrap { padding: 9px 11px; margin-bottom: 3px; }
+.ex-badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid;
+}
+.ex-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; gap: 10px; text-align: center; }
+.ex-empty-icon {
+  width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,.03);
+  border: 1px solid #314766a7; display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
+}
+.ex-empty-title { color: #314766; font-weight: 700; font-size: 15px; }
+.ex-empty-sub { color: #41597a; font-size: 13px; }
+.ex-spin { animation: spin .8s linear infinite; }
+
+/* ── left: pairs sidebar + add slide-in ── */
+.ex-left { position: relative; flex-shrink: 0; display: flex; }
+.ex-sidebar {
+  width: 380px; background: #040a14; border-right: 1px solid rgba(255,255,255,.05);
+  display: flex; flex-direction: column; overflow: hidden; transition: opacity .2s;
+}
+.ex-sidebar.is-dimmed { opacity: .3; pointer-events: none; }
+.ex-sidebar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; margin-right: 13px; }
+.ex-sidebar-title { padding: 10px 12px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.ex-sidebar-title span.t { color: white; font-weight: 700; font-size: 18px; }
+.ex-count { background: rgba(59,130,246,.12); color: #60a5fa; border-radius: 20px; padding: 1px 8px; font-size: 13px; font-weight: 700; }
+.ex-sort-row { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.04); flex-shrink: 0; display: flex; gap: 6px; }
+.ex-pair-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.ex-pair-empty { color: #536b8c; font-size: 12px; text-align: center; padding: 30px 10px; font-weight: 600; }
+
+.ex-pair {
+  display: flex; align-items: center; gap: 10px; padding: 9px 20px; border-radius: 9px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; transition: all .15s; margin-bottom: 3px;
+}
+.ex-pair.is-selected { border-color: rgba(59,130,246,.28); background: rgba(59,130,246,.1); }
+.ex-dot { width: 6px; height: 6px; border-radius: 50%; background: #374151; flex-shrink: 0; display: inline-block; }
+.ex-dot.is-on { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.4); }
+.ex-pair-main { min-width: 0; flex: 1; text-align: left; }
+.ex-pair-name { font-size: 14px; font-weight: 700; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ex-pair.is-selected .ex-pair-name { color: white; }
+.ex-owner {
+  display: inline-block; margin-top: 2px; font-size: 10px; font-weight: 700; color: #a78bfa;
+  background: rgba(139,92,246,.12); border: 1px solid rgba(139,92,246,.25); border-radius: 999px;
+  padding: 2px 7px; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
+.ex-pair-side { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; text-align: right; }
+.ex-pair-rate { font-size: 14px; color: #374151; font-weight: 700; white-space: nowrap; }
+.ex-pair-rate.is-on { color: #3b82f6; }
+.ex-pair-fee { font-size: 11px; color: #5f728e; white-space: nowrap; margin-top: 1px; }
+
+.ex-addPanel {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 0; overflow: hidden; z-index: 20;
+  transition: width .32s cubic-bezier(.4,0,.2,1); background: #06101e;
+  border-right: 1px solid transparent; display: flex; flex-direction: column;
+}
+.ex-addPanel.is-open { width: 380px; border-right-color: rgba(59,130,246,.22); box-shadow: 6px 0 28px rgba(0,0,0,.5); }
+.ex-addPanel-inner { min-width: 280px; height: 100%; display: flex; flex-direction: column; }
+.ex-addPanel-head { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ex-addPanel-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ex-addPanel-title { color: white; font-weight: 700; font-size: 18px; flex: 1; white-space: nowrap; }
+.ex-addPanel-body { flex: 1; overflow-y: auto; padding: 14px; }
+
+/* ── pair detail ── */
+.ex-detail {
+  width: 0; overflow: hidden; background: #070f1d; border-right: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0; transition: width .28s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column;
+}
+.ex-detail.is-open { width: 258px; }
+.ex-detail-inner { width: 258px; height: 100%; }
+.ex-pd { display: flex; flex-direction: column; height: 100%; width: 100%; }
+.ex-pd-head { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,.05); flex-shrink: 0; }
+.ex-pd-headrow { display: flex; align-items: center; gap: 8px; }
+.ex-pd-dot { width: 7px; height: 7px; border-radius: 50%; background: #a31919; flex-shrink: 0; }
+.ex-pd-dot.is-on { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+.ex-pd-name { color: white; font-weight: 800; font-size: 15px; flex: 1; letter-spacing: -.02em; }
+.ex-pd-live {
+  background: #a31919; border: 1px solid rgba(252,253,254,.15); color: #cba3a3;
+  border-radius: 20px; padding: 2px 9px; font-size: 10px; font-weight: 700;
+}
+.ex-pd-live.is-on { background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.22); color: #4ade80; }
+.ex-pd-owner { margin-top: 6px; font-size: 11px; color: #a78bfa; }
+.ex-pd-body { flex: 1; overflow-y: auto; padding: 13px 15px; display: flex; flex-direction: column; gap: 10px; }
+.ex-pd-rate { background: #040a14; border: 1px solid rgba(59,130,246,.15); border-radius: 11px; padding: 12px; }
+.ex-pd-rate-label { font-size: 10px; color: #3b82f6; font-weight: 700; letter-spacing: .07em; margin-bottom: 4px; }
+.ex-pd-rate-val { font-size: 22px; color: white; font-weight: 900; letter-spacing: -.04em; }
+.ex-pd-inverse { font-size: 13px; color: #7b8695; margin-top: 3px; }
+.ex-pd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ex-pd-stat { background: #040a14; border: 1px solid rgba(255,255,255,.06); border-radius: 9px; padding: 9px 10px; }
+.ex-pd-stat-k { font-size: 12px; color: #7c8696; margin-bottom: 3px; }
+.ex-pd-stat-v { font-size: 14px; color: white; font-weight: 700; }
+/* Desktop/tablet (default): rate, then stats, then quick-update full-width
+   below — unchanged, plain document flow, exactly as before. */
+.ex-pd-quick-label { font-size: 10px; color: #7c8696; font-weight: 700; letter-spacing: .07em; margin: 15px 0 10px; }
+.ex-pd-quick { display: flex; flex-direction: column; }
+.ex-pd-quick-row1 { display: flex; gap: 6px; }
+.ex-pd-quick-row2 { display: flex; gap: 6px; margin-top: 6px; }
+.ex-pd-quick-row2 .ex-saveRateBtn { flex: 1; }
+.ex-stepGroup { display: flex; overflow: hidden; border-radius: 8px; border: 1px solid rgba(252,243,243,.12); }
+.ex-pd-foot { padding: 11px 15px; border-top: 1px solid rgba(255,255,255,.05); display: flex; gap: 6px; flex-shrink: 0; }
+.ex-pd-readonly { padding: 11px 15px; border-top: 1px solid rgba(255,255,255,.05); font-size: 11px; color: #64748b; text-align: center; }
+
+/* ── main (right) ── */
+.ex-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.ex-tabbar {
+  padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; gap: 6px;
+  align-items: center; flex-shrink: 0; background: #060c18; overflow-x: auto;
+}
+.ex-tab-count { background: rgba(255,255,255,.12); color: #a2a8b1; border-radius: 99px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+.ex-tab.is-active .ex-tab-count { background: rgba(96,165,250,.18); color: #60a5fa; }
+.ex-tab-count.is-warn { background: rgba(245,158,11,.12); color: #fbbf24; }
+.ex-content { flex: 1; overflow-y: auto; padding: 14px 16px; }
+.ex-list { display: flex; flex-direction: column; gap: 6px; }
+.ex-full { height: 100%; }
+
+/* ── order row ── */
+.ex-order {
+  background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.055); border-radius: 11px;
+  padding: 10px 12px; display: grid; grid-template-columns: 1.3fr 1.6fr 1.3fr 1fr; align-items: center; gap: 12px;
+}
+.ex-order-c { min-width: 0; }
+.ex-order-user { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ex-order-ico {
+  width: 28px; height: 28px; background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.15);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+/* Desktop/tablet: when the grid column shrinks (narrow window, more columns
+   than room), truncate with an ellipsis — "USER_tes…" — instead of wrapping
+   or overflowing the card. */
+.ex-order-name, .ex-order-sub, .ex-order-pair, .ex-order-amt,
+.ex-order-rate-v, .ex-order-id, .ex-order-fee {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.ex-order-name { font-size: 13px; color: white; }
+.ex-order-sub { font-size: 11px; color: #9ca3af8c; font-weight: 600; }
+.ex-order-pair { font-size: 14px; font-weight: 700; color: #9098a7; }
+.ex-order-amt { font-size: 14px; color: white; font-weight: 600; }
+.ex-order-rate { display: flex; flex-direction: row; gap: 2px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.ex-order-rate-l { font-size: 12px; color: #9098a7; flex-shrink: 0; }
+.ex-order-rate-v { font-size: 14px; color: white; font-weight: 600; margin-left: 3px; }
+.ex-order-id { font-size: 12px; color: #475569; margin-top: 3px; }
+.ex-order-fee { font-size: 12px; color: #9098a7; margin-top: 3px; }
+.ex-order-status { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; }
+.ex-order-date { font-size: 10px; color: #7c8694; }
+.ex-owner-sm {
+  font-size: 10px; font-weight: 700; color: #a78bfa; background: rgba(139,92,246,.12);
+  border: 1px solid rgba(139,92,246,.22); border-radius: 999px; padding: 1px 6px; margin-left: 4px;
+  display: inline-block; max-width: 110px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; vertical-align: bottom;
+}
+
+/* ── sweep row ──
+   Same 2×2 grid shape at every breakpoint — "title status" / "meta actions" /
+   "err err" — only column proportions and font sizes change responsively,
+   same logic as .ex-order. */
+.ex-sweep {
+  background: rgba(255,255,255,.025); border: 1px solid rgba(239,68,68,.1); border-radius: 11px;
+  padding: 10px 14px; display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "title status" "meta actions" "err err";
+  gap: 6px 14px; align-items: start;
+}
+.ex-sweep.is-resolved { border-color: rgba(34,197,94,.1); }
+
+.ex-sweep-titleCell { grid-area: title; display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.ex-sweep-titleText { min-width: 0; flex: 1; }
+.ex-sweep-ico {
+  width: 32px; height: 32px; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ex-sweep.is-resolved .ex-sweep-ico { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.2); }
+
+/* desktop/tablet: truncate with an ellipsis instead of wrapping/overflowing
+   when the column shrinks — same rule as the Orders tab. */
+.ex-sweep-title {
+  font-weight: 700; font-size: 12px; color: white;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.ex-sweep-title small { color: #6b7280; font-weight: 400; font-size: 12px; }
+.ex-sweep-meta {
+  grid-area: meta; font-size: 10px; color: #4b5563; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.ex-sweep-err {
+  grid-area: err;
+  font-size: 10px; color: #fca5a5; font-family: monospace; margin-top: 2px; background: rgba(239,68,68,.05);
+  padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,.12); white-space: pre-wrap; word-break: break-all;
+}
+
+.ex-sweep-statusCell { grid-area: status; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ex-sweep-state {
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.2); color: #f87171;
+  font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+}
+.ex-sweep.is-resolved .ex-sweep-state { background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.2); color: #4ade80; }
+.ex-sweep-date { font-size: 10px; color: #4b5563; white-space: nowrap; }
+
+.ex-sweep-actionsCell { grid-area: actions; display: flex; justify-content: flex-end; align-items: flex-start; }
+
+.ex-owner-warn { color: #fbbf24; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.22); }
+
+/* ═══════════ TABLET ≤ 1024 ═══════════ */
+@media (max-width: 1024px) {
+  .ex-sidebar { width: 300px; }
+  .ex-addPanel.is-open { width: 300px; }
+  .ex-detail.is-open { width: 240px; }
+  .ex-detail-inner { width: 240px; }
+  .ex-pair { padding: 9px 12px; }
+  .ex-order { grid-template-columns: 1.3fr 1.6fr 1.3fr 1fr; }
+  .ex-order-status { align-items: flex-start; }
+}
+
+/* ── mobile-only "Pairs" tab content + full-screen slide-in overlay
+      (used for both Add and Detail on mobile — same mechanism) ── */
+.ex-scope .ex-tab.ex-mobileTab { display: none; } /* must out-specificity ".ex-scope .ex-tab" above */
+.ex-mobilePairs-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.ex-mobilePairs-sortRow { display: flex; gap: 6px; margin-bottom: 10px; }
+.ex-mobilePairs-title { display: flex; align-items: center; gap: 7px; }
+.ex-mobilePairs-title span.t { color: white; font-weight: 700; font-size: 16px; }
+
+/* Position is set inline from JS (see sheetBoundsStyle in the component):
+   position:fixed with top/left/right/bottom measured from ex-main's real
+   getBoundingClientRect(). That's what actually pins this to the Pairs
+   tab's own box — immune to parent-layout height quirks and never
+   clipped by/drawn over the app's left menu. This rule is just a
+   fallback for the instant before the first measurement lands. */
+.ex-mobileOverlay {
+  /* high z-index so this sits above the app's own top bar too, not just
+     this component's own content — the overlay/backdrop should cover the
+     whole screen, top bar included. */
+  position: fixed; inset: 0; z-index: 99998;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+  /* delay hiding until AFTER the .3s slide-down transition finishes, instead
+     of snapping invisible instantly — that was cutting the close
+     animation off before it could play. */
+  visibility: hidden;
+  transition: visibility 0s linear .3s;
+}
+.ex-mobileOverlay.is-open {
+  pointer-events: auto;
+  visibility: visible;
+  transition: none; /* show immediately when opening — only delay on close */
+}
+.ex-mobileOverlay-backdrop {
+  position: absolute; inset: 0; background: rgba(2,6,23,.6); backdrop-filter: blur(1px);
+  opacity: 0; transition: opacity .25s ease;
+}
+.ex-mobileOverlay.is-open .ex-mobileOverlay-backdrop { opacity: 1; }
+.ex-mobileOverlay-panel {
+  position: relative; width: 100%; max-height: 100%;
+  background: #0d1424; border-radius: 20px 20px 0 0; border: 1px solid rgba(255,255,255,.08);
+  border-bottom: none; box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.ex-mobileOverlay.is-open .ex-mobileOverlay-panel { transform: translateY(0); }
+.ex-mobileOverlay-head {
+  padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.ex-mobileOverlay-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ex-mobileOverlay-title { color: white; font-weight: 700; font-size: 16px; flex: 1; }
+/* fills the sheet; scrolls internally when content is taller than the 60% panel */
+.ex-mobileOverlay-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; }
+.ex-mobileOverlay-body > * { flex: 1; }
+
+/* ═══════════ TABLET ≤ 1024 (unchanged pairs sidebar layout stays desktop-like) ═══════════ */
+
+/* ═══════════ MOBILE ≤ 640 ═══════════ */
+@media (max-width: 640px) {
+  .ex-body { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+
+  /* desktop sidebar/detail are replaced by the dedicated Pairs tab + overlay */
+  .ex-left { display: none; }
+  .ex-detail { display: none; }
+
+  .ex-scope .ex-tab.ex-mobileTab { display: flex; }
+
+  .ex-main { flex: none; min-height: 70vh; overflow: visible; }
+  .ex-content { overflow: visible; padding: 10px; }
+  /* Mobile: compact 2×2 order card.
+     Row 1 — user info | status + date
+     Row 2 — pair (from→to) + amount + order id | rate + fee + admin tag */
+  .ex-order {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "user    status"
+      "pairAmt rate";
+    gap: 8px 10px;
+    padding: 10px 12px;
+    align-items: start;
+  }
+  .ex-order-user    { grid-area: user; }
+  .ex-order-status  { grid-area: status; align-items: flex-end; }
+  .ex-order-pairAmt { grid-area: pairAmt; }
+  .ex-order-rateBlock {
+    grid-area: rate; align-items: flex-end; text-align: right;
+    border-left: 1px solid rgba(255,255,255,.05); padding-left: 10px;
+  }
+  .ex-order-rateBlock .ex-order-rate { justify-content: flex-end; }
+  .ex-order-rateBlock .ex-order-fee { text-align: right; }
+  /* sweeps: same grid shape as desktop, just tighter proportions/fonts */
+  .ex-sweep { grid-template-columns: 1fr auto; gap: 6px 10px; padding: 10px 12px; }
+  .ex-sweep-title { font-size: 11px; }
+  .ex-sweep-meta { font-size: 10px; }
+
+  .ex-grid2 { grid-template-columns: 1fr; }
+  .ex-toast { left: 24px; right: 24px; bottom: 16px; }
+
+  /* mobile Pairs-tab bottom sheet: occupies 60% of the real viewport height
+     (see sheetBoundsStyle), flush with the true screen bottom. Content
+     scrolls internally when it doesn't fit in that 60%. */
+  .ex-mobileOverlay-panel { height: 60%; }
+  .ex-mobileOverlay-body .ex-form { height: 100%; }
+  .ex-mobileOverlay-body .ex-pd { height: 100%; }
+  /* keep the Add-pair fields 2-per-row inside the sheet, even though the
+     generic mobile rule collapses .ex-grid2 to 1 column elsewhere */
+  .ex-mobileOverlay-body .ex-grid2 { grid-template-columns: 1fr 1fr; }
+
+  /* Pair detail sheet, mobile only: reposition quick-update beside the rate
+     box using CSS Grid areas — the JSX/DOM order (rate, stats, quick) is
+     untouched, so desktop (outside this media query) is entirely unaffected.
+     Stats (Fee/Min/Max/Pair ID) stay below, spanning both columns. */
+  .ex-pd-body {
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-template-areas: "rate quick" "stats stats";
+    gap: 10px;
+  }
+  .ex-pd-rate { grid-area: rate; display: flex; flex-direction: column; justify-content: center; }
+  .ex-pd-quick {
+    grid-area: quick;
+    background: #040a14; border: 1px solid rgba(255,255,255,.06); border-radius: 11px;
+    padding: 10px; justify-content: center;
+  }
+  .ex-pd-quick-label { margin: 0 0 8px; }
+  .ex-pd-stats { grid-area: stats; }
+
+  /* ── Edit modal: same bottom-sheet slide-up + dim, no inner scroll ── */
+  .ex-modal-overlay {
+    align-items: flex-end; padding: 0;
+    animation: exFadeIn .25s ease;
+  }
+  .ex-modal-card {
+    width: 100%; max-width: 100%; max-height: 60%; height: 60%;
+    border-radius: 20px 20px 0 0; padding: 20px 16px;
+    animation: exSlideUp .3s cubic-bezier(.4,0,.2,1);
+    overflow: hidden; /* the card itself stays fixed-height; ex-form-body scrolls */
+  }
+  .ex-modal-card .ex-form { height: 100%; }
+  .ex-modal-card .ex-form-body { overflow-y: auto; } /* scroll to reach Fee/Min/Max/Active/buttons */
+  .ex-modal-card .ex-grid2 { grid-template-columns: 1fr 1fr; }
+
+  /* Closing state: the modal unmounts on React state change, so there's no
+     "is-open" toggle to reverse-transition — instead the component holds
+     itself mounted for one animation cycle (see PairEditModal in the .jsx)
+     and adds this class right before calling the real onClose. */
+  .ex-modal-overlay.is-closing { animation: exFadeOut .25s ease forwards; }
+  .ex-modal-card.is-closing { animation: exSlideDown .3s cubic-bezier(.4,0,.2,1) forwards; }
+}
+
+@keyframes exSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes exSlideDown {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes exFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes exFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

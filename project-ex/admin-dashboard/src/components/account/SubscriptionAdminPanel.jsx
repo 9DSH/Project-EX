@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDownAZ, ArrowDownUp, Clock, Pencil, Plus, Power, RefreshCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownAZ, ArrowDownUp, Clock, Pencil, Plus, Power, RefreshCcw, Search, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { API_URL } from "../../config";
 import ACCESS_OPTIONS from "../../constants/AccessPoints";
 import PlanCard from "./PlanCard";
@@ -7,7 +7,10 @@ import PlanAddModal from "./PlanAddModal";
 import PlanEditModal from "./PlanEditModal";
 import AccessPointCard from "./AccessPointCard";
 import { AccessPointAddModal, AccessPointEditModal } from "./AccessPointModals";
-import { S, T, accentFor, statusColor, fmtDateShort, fmtMoney } from "./SubscriptionTheme";
+import { accentFor, statusColor, fmtDateShort, fmtMoney } from "./SubscriptionTheme";
+import { EmptyState, SidePanel } from "./AccountBits";
+import { useIsMobile } from "./accountUtils";
+import "../../pages/MyAccount.css";
 
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
 
@@ -26,6 +29,8 @@ async function req(url, token, opts = {}) {
 
 export default function SubscriptionAdminPanel() {
   const token = localStorage.getItem("token");
+  const isMobile = useIsMobile();
+  const detailRef = useRef(null);
   const [tab, setTab] = useState("access-points");
 
   const [accessPoints, setAccessPoints] = useState([]);
@@ -197,6 +202,14 @@ export default function SubscriptionAdminPanel() {
   };
 
   // ── ADMIN OVERSIGHT ────────────────────────────
+  useEffect(() => {
+    // tablet (stacked layout): bring the freshly opened detail into view
+    if (detail && !isMobile && window.innerWidth <= 900) {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.admin_id]);
+
   const openAdminDetail = async (adminId) => {
     const data = await req(`${API_URL}/admin/subscriptions/admins/${adminId}`, token);
     setDetail(data);
@@ -267,70 +280,186 @@ export default function SubscriptionAdminPanel() {
     }
   };
 
-  return (
-    <div>
-      <div style={hs.header}>
-        <div>
-          <div style={hs.title}>Subscription Management</div>
-          <div style={hs.subtitle}>Access points, plans, pricing &amp; admin subscription oversight</div>
+  const addonChoices = detail
+    ? accessPoints.filter((ap) => !(detail.addons || []).some((a) => a.access_point_id === ap.id && a.status !== "expired"))
+    : [];
+
+  const renderDetail = () => (
+    <div className="ma-detail-body">
+      {detail.subscription ? (
+        <div className="ma-detail-box">
+          <div className="ma-row-between">
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{detail.subscription.plan_name}</div>
+              <div className="ma-subtle" style={{ marginTop: 3 }}>Period end: {fmtDateShort(detail.subscription.current_period_end)}</div>
+            </div>
+            <span className="ma-tag" style={{ color: statusColor(detail.subscription.status), borderColor: `${statusColor(detail.subscription.status)}55`, background: `${statusColor(detail.subscription.status)}22` }}>
+              {detail.subscription.status.toUpperCase()}
+            </span>
+          </div>
+          <div className="ma-row" style={{ marginTop: 14 }}>
+            <button type="button" onClick={() => forceStatus(detail.admin_id, "active")} className="ma-btn ma-btn--sm">Force active</button>
+            <button type="button" onClick={() => forceStatus(detail.admin_id, "grace")} className="ma-btn ma-btn--sm">Force grace</button>
+            <button type="button" onClick={() => forceStatus(detail.admin_id, "expired")} className="ma-btn ma-btn--sm">Force expired</button>
+          </div>
+          <hr style={{ border: "none", height: 1, background: "rgba(148,163,184,.12)", margin: "14px 0 12px" }} />
+          <div className="ma-sectionLabel" style={{ marginBottom: 0 }}>Switch plan</div>
+          <div className="ma-subtle" style={{ marginTop: 3 }}>Free master override — replaces their current fixed access points immediately, no charge.</div>
+          <div className="ma-inlineAdd">
+            <select className="ma-select" value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)}>
+              <option value="">Select a plan…</option>
+              {plans.filter((p) => p.id !== detail.subscription.plan_id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} className="ma-btn ma-btn--primary">Switch plan</button>
+          </div>
         </div>
-        <button type="button" onClick={loadAll} style={S.ghostBtn}><RefreshCcw size={13} /> {loading ? "…" : "Refresh"}</button>
+      ) : (
+        <div className="ma-detail-box">
+          <div className="ma-subtle" style={{ marginBottom: 10 }}>No plan subscription yet.</div>
+          <div className="ma-inlineAdd" style={{ marginTop: 0 }}>
+            <select className="ma-select" value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)}>
+              <option value="">Select a plan…</option>
+              {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} className="ma-btn ma-btn--primary">Assign plan</button>
+          </div>
+        </div>
+      )}
+
+      <div className="ma-detail-box">
+        <div className="ma-sectionLabel" style={{ marginBottom: 0 }}>Add-ons</div>
+        <div className="ma-subtle" style={{ marginTop: 3 }}>
+          <Clock size={10} style={{ verticalAlign: -1 }} /> expires it (keeps the record) · <Trash2 size={10} style={{ verticalAlign: -1 }} /> deletes it completely
+        </div>
+        <div className="ma-chipWrap" style={{ marginTop: 10 }}>
+          {detail.addons.length === 0 && <span className="ma-subtle ma-faint">None</span>}
+          {detail.addons.map((a) => (
+            <span key={a.id} className="ma-accessChip" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#c4b5fd", borderColor: "rgba(168,85,247,.25)", background: "rgba(168,85,247,.1)", padding: "5px 8px 5px 11px" }}>
+              {a.label || a.key} · {a.status}
+              <button type="button" onClick={() => expireAdminAddon(detail.admin_id, a.access_point_id)} title="Mark expired (keeps the record)" aria-label="Mark expired" style={miniBtn("rgba(245,158,11,.18)", "#fbbf24")}><Clock size={11} /></button>
+              <button type="button" onClick={() => removeAdminAddon(detail.admin_id, a.access_point_id)} title="Remove completely (deletes the record)" aria-label="Remove" style={miniBtn("rgba(239,68,68,.18)", "#f87171")}><Trash2 size={11} /></button>
+            </span>
+          ))}
+        </div>
+
+        {/* NEW: add an add-on to this admin (uses addAddonSelect / addAdminAddon) */}
+        <div className="ma-inlineAdd">
+          <select className="ma-select" value={addAddonSelect} onChange={(e) => setAddAddonSelect(e.target.value)}>
+            <option value="">Select add-on to attach…</option>
+            {addonChoices.map((ap) => <option key={ap.id} value={ap.id}>{ap.label} ({ap.key})</option>)}
+          </select>
+          <button type="button" onClick={() => addAdminAddon(detail.admin_id)} disabled={!addAddonSelect} className="ma-btn ma-btn--primary"><Plus size={13} /> Add add-on</button>
+        </div>
+        {addonChoices.length === 0 && <div className="ma-subtle" style={{ marginTop: 6 }}>Every access point is already attached as an add-on.</div>}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+      <div className="ma-detail-box">
+        <div className="ma-sectionLabel">Access breakdown by source</div>
+        {["master_granted", "plan_included", "addon_purchased"].map((src) => {
+          const items = (detail.grants || []).filter((g) => g.source === src);
+          if (items.length === 0) return null;
+          const revocable = src === "master_granted";
+          return (
+            <div key={src} style={{ marginTop: 10 }}>
+              <div className="ma-subtle ma-faint" style={{ fontWeight: 700 }}>{src.replace("_", " ")}</div>
+              <div className="ma-chipWrap" style={{ marginTop: 6 }}>
+                {items.map((g) => (
+                  <span
+                    key={g.id}
+                    onClick={revocable ? () => revokeKey(detail.admin_id, g.key) : undefined}
+                    title={revocable ? "Click to revoke" : "Managed by billing"}
+                    className="ma-accessChip"
+                    style={{
+                      cursor: revocable ? "pointer" : "default", fontWeight: 500,
+                      borderColor: revocable ? "rgba(239,68,68,.3)" : "rgba(148,163,184,.16)",
+                      background: revocable ? "rgba(239,68,68,.1)" : "#0b1220",
+                      color: revocable ? "#fca5a5" : "#cbd5e1",
+                    }}
+                  >
+                    {g.key}{revocable ? " ✕" : ""}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        <div className="ma-inlineAdd">
+          <select className="ma-select" value={grantKeySelect} onChange={(e) => setGrantKeySelect(e.target.value)}>
+            <option value="">Select access point to grant…</option>
+            {(() => {
+              const known = new Map(ACCESS_OPTIONS.map((a) => [a.key, a.label]));
+              accessPoints.forEach((ap) => { if (!known.has(ap.key)) known.set(ap.key, ap.label); });
+              return Array.from(known.entries()).map(([key, label]) => <option key={key} value={key}>{label} ({key})</option>);
+            })()}
+          </select>
+          <button type="button" onClick={() => grantSelectedKey(detail.admin_id)} className="ma-btn ma-btn--primary"><ShieldCheck size={13} /> Grant</button>
+        </div>
+        <div className="ma-subtle ma-faint" style={{ marginTop: 6 }}>Master grants bypass any required-plan restriction.</div>
+      </div>
+
+      <div className="ma-detail-box">
+        <div className="ma-sectionLabel">Invoices</div>
+        {detail.invoices.map((i) => (
+          <div key={i.id} className="ma-invoice" style={{ fontSize: 12.5, color: "#cbd5e1", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <span style={{ minWidth: 0 }}>{i.type === "plan" ? i.plan_name : i.access_point_key} — {fmtMoney(i.amount)} {i.currency} {i.discount_percent > 0 ? `(-${i.discount_percent}%)` : ""} — {i.status}</span>
+            <span className="ma-faint">{fmtDateShort(i.created_at)}</span>
+          </div>
+        ))}
+        {detail.invoices.length === 0 && <div className="ma-subtle ma-faint">No invoices yet.</div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="ma-stack">
+      <div className="ma-row-between">
+        <div>
+          <div className="ma-card-title" style={{ fontSize: 20 }}>Subscription Management</div>
+          <div className="ma-subtle">Access points, plans, pricing &amp; admin subscription oversight</div>
+        </div>
+        <button type="button" onClick={loadAll} className="ma-btn"><RefreshCcw size={13} className={loading ? "ma-spin" : ""} /> {loading ? "…" : "Refresh"}</button>
+      </div>
+
+      <div className="ma-subtabs" style={{ alignSelf: "flex-start" }}>
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            style={{ padding: "9px 16px", borderRadius: 11, fontSize: 13, fontWeight: 700, cursor: "pointer", border: `1px solid ${tab === t.key ? "#3b82f6" : "#223451"}`, background: tab === t.key ? "rgba(59,130,246,.16)" : "#0b1628", color: tab === t.key ? "#bfdbfe" : "#94a3b8" }}
-          >
-            {t.label}
-          </button>
+          <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`ma-subtab${tab === t.key ? " is-active" : ""}`}>{t.label}</button>
         ))}
       </div>
 
       {tab === "access-points" && (
-        <div style={{ display: "grid", gap: 16 }}>
-          <div style={hs.sectionHead}>
+        <section className="ma-card">
+          <div className="ma-card-head">
             <div>
-              <div style={hs.sectionTitle}>Priced access points</div>
-              <div style={hs.sectionSub}>Sellable RBAC permissions admins can buy as add-ons — free or paid, gated to one or more plans.</div>
+              <div className="ma-card-title">Priced access points</div>
+              <div className="ma-subtle">Sellable RBAC permissions admins can buy as add-ons — free or paid, gated to one or more plans.</div>
             </div>
-            <button type="button" onClick={() => setAddApOpen(true)} style={S.primaryBtn}><Plus size={14} /> Add access point</button>
+            <button type="button" onClick={() => setAddApOpen(true)} className="ma-btn ma-btn--primary"><Plus size={14} /> Add access point</button>
           </div>
 
-          <div style={S.toolbar}>
-            <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0 }}>
-              <Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
-              <input
-                value={apSearch}
-                onChange={(e) => setApSearch(e.target.value)}
-                placeholder="Search by name, key, or plan…"
-                style={S.searchInput}
-              />
+          <div className="ma-toolbar" style={{ margin: "14px 0" }}>
+            <div className="ma-searchWrap">
+              <Search size={14} />
+              <input className="ma-input" value={apSearch} onChange={(e) => setApSearch(e.target.value)} placeholder="Search by name, key, or plan…" />
             </div>
-            <select value={apPlanFilter} onChange={(e) => setApPlanFilter(e.target.value)} style={{ ...S.input, width: 190, flexShrink: 0 }}>
+            <select className="ma-select" style={{ width: 190, maxWidth: "100%" }} value={apPlanFilter} onChange={(e) => setApPlanFilter(e.target.value)}>
               <option value="all">All plans</option>
               <option value="open">Open to any plan</option>
               {plans.map((p) => <option key={p.id} value={p.id}>Requires {p.name}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <button type="button" onClick={() => setApSort("name")} title="Sort by name" style={{ ...S.ghostBtn, whiteSpace: "nowrap", color: apSort === "name" ? "#bfdbfe" : "#94a3b8", borderColor: apSort === "name" ? "#3b82f6" : "#28405f" }}>
-                <ArrowDownAZ size={13} /> Name
-              </button>
-              <button type="button" onClick={() => setApSort(apSort === "price_asc" ? "price_desc" : "price_asc")} title="Sort by price" style={{ ...S.ghostBtn, whiteSpace: "nowrap", color: apSort.startsWith("price") ? "#bfdbfe" : "#94a3b8", borderColor: apSort.startsWith("price") ? "#3b82f6" : "#28405f" }}>
+            <div className="ma-row">
+              <button type="button" onClick={() => setApSort("name")} title="Sort by name" className="ma-btn" style={apSort === "name" ? activeSort : undefined}><ArrowDownAZ size={13} /> Name</button>
+              <button type="button" onClick={() => setApSort(apSort === "price_asc" ? "price_desc" : "price_asc")} title="Sort by price" className="ma-btn" style={apSort.startsWith("price") ? activeSort : undefined}>
                 <ArrowDownUp size={13} /> Price {apSort === "price_asc" ? "↑" : apSort === "price_desc" ? "↓" : ""}
               </button>
             </div>
           </div>
 
           {accessPoints.length === 0 ? (
-            <EmptyState text="No access points added yet." />
+            <EmptyState>No access points added yet.</EmptyState>
           ) : filteredAccessPoints.length === 0 ? (
-            <EmptyState text="No access points match your search / filter." />
+            <EmptyState>No access points match your search / filter.</EmptyState>
           ) : (
-            <div style={S.grid}>
+            <div className="ma-cardGrid ma-cardGrid--ap">
               {filteredAccessPoints.map((ap) => {
                 const i = accessPoints.indexOf(ap);
                 return (
@@ -344,73 +473,59 @@ export default function SubscriptionAdminPanel() {
                       { icon: <Trash2 size={13} />, label: "Delete", tone: "danger", onClick: () => deleteAccessPoint(ap) },
                     ]}
                     width="100%"
-                    footer={
-                      <button type="button" onClick={() => setEditApId(ap.id)} style={{ ...S.ghostBtn, width: "100%", justifyContent: "center" }}>
-                        Manage pricing
-                      </button>
-                    }
+                    footer={<button type="button" onClick={() => setEditApId(ap.id)} className="ma-btn ma-btn--block">Manage pricing</button>}
                   />
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {tab === "plans" && (
-        <div style={{ display: "grid", gap: 16 }}>
-          <div style={hs.sectionHead}>
+        <section className="ma-card">
+          <div className="ma-card-head">
             <div>
-              <div style={hs.sectionTitle}>Plans</div>
-              <div style={hs.sectionSub}>Billing tiers admins can subscribe to.</div>
+              <div className="ma-card-title">Plans</div>
+              <div className="ma-subtle">Billing tiers admins can subscribe to.</div>
             </div>
-            <button type="button" onClick={() => setAddPlanOpen(true)} style={S.primaryBtn}><Plus size={14} /> Add plan</button>
+            <button type="button" onClick={() => setAddPlanOpen(true)} className="ma-btn ma-btn--primary"><Plus size={14} /> Add plan</button>
           </div>
-
-          {plans.length === 0 ? (
-            <EmptyState text="No plans created yet." />
-          ) : (
-            <div style={S.scrollRow}>
-              {plans.map((plan, i) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  accentColor={accentFor(plan, i)}
-                  actions={[
-                    { icon: <Pencil size={13} />, label: "Edit plan", onClick: () => setEditPlanId(plan.id) },
-                    { icon: <Power size={13} />, label: plan.is_active ? "Deactivate" : "Activate", tone: plan.is_active ? "default" : "active", onClick: () => updatePlanMeta(plan.id, { is_active: !plan.is_active }) },
-                    { icon: <Trash2 size={13} />, label: "Delete", tone: "danger", onClick: () => deletePlan(plan) },
-                  ]}
-                  footer={
-                    <button type="button" onClick={() => setEditPlanId(plan.id)} style={{ ...S.ghostBtn, width: "100%", justifyContent: "center" }}>
-                      Manage plan
-                    </button>
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </div>
+          <div style={{ marginTop: 14 }}>
+            {plans.length === 0 ? (
+              <EmptyState>No plans created yet.</EmptyState>
+            ) : (
+              <div className="ma-cardGrid">
+                {plans.map((plan, i) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    width="100%"
+                    accentColor={accentFor(plan, i)}
+                    actions={[
+                      { icon: <Pencil size={13} />, label: "Edit plan", onClick: () => setEditPlanId(plan.id) },
+                      { icon: <Power size={13} />, label: plan.is_active ? "Deactivate" : "Activate", tone: plan.is_active ? "default" : "active", onClick: () => updatePlanMeta(plan.id, { is_active: !plan.is_active }) },
+                      { icon: <Trash2 size={13} />, label: "Delete", tone: "danger", onClick: () => deletePlan(plan) },
+                    ]}
+                    footer={<button type="button" onClick={() => setEditPlanId(plan.id)} className="ma-btn ma-btn--block">Manage plan</button>}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {tab === "admins" && (
-        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 16 }}>
-          <div style={hs.card}>
-            <div style={hs.sectionTitle}>Admins</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+        <section className="ma-card">
+          <div className="ma-card-title">Admin subscriptions</div>
+          <div className="ma-subtle">Select an admin to inspect or override their plan, add-ons and access.</div>
+          <div className="ma-admins">
+            <div className="ma-adminList">
               {adminRows.map((row) => (
-                <button
-                  key={row.admin_id}
-                  type="button"
-                  onClick={() => openAdminDetail(row.admin_id)}
-                  style={{
-                    ...adminRowStyle,
-                    borderColor: detail?.admin_id === row.admin_id ? "#3b82f6" : "rgba(148,163,184,0.14)",
-                    background: detail?.admin_id === row.admin_id ? "rgba(59,130,246,.08)" : "#0b1220",
-                  }}
-                >
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "white" }}>{row.username}</div>
-                  <div style={{ fontSize: 11.5, color: T.textDim, marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                <button key={row.admin_id} type="button" onClick={() => openAdminDetail(row.admin_id)} className={`ma-adminItem${detail?.admin_id === row.admin_id ? " is-active" : ""}`}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{row.username}</div>
+                  <div className="ma-subtle" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {row.subscription ? (
                       <>
                         <span>{row.subscription.plan_name}</span>
@@ -422,154 +537,29 @@ export default function SubscriptionAdminPanel() {
                   </div>
                 </button>
               ))}
-              {adminRows.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>No admins yet.</div>}
+              {adminRows.length === 0 && <EmptyState>No admins yet.</EmptyState>}
             </div>
-          </div>
 
-          <div style={hs.card}>
-            {!detail && <div style={{ fontSize: 13, color: T.textDim }}>Select an admin to view subscription details.</div>}
-            {detail && (
-              <div style={{ display: "grid", gap: 18 }}>
-                <div style={hs.sectionTitle}>{detail.username} — subscription detail</div>
-
-                {detail.subscription ? (
-                  <div style={detailCard}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>{detail.subscription.plan_name}</div>
-                        <div style={{ fontSize: 11.5, color: T.textDim, marginTop: 3 }}>Period end: {fmtDateShort(detail.subscription.current_period_end)}</div>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: statusColor(detail.subscription.status), background: `${statusColor(detail.subscription.status)}22`, border: `1px solid ${statusColor(detail.subscription.status)}55`, borderRadius: 999, padding: "4px 10px" }}>
-                        {detail.subscription.status.toUpperCase()}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                      <button type="button" onClick={() => forceStatus(detail.admin_id, "active")} style={S.ghostBtn}>Force active</button>
-                      <button type="button" onClick={() => forceStatus(detail.admin_id, "grace")} style={S.ghostBtn}>Force grace</button>
-                      <button type="button" onClick={() => forceStatus(detail.admin_id, "expired")} style={S.ghostBtn}>Force expired</button>
-                    </div>
-
-                    <hr style={{ ...S.divider, margin: "14px 0 10px" }} />
-
-                    <div style={S.sectionLabel}>Switch plan</div>
-                    <div style={{ fontSize: 11, color: T.textFaint, marginTop: 3 }}>Free master override — replaces their current fixed access points immediately, no charge.</div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                      <select value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)} style={{ ...S.input, flex: 1, minWidth: 180 }}>
-                        <option value="">Select a plan…</option>
-                        {plans.filter((p) => p.id !== detail.subscription.plan_id).map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} style={S.primaryBtn}>Switch plan</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={detailCard}>
-                    <div style={{ fontSize: 13, color: T.textDim, marginBottom: 10 }}>No plan subscription yet.</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <select value={switchPlanSelect} onChange={(e) => setSwitchPlanSelect(e.target.value)} style={{ ...S.input, flex: 1, minWidth: 180 }}>
-                        <option value="">Select a plan…</option>
-                        {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                      <button type="button" onClick={() => switchAdminPlan(detail.admin_id)} disabled={!switchPlanSelect} style={S.primaryBtn}>Assign plan</button>
-                    </div>
-                  </div>
+            {!isMobile && (
+              <div ref={detailRef} className="ma-detail-box" style={{ scrollMarginTop: 12 }}>
+                {!detail && <div className="ma-subtle"><UserRound size={14} style={{ verticalAlign: -2 }} /> Select an admin to view subscription details.</div>}
+                {detail && (
+                  <>
+                    <div className="ma-card-title" style={{ marginBottom: 14 }}>{detail.username} — subscription detail</div>
+                    {renderDetail()}
+                  </>
                 )}
-
-                <div>
-                  <div style={S.sectionLabel}>Add-ons</div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 3 }}>
-                    <Clock size={10} style={{ verticalAlign: -1 }} /> expires it (keeps the record) · <Trash2 size={10} style={{ verticalAlign: -1 }} /> deletes it completely
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                    {detail.addons.length === 0 && <span style={{ fontSize: 12, color: T.textFaint }}>None</span>}
-                    {detail.addons.map((a) => (
-                      <span
-                        key={a.id}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#c4b5fd", borderRadius: 999, padding: "5px 8px 5px 11px" }}
-                      >
-                        {a.label || a.key} · {a.status}
-                        <button
-                          type="button"
-                          onClick={() => expireAdminAddon(detail.admin_id, a.access_point_id)}
-                          title="Mark expired (keeps the record)"
-                          style={{ width: 18, height: 18, borderRadius: 6, border: "none", background: "rgba(245,158,11,.18)", color: "#fbbf24", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                        >
-                          <Clock size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeAdminAddon(detail.admin_id, a.access_point_id)}
-                          title="Remove completely (deletes the record)"
-                          style={{ width: 18, height: 18, borderRadius: 6, border: "none", background: "rgba(239,68,68,.18)", color: "#f87171", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={S.sectionLabel}>Access breakdown by source</div>
-                  {["master_granted", "plan_included", "addon_purchased"].map((src) => {
-                    const items = (detail.grants || []).filter((g) => g.source === src);
-                    if (items.length === 0) return null;
-                    return (
-                      <div key={src} style={{ marginTop: 10 }}>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, color: T.textFaint, letterSpacing: 0.4 }}>{src.replace("_", " ")}</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                          {items.map((g) => (
-                            <span
-                              key={g.id}
-                              onClick={src === "master_granted" ? () => revokeKey(detail.admin_id, g.key) : undefined}
-                              title={src === "master_granted" ? "Click to revoke" : "Managed by billing"}
-                              style={{
-                                fontSize: 11.5, borderRadius: 999, padding: "5px 11px",
-                                cursor: src === "master_granted" ? "pointer" : "default",
-                                border: src === "master_granted" ? "1px solid rgba(239,68,68,.3)" : "1px solid rgba(148,163,184,0.16)",
-                                background: src === "master_granted" ? "rgba(239,68,68,.1)" : "#0b1220",
-                                color: src === "master_granted" ? "#fca5a5" : "#cbd5e1",
-                              }}
-                            >
-                              {g.key}{src === "master_granted" ? " ✕" : ""}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                    <select value={grantKeySelect} onChange={(e) => setGrantKeySelect(e.target.value)} style={{ ...S.input, flex: 1, minWidth: 200 }}>
-                      <option value="">Select access point to grant…</option>
-                      {(() => {
-                        const known = new Map(ACCESS_OPTIONS.map((a) => [a.key, a.label]));
-                        accessPoints.forEach((ap) => { if (!known.has(ap.key)) known.set(ap.key, ap.label); });
-                        return Array.from(known.entries()).map(([key, label]) => <option key={key} value={key}>{label} ({key})</option>);
-                      })()}
-                    </select>
-                    <button type="button" onClick={() => grantSelectedKey(detail.admin_id)} style={S.primaryBtn}><ShieldCheck size={13} /> Grant</button>
-                  </div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Master grants bypass any required-plan restriction.</div>
-                </div>
-
-                <div>
-                  <div style={S.sectionLabel}>Invoices</div>
-                  <div style={{ marginTop: 8 }}>
-                    {detail.invoices.map((i) => (
-                      <div key={i.id} style={invoiceRow}>
-                        <span>{i.type === "plan" ? i.plan_name : i.access_point_key} — {fmtMoney(i.amount)} {i.currency} {i.discount_percent > 0 ? `(-${i.discount_percent}%)` : ""} — {i.status}</span>
-                        <span style={{ color: T.textFaint }}>{fmtDateShort(i.created_at)}</span>
-                      </div>
-                    ))}
-                    {detail.invoices.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>No invoices yet.</div>}
-                  </div>
-                </div>
               </div>
             )}
           </div>
-        </div>
+        </section>
+      )}
+
+      {/* mobile: admin detail opens as a bottom sheet */}
+      {isMobile && tab === "admins" && detail && (
+        <SidePanel onClose={() => setDetail(null)} icon={UserRound} title={detail.username} subtitle="Subscription detail">
+          {renderDetail()}
+        </SidePanel>
       )}
 
       {addPlanOpen && <PlanAddModal onClose={() => setAddPlanOpen(false)} onCreate={createPlan} />}
@@ -604,33 +594,8 @@ export default function SubscriptionAdminPanel() {
   );
 }
 
-function EmptyState({ text }) {
-  return (
-    <div style={{ border: "1px dashed rgba(148,163,184,0.22)", borderRadius: T.radiusLg, padding: 32, textAlign: "center", color: T.textFaint, fontSize: 13 }}>
-      {text}
-    </div>
-  );
-}
-
-const hs = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12, flexWrap: "wrap" },
-  title: { fontSize: 21, fontWeight: 800, color: "white" },
-  subtitle: { fontSize: 12.5, color: T.textDim, marginTop: 4 },
-  sectionHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  sectionTitle: { fontSize: 15, fontWeight: 800, color: "white" },
-  sectionSub: { fontSize: 12, color: T.textDim, marginTop: 3 },
-  card: { background: T.panelBg, border: "1px solid rgba(148,163,184,0.14)", borderRadius: T.radiusLg, padding: 16 },
-};
-
-const adminRowStyle = {
-  textAlign: "left", padding: 12, borderRadius: 12, border: "1px solid", cursor: "pointer", width: "100%",
-};
-
-const detailCard = {
-  border: "1px solid rgba(148,163,184,0.14)", borderRadius: T.radiusMd, padding: 14, background: "#0b1220",
-};
-
-const invoiceRow = {
-  display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0",
-  borderBottom: "1px solid rgba(148,163,184,0.1)", fontSize: 12.5, color: "#cbd5e1",
-};
+const activeSort = { color: "#bfdbfe", borderColor: "#3b82f6" };
+const miniBtn = (bg, color) => ({
+  width: 18, height: 18, borderRadius: 6, border: "none", background: bg, color,
+  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+});

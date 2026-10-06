@@ -50,8 +50,8 @@ export function AccessPointAddModal({ plans, pairOptions, onClose, onCreate }) {
   };
 
   return (
-    <div style={S.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={S.modal}>
+    <div className="ma-modalOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal">
         <div style={S.modalHeader}>
           <div>
             <div style={S.modalTitle}>New access point</div>
@@ -141,8 +141,8 @@ export function AccessPointEditModal({ ap, plans, pairOptions, onClose, onUpdate
   };
 
   return (
-    <div style={S.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={S.modal}>
+    <div className="ma-modalOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal">
         <div style={S.modalHeader}>
           <div>
             <div style={S.modalTitle}>Edit access point — {ap.label}</div>
@@ -292,6 +292,6 @@ function PriceAdder({ pairOptions, onSave }) {
 }
 
 const rowStyle = {
-  display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+  display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "8px 10px",
   borderRadius: T.radiusSm, border: "1px solid rgba(148,163,184,0.12)", background: "#0b1220",
 };

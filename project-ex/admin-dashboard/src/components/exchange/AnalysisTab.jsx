@@ -17,6 +17,7 @@ import {
 
 import TradingViewCandles from "./TradingViewCandles";
 import { TrendingUp, TrendingDown, DollarSign, Layers, Activity, RefreshCcw, AlertTriangle } from "lucide-react";
+import "./AnalysisTab.css";
 
 const API = "http://127.0.0.1:8000";
 const api = axios.create({ baseURL: API });
@@ -517,7 +518,7 @@ export default function AnalysisTab({ pairs, headers, adminFilter = "mine" }) {
       )}
 
       {/* ── P&L + Volume grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="ax-grid2">
 
         <ChartCard
           title="Cumulative P&L"

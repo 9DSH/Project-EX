@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   ShoppingCart,
   MessageSquare,
@@ -12,6 +13,8 @@ import {
   User,
   PanelLeftClose,
   PanelLeftOpen,
+  Menu as MenuIcon,
+  X as CloseIcon,
 } from "lucide-react";
 import { TOPBAR_HEIGHT } from "./AdminLayout";
 
@@ -69,49 +72,123 @@ function StatusChip({ status, accent }) {
   );
 }
 
-function IndicatorDropdown({ config, data, onNavigate }) {
+function IndicatorDropdown({ config, data, onNavigate, isMobile }) {
   const { icon: Icon, label, path, accent } = config;
   const count = data.count || 0;
-  const items = data.items || [];
+  const items = (data.items || []).slice(0, 6);
   const [hovered, setHovered] = useState(false);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, right: 0 });
+
+  // Desktop: hover opens the popover. Mobile: tap toggles it open/closed
+  // (there's no hover on touch), and a tap outside closes it.
+  const visible = isMobile ? open : hovered;
+
+  // Keep the popover mounted a little longer than `visible` so it can
+  // play a closing animation instead of vanishing instantly, and so the
+  // opening animation's own transform values (not the browser's default)
+  // are what's on screen for the very first paint — no flash at the
+  // trigger's edge before it "jumps" into place.
+  const [renderPanel, setRenderPanel] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (visible) {
+      clearTimeout(closeTimeoutRef.current);
+      setClosing(false);
+      setRenderPanel(true);
+    } else if (renderPanel) {
+      setClosing(true);
+      closeTimeoutRef.current = setTimeout(() => {
+        setRenderPanel(false);
+        setClosing(false);
+      }, 180);
+    }
+    return () => clearTimeout(closeTimeoutRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  // The popover is portaled to <body> with position: fixed, positioned
+  // off the trigger's real screen coordinates — this keeps it visible
+  // even though the topbar row itself scrolls (overflow-x: auto) on
+  // narrow screens, which would otherwise clip an absolutely-positioned
+  // popover right out of view. On mobile it's centered horizontally on
+  // the screen (same spot for every indicator) rather than anchored to
+  // the trigger's edge; coordinates are computed BEFORE the panel first
+  // paints so it opens already centered, not sliding in from the side.
+  useLayoutEffect(() => {
+    if (!visible || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setCoords({ top: rect.bottom + 10, right: Math.max(8, window.innerWidth - rect.right) });
+  }, [visible]);
+
+  useEffect(() => {
+    if (!isMobile || !open) return;
+    const handleOutside = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [isMobile, open]);
+
+  const handleTriggerClick = () => {
+    if (isMobile) {
+      setOpen((o) => !o);
+    } else {
+      onNavigate(path);
+    }
+  };
+
+  const handleItemClick = () => {
+    onNavigate(path);
+    if (isMobile) setOpen(false);
+  };
 
   return (
     <div
+      ref={rootRef}
+      className="topbar-indicator"
       style={{ position: "relative", display: "flex", alignItems: "center" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => !isMobile && setHovered(true)}
+      onMouseLeave={() => !isMobile && setHovered(false)}
     >
       <button
+        ref={triggerRef}
+        className="topbar-indicator-btn"
         title={label}
-        onClick={() => onNavigate(path)}
+        onClick={handleTriggerClick}
         style={{
           position: "relative",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 34,
-          height: 34,
           borderRadius: 10,
           border: `1px solid ${count > 0 ? accent + "3a" : "rgba(255,255,255,.06)"}`,
-          background: hovered ? (count > 0 ? accent + "1f" : "rgba(255,255,255,.05)") : "transparent",
+          background: visible ? (count > 0 ? accent + "1f" : "rgba(255,255,255,.05)") : "transparent",
           cursor: "pointer",
           transition: "all .15s ease",
+          flexShrink: 0,
         }}
       >
-        <Icon size={16} color={count > 0 ? accent : "#475569"} />
+        <Icon className="topbar-indicator-icon" size={16} color={count > 0 ? accent : "#475569"} />
         {count > 0 && (
           <span
+            className="topbar-indicator-badge"
             style={{
               position: "absolute",
               top: -5,
               right: -5,
-              minWidth: 16,
-              height: 16,
               padding: "0 3px",
               borderRadius: 8,
               background: accent,
               color: "#04070d",
-              fontSize: 10,
               fontWeight: 800,
               display: "flex",
               alignItems: "center",
@@ -126,17 +203,25 @@ function IndicatorDropdown({ config, data, onNavigate }) {
         )}
       </button>
 
-      {hovered && (
-        <div style={{ position: "absolute", top: "100%", paddingTop: 10, right: 0, zIndex: 60 }}>
+      {renderPanel &&
+        createPortal(
           <div
+            className="topbar-indicator-panel"
             style={{
-              width: 320,
+              position: "fixed",
+              top: coords.top,
+              ...(isMobile
+                ? { left: "50%", transformOrigin: "70% 0%" }
+                : { right: coords.right, transformOrigin: "top right" }),
+              zIndex: 9999,
               background: "#0d1424",
               border: "1px solid #1f2937",
               borderRadius: 14,
               boxShadow: "0 16px 40px rgba(0,0,0,.55)",
               overflow: "hidden",
-              animation: "dropIn .14s ease",
+              animation: isMobile
+                ? `${closing ? "popoverZoomOut" : "popoverZoomIn"} .18s cubic-bezier(.34,1.56,.64,1) forwards`
+                : `${closing ? "popoverZoomOutRight" : "popoverZoomInRight"} .18s cubic-bezier(.34,1.56,.64,1) forwards`,
             }}
           >
             <div
@@ -165,7 +250,7 @@ function IndicatorDropdown({ config, data, onNavigate }) {
                 items.map((item) => (
                   <div
                     key={item.id}
-                    onClick={() => onNavigate(path)}
+                    onClick={handleItemClick}
                     style={{
                       padding: "10px 14px",
                       cursor: "pointer",
@@ -211,7 +296,7 @@ function IndicatorDropdown({ config, data, onNavigate }) {
             </div>
 
             <div
-              onClick={() => onNavigate(path)}
+              onClick={handleItemClick}
               style={{
                 padding: "9px 12px",
                 fontSize: 11.5,
@@ -225,9 +310,9 @@ function IndicatorDropdown({ config, data, onNavigate }) {
             >
               View all →
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -251,11 +336,12 @@ function UserMenu() {
 
   return (
     <div
-      style={{ position: "relative", display: "flex", alignItems: "center" }}
+      style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <button
+        className="topbar-user-btn"
         onClick={logout}
         title="Log out"
         style={{
@@ -265,17 +351,14 @@ function UserMenu() {
           background: hovered ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.04)",
           border: `1px solid ${hovered ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.08)"}`,
           color: hovered ? "#ef4444" : "#94a3b8",
-          height: 34,
-          padding: "0 10px",
           borderRadius: 10,
           cursor: "pointer",
           transition: "0.15s",
         }}
       >
         <div
+          className="topbar-user-avatar"
           style={{
-            width: 20,
-            height: 20,
             borderRadius: 6,
             background: roleColor + "22",
             display: "flex",
@@ -286,7 +369,7 @@ function UserMenu() {
         >
           <User size={11} color={roleColor} />
         </div>
-        <LogOut size={13} />
+        <LogOut size={13} className="topbar-user-logout-icon" />
       </button>
 
       {hovered && (
@@ -337,6 +420,7 @@ function UserMenu() {
 function ToastStack({ toasts, onNavigate, onDismiss }) {
   return (
     <div
+      className="topbar-toast-stack"
       style={{
         position: "fixed",
         bottom: 20,
@@ -357,10 +441,10 @@ function ToastStack({ toasts, onNavigate, onDismiss }) {
               onNavigate(t.path);
               onDismiss(t.id);
             }}
+            className="topbar-toast"
             style={{
               pointerEvents: "auto",
               cursor: "pointer",
-              width: 300,
               background: "#0d1424",
               border: `1px solid ${t.accent}40`,
               borderLeft: `3px solid ${t.accent}`,
@@ -409,7 +493,7 @@ function ToastStack({ toasts, onNavigate, onDismiss }) {
   );
 }
 
-export default function TopBar({ pinned, onToggleMenu }) {
+export default function TopBar({ pinned, isMobile, mobileMenuOpen, onToggleMenu }) {
   const navigate = useNavigate();
   const [balances, setBalances] = useState([]);
   const [indicators, setIndicators] = useState({
@@ -423,7 +507,7 @@ export default function TopBar({ pinned, onToggleMenu }) {
   const [toasts, setToasts] = useState([]);
   const wsRef = useRef(null);
   const seenIdsRef = useRef({});
-  
+
   const pushToast = (toast) => {
     const id = Math.random().toString(36).slice(2);
     setToasts((prev) => [...prev.slice(-3), { ...toast, id }]);
@@ -529,10 +613,92 @@ export default function TopBar({ pinned, onToggleMenu }) {
       <style>{`
         @keyframes pulseBadge { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
         @keyframes dropIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dropOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-4px); } }
+        @keyframes popoverZoomIn {
+          from { opacity: 0; transform: translateX(-50%) scale(0.35); }
+          to { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+        @keyframes popoverZoomOut {
+          from { opacity: 1; transform: translateX(-50%) scale(1); }
+          to { opacity: 0; transform: translateX(-50%) scale(0.35); }
+        }
+        @keyframes popoverZoomInRight {
+          from { opacity: 0; transform: scale(0.35); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes popoverZoomOutRight {
+          from { opacity: 1; transform: scale(1); }
+          to { opacity: 0; transform: scale(0.35); }
+        }
         @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* ---- Responsive TopBar sizing ---- */
+        .topbar-root {
+          padding: 0 clamp(6px, 2vw, 10px);
+          gap: clamp(6px, 2vw, 18px);
+        }
+        .topbar-root::-webkit-scrollbar { height: 0; }
+
+        .topbar-toggle-btn {
+          width: clamp(30px, 4.5vw, 34px);
+          height: clamp(30px, 4.5vw, 34px);
+          border-radius: 9px;
+        }
+
+        .topbar-logo-img {
+          height: clamp(18px, 4vw, 28px);
+          width: auto;
+        }
+
+        .topbar-indicators-row {
+          gap: clamp(2px, 1vw, 6px);
+        }
+        .topbar-indicator-btn {
+          width: clamp(34px, 4vw, 34px);
+          height: clamp(34px, 4vw, 34px);
+        }
+        .topbar-indicator-icon {
+          width: clamp(16px, 3vw, 16px);
+          height: clamp(16px, 3vw, 16px);
+        }
+        .topbar-indicator-badge {
+          min-width: 16px;
+          height: 16px;
+          font-size: 10px;
+        }
+        .topbar-indicator-panel {
+          width: min(320px, calc(100vw - 20px));
+        }
+
+        .topbar-user-btn {
+          height: clamp(30px, 4.5vw, 34px);
+          padding: 0 clamp(6px, 1.5vw, 10px);
+        }
+        .topbar-user-avatar {
+          width: 20px;
+          height: 20px;
+        }
+
+        .topbar-toast-stack { }
+        .topbar-toast { width: min(300px, calc(100vw - 40px)); }
+
+        @media (max-width: 900px) {
+          .topbar-balances { display: none !important; }
+          .topbar-divider-balances { display: none !important; }
+        }
+
+        @media (max-width: 640px) {
+          .topbar-connection-label { display: none; }
+          .topbar-user-logout-icon { display: none; }
+        }
+
+        @media (max-width: 420px) {
+          .topbar-divider-indicators { display: none !important; }
+        }
       `}</style>
 
       <div
+        className="topbar-root"
         style={{
           position: "fixed",
           top: 0,
@@ -542,26 +708,24 @@ export default function TopBar({ pinned, onToggleMenu }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
-          padding: "0 10px",
           background: "linear-gradient(180deg, #0d1424 0%, #0b1220 100%)",
           borderBottom: "1px solid #1a2333",
-          zIndex: 5,
-          gap: 18,
+          zIndex: 10,
           boxSizing: "border-box",
+          overflowX: "auto",
+          overflowY: "hidden",
         }}
       >
         {/* LEFT SIDE: menu toggle + logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginRight: "auto", flexShrink: 0 }}>
           <button
+            className="topbar-toggle-btn"
             onClick={onToggleMenu}
-            title={pinned ? "Collapse menu" : "Expand menu"}
+            title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : pinned ? "Collapse menu" : "Expand menu"}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 34,
-              height: 34,
-              borderRadius: 9,
               background: "rgba(255,255,255,.04)",
               border: "1px solid rgba(255,255,255,.08)",
               color: "#94a3b8",
@@ -569,21 +733,26 @@ export default function TopBar({ pinned, onToggleMenu }) {
               flexShrink: 0,
             }}
           >
-            {pinned ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+            {isMobile ? (
+              mobileMenuOpen ? <CloseIcon size={16} /> : <MenuIcon size={16} />
+            ) : pinned ? (
+              <PanelLeftClose size={16} />
+            ) : (
+              <PanelLeftOpen size={16} />
+            )}
           </button>
 
           {/* LOGO — full natural width, no deformation */}
           <div style={{
             display: "flex",
             alignItems: "center",
-            height: 34,          // keeps it vertically centered with the button
+            height: 34,
           }}>
             <img
+              className="topbar-logo-img"
               src="./WIRES-txt-LOGO.png"
               alt="Logo"
               style={{
-                height: 28,       // fits nicely inside the 34px topbar height
-                width: "auto",    // keeps original aspect ratio → no deformation
                 display: "block",
               }}
             />
@@ -591,23 +760,24 @@ export default function TopBar({ pinned, onToggleMenu }) {
         </div>
 
         {/* INDICATORS */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div className="topbar-indicators-row" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
           {INDICATOR_CONFIG.map((config) => (
             <IndicatorDropdown
               key={config.key}
               config={config}
               data={indicators[config.key] || EMPTY_INDICATOR}
               onNavigate={navigate}
+              isMobile={isMobile}
             />
           ))}
         </div>
 
-        <div style={{ width: 1, height: 24, background: "#1a2333" }} />
+        <div className="topbar-divider-indicators" style={{ width: 1, height: 24, background: "#1a2333", flexShrink: 0 }} />
 
-        {/* BALANCES — now on the right, after indicators */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* BALANCES — hidden below ~900px to keep everything else visible */}
+        <div className="topbar-balances" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           {balances.length === 0 ? (
-            <span style={{ fontSize: 12, color: "#3d4d68" }}>No balances yet</span>
+            <span style={{ fontSize: 12, color: "#3d4d68", whiteSpace: "nowrap" }}>No balances yet</span>
           ) : (
             balances.map((b, idx) => (
               <div
@@ -632,7 +802,7 @@ export default function TopBar({ pinned, onToggleMenu }) {
           )}
         </div>
 
-        <div style={{ width: 1, height: 24, background: "#1a2333" }} />
+        <div className="topbar-divider-balances" style={{ width: 1, height: 24, background: "#1a2333", flexShrink: 0 }} />
 
         {/* CONNECTION STATE */}
         <div
@@ -644,9 +814,11 @@ export default function TopBar({ pinned, onToggleMenu }) {
             fontSize: 11,
             fontWeight: 700,
             color: connected ? "#22c55e" : "#ef4444",
+            flexShrink: 0,
           }}
         >
           {connected ? <Wifi size={14} /> : <WifiOff size={14} />}
+          <span className="topbar-connection-label">{connected ? "Live" : "Offline"}</span>
         </div>
 
         {/* USER / LOGOUT — very right corner */}

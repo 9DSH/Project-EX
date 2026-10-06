@@ -618,6 +618,8 @@ def update_pair(
         pair.is_active = payload.is_active
 
     db.commit()
+    
+    _reassert_master_rls(db)
     return {"success": True}
 # =========================
 # DELETE PAIR
@@ -640,6 +642,8 @@ def delete_pair(
 
     db.delete(pair)
     db.commit()
+    
+    _reassert_master_rls(db)
     return {"success": True}
 
 

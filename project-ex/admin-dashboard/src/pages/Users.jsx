@@ -259,8 +259,8 @@ export default function Users() {
   };
 
 
-  const COLS = "3% 6% 10% 10% 10% minmax(180px, 1fr)";
-  const HEAD_COLS = "5% 8% 10% 7% 10% minmax(180px, 1fr)";
+  const COLS = "3% 8% 10% 10% 10% minmax(180px, 1fr)";
+  const HEAD_COLS = "5% 10% 10% 7% 10% minmax(180px, 1fr)";
 
   return (
     <div className="users-page">
@@ -579,6 +579,77 @@ export default function Users() {
                           <div className="users-balance-grid">
                             <div className="users-balance-stat">
                               <span className="users-balance-stat-label">Available</span>
+                              <span className="users-balance-available">{available.toLocaleString()}</span>
+                            </div>
+                            <div className="users-balance-divider" />
+                            <div className="users-balance-stat">
+                              <span className="users-balance-stat-label">Frozen</span>
+                              <span className={`users-balance-frozen${frozen > 0 ? " is-frozen" : ""}`}>{frozen.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }) : <span className="users-no-balances">No balances</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── MOBILE CARD LIST (CSS-only breakpoint swap; 2 rows per user) ── */}
+            <div className="users-table-body-mobile">
+              {filteredUsers.map((u) => (
+                <div key={u.user_id} className="users-row-mobile" onClick={() => openUser(u)}>
+                  {/* Row 1 — user (+truncated username) + activity + status */}
+                  <div className="users-rm-top">
+                    <div className="users-rm-user">
+                      <div className="users-avatar users-rm-avatar">{u.username?.[0]?.toUpperCase()}</div>
+                      <div className="users-username-wrap users-rm-username-wrap">
+                        <div className="users-username">{u.username}</div>
+                        <div className="users-role-text">#{u.user_id} · {u.role}</div>
+                      </div>
+                    </div>
+
+                    <div className="users-rm-activity">
+                      {[
+                        [MessageSquare, u.unread_messages, "#22c55e"],
+                        [ShoppingCart, (u.pending_orders || 0) + (u.approved_orders || 0), "#f59e0b"],
+                        [Landmark, u.pending_wire_transfers || 0, "#3b82f6"],
+                        [Banknote, u.pending_withdrawals || 0, "#ef4444"],
+                      ].map(([Icon, count, color], i) => (
+                        <div
+                          key={i}
+                          className={`users-activity-icon${count > 0 ? " is-active" : ""}`}
+                          style={count > 0 ? { "--count-color": color } : undefined}
+                        >
+                          <Icon size={12} color={"#535c7a"} />
+                          {count > 0 && (
+                            <span className="users-activity-count" style={{ "--count-color": color }}>{count}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <span className={`users-status-badge${u.status === "active" ? " is-active" : " is-inactive"}`}>
+                      {u.status}
+                    </span>
+                  </div>
+
+                  {/* Row 2 — balances only */}
+                  <div className="users-balances-row balances-scroll users-rm-balances">
+                    {u.balances?.length > 0 ? u.balances.map((b, idx) => {
+                      const available = Number(b.available || 0);
+                      const frozen = Number(b.frozen || 0);
+                      return (
+                        <div key={idx} className="users-balance-card users-balance-card-compact">
+                          <div className="users-balance-card-head">
+                            <span className="users-balance-currency">{b.currency}</span>
+                            <span className={`users-balance-network${b.network ? " is-set" : ""}`}>
+                              {b.network || "—"}
+                            </span>
+                          </div>
+                          <div className="users-balance-grid">
+                            <div className="users-balance-stat">
+                              <span className="users-balance-stat-label">Avail</span>
                               <span className="users-balance-available">{available.toLocaleString()}</span>
                             </div>
                             <div className="users-balance-divider" />

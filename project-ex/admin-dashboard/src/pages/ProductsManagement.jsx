@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import {
   Upload, Plus, Layers, RefreshCcw, Edit3, Trash2, Power, PowerOff, Package,
@@ -46,6 +46,30 @@ const FIELD_STEPS = [
   { value: "before_order", label: "Before Order" },
   { value: "after_login",  label: "After Login" },
 ];
+
+/* ─── MOBILE OVERLAY ───────────────────────────────────────────
+   Same mechanism as ExchangeDashboard/WireTransferDashboard's mobile
+   sheets: dimmed backdrop, slides up from the bottom, bounded to the
+   page's real on-screen box (via boundsStyle, measured in the main
+   component), scrolls internally. Used for Add product/category and
+   Product Detail on mobile — desktop keeps the sidebar/detail column. */
+function MobileOverlay({ open, icon: Icon, iconBg, iconColor, title, onClose, children, boundsStyle }) {
+  return (
+    <div className={`pm-mobileOverlay${open ? " is-open" : ""}`} style={boundsStyle}>
+      <div className="pm-mobileOverlay-backdrop" onClick={onClose} />
+      <div className="pm-mobileOverlay-panel">
+        <div className="pm-mobileOverlay-head">
+          <div className="pm-mobileOverlay-icon" style={{ background: iconBg }}>
+            <Icon size={15} color={iconColor} />
+          </div>
+          <span className="pm-mobileOverlay-title">{title}</span>
+          <button className="pm-closeIconBtn" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div className="pm-mobileOverlay-body">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 /* ─── EMPTY STATE ─── */
 function EmptyState({ icon: Icon, title, sub, action }) {
@@ -154,82 +178,90 @@ function OrderRow({ o, selected, onClick, formatDate }) {
   return (
     <div
       onClick={onClick}
-      style={{
-        background: selected ? "#172554" : "#0b1424",
-        border: `1px solid ${selected ? "#3b82f6" : "#1e293b"}`,
-        borderRadius: 10, padding: "10px 16px", cursor: "pointer",
-        display: "grid",
-        gridTemplateColumns: "0.3fr 0.5fr 0.5fr 0.5fr 1fr 1fr 100px 0.5fr minmax(60px,1fr)",
-        alignItems: "center", gap: 18, transition: "border-color .15s, background .15s",
-      }}
+      className={`pm-orderRow${selected ? " is-selected" : ""}`}
     >
-      <span style={{ color: "#475569", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>#{o.id}</span>
+      <span className="pm-orderRow-id">#{o.id}</span>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+      <div className="pm-orderRow-cell pm-orderRow-user">
         <User size={12} color="#64748b" style={{ flexShrink: 0 }} />
-        <span style={{ color: "white", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.username}</span>
+        <span className="pm-orderRow-username">{o.username}</span>
       </div>
 
-      <div style={{ minWidth: 0, display: "flex", alignItems: "center", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden" }}>
-          <span style={{ color: "white", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.product_name}</span>
+      <div className="pm-orderRow-cell pm-orderRow-product">
+        <div className="pm-orderRow-productLine">
+          <span className="pm-orderRow-productName">{o.product_name}</span>
           {o.is_featured && <Star size={11} color="#fbbf24" style={{ flexShrink: 0 }} />}
-        </div>
-        <div>
           {o.plan && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, background: "#1e293b", padding: "3px 9px", borderRadius: 999, fontSize: 11, textTransform: "capitalize", color: "#cbd5e1", whiteSpace: "nowrap", marginTop: 3 }}>
+            <span className="pm-chip pm-orderRow-plan">
               <Layers size={10} />{o.plan}
             </span>
           )}
         </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, background: "#1e293b", padding: "3px 9px", borderRadius: 999, fontSize: 11, textTransform: "capitalize", color: "#cbd5e1", whiteSpace: "nowrap" }}>
-          <Tag size={10} />{o.product_type || "-"}
-        </span>
-      </div>
-
-      <div style={{ textAlign: "center" }}>
-        {hasDiscount && (
-          <div style={{ fontSize: 11, color: "#64748b", textDecoration: "line-through" }}>
-            {parseFloat(o.original_price).toFixed(2)} <span style={{ fontSize: 10, color: "#4ade80", fontWeight: 700, marginLeft: 5 }}>-{Number(o.discount_percent)}%</span>
-          </div>
-        )}
-        <div>
-          <span style={{ fontSize: 14, fontWeight: 800, color: hasDiscount ? "#4ade80" : "#e2e8f0" }}>{parseFloat(o.price).toFixed(2)}</span>{" "}
-          <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{o.currency}</span>
+        <div className="pm-orderRow-typeLine">
+          <span className="pm-chip">
+            <Tag size={10} />{o.product_type || "-"}
+          </span>
         </div>
       </div>
 
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Owner</div>
+      {/* Compact-card only (hidden on desktop via CSS): plan + type pills and
+          the product name share ONE row, pills in front of the name. The
+          desktop product/type cells above are hidden in that mode. */}
+      <div className="pm-orderRow-mobileProduct">
+        <span className="pm-orderRow-productName">{o.product_name}</span>
+        {o.is_featured && <Star size={11} color="#fbbf24" style={{ flexShrink: 0 }} />}
+        <div className="pm-orderRow-pills">
+          {o.plan && (
+            <span className="pm-chip pm-chip--sm"><Layers size={10} />{o.plan}</span>
+          )}
+          <span className="pm-chip pm-chip--sm"><Tag size={10} />{o.product_type || "-"}</span>
+        </div>
+      </div>
+
+      <div className="pm-orderRow-cell pm-orderRow-price">
+        {hasDiscount && (
+          <div className="pm-orderRow-priceOld">
+            {parseFloat(o.original_price).toFixed(2)} <span className="pm-orderRow-discount">-{Number(o.discount_percent)}%</span>
+          </div>
+        )}
+        <div>
+          <span className="pm-orderRow-priceNow" style={{ color: hasDiscount ? "#4ade80" : "#e2e8f0" }}>{parseFloat(o.price).toFixed(2)}</span>{" "}
+          <span className="pm-orderRow-currency">{o.currency}</span>
+        </div>
+      </div>
+
+      <div className="pm-orderRow-cell pm-orderRow-owner">
+        <div className="pm-orderRow-label">Owner</div>
         {o.product_owner_displayName ? (
-          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#a78bfa", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span className="pm-orderRow-ownerName">
             <Store size={11} />{o.product_owner_displayName}
           </span>
         ) : (
-          <span style={{ fontSize: 12, color: "#475569" }}>—</span>
+          <span className="pm-orderRow-ownerNone">—</span>
         )}
       </div>
 
-      <span style={{
-        display: "flex", alignItems: "center", gap: 5, justifyContent: "center",
-        background: cfg.bg, color: cfg.color, padding: "4px 0", borderRadius: 999, fontSize: 10, fontWeight: 700,
-      }}>
+      <span className="pm-orderRow-status" style={{ background: cfg.bg, color: cfg.color }}>
         <StatusIcon size={11} />{cfg.label}
       </span>
 
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Created</div>
-        <div style={{ fontSize: 11, color: "#94a3b8" }}>{formatDate(o.created_at)}</div>
-      </div>
+      {/* Desktop: this wrapper is unstyled (display:contents), so Created and
+          the status events render exactly as their own two original grid
+          columns — no visual change. Mobile: the wrapper becomes the single
+          "timeline" grid-area, laying Created + events out as one
+          horizontal footer strip (see .pm-orderRow-timelineFooter). */}
+      <div className="pm-orderRow-timelineFooter">
+        <div className="pm-orderRow-cell pm-orderRow-created">
+          <div className="pm-orderRow-label">Created</div>
+          <div className="pm-orderRow-createdDate">{formatDate(o.created_at)}</div>
+        </div>
 
-      <div style={{ display: "flex", gap: 16, overflowX: "auto", justifyContent: "flex-end", minWidth: 0 }}>
-        {statusEvents.length > 0
-          ? statusEvents.map((ev) => <StatusEvent key={ev.key} {...ev} formatDate={formatDate} />)
-          : <span style={{ fontSize: 11, color: "#334155" }}>—</span>
-        }
+        <div className="pm-orderRow-events">
+          {statusEvents.length > 0
+            ? statusEvents.map((ev) => <StatusEvent key={ev.key} {...ev} formatDate={formatDate} />)
+            : <span className="pm-orderRow-noEvents">—</span>
+          }
+        </div>
       </div>
     </div>
   );
@@ -1540,6 +1572,47 @@ export default function ProductsManagement() {
   const [analysisViewMode, setAnalysisViewMode] = useState("products");  // "products" | "categories" (Analysis tab)
   const [panel, setPanel]                   = useState(null);  // null | "add-product" | "add-category"
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // ── mobile: same mechanism as ExchangeDashboard's Pairs tab ──
+  // Desktop keeps the always-visible left sidebar (list + add-panel +
+  // detail column); on mobile that's replaced by the existing "Products"
+  // tab showing the same list, with Add/Category/Detail all opening as the
+  // same bottom sheet used across the rest of the app.
+  const mainRef = useRef(null);
+  const [mainBounds, setMainBounds] = useState(null);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener("change", onChange) : mq.addListener(onChange);
+    return () => (mq.removeEventListener ? mq.removeEventListener("change", onChange) : mq.removeListener(onChange));
+  }, []);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setMainBounds({ left: r.left, right: window.innerWidth - r.right });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, []);
+
+  const sheetBoundsStyle = isMobile && mainBounds
+    ? { position: "fixed", top: 0, bottom: 0, left: mainBounds.left, right: mainBounds.right }
+    : undefined;
   const [form, setForm]                     = useState(emptyForm());
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -2055,10 +2128,11 @@ export default function ProductsManagement() {
   ];
 
   return (
-    <div style={{
+    <div className="pm-scope" style={{
       display: "flex",
       flexDirection: "column",
-      height: "100vh",
+      height: "100%",
+      minHeight: 0,
       background: "#060b16",
       overflow: "hidden",
       padding: "0px",
@@ -2179,8 +2253,10 @@ export default function ProductsManagement() {
       {/* ── BELOW HERO: sidebar (left) + main container (right) ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-      {/* ── LEFT: PRODUCTS SIDEBAR + SLIDE-IN ADD/CATEGORY PANEL + DETAIL PANEL ── */}
-      <div style={{ position: "relative", flexShrink: 0, display: "flex" }}>
+      {/* ── LEFT: PRODUCTS SIDEBAR + SLIDE-IN ADD/CATEGORY PANEL + DETAIL PANEL —
+             desktop/tablet only, hidden on mobile where the "Products" tab's
+             mobile content (below) plus MobileOverlay sheets take over. ── */}
+      <div className="pm-left" style={{ position: "relative", flexShrink: 0, display: "flex" }}>
 
         {/* product list sidebar */}
         <div style={{
@@ -2336,8 +2412,10 @@ export default function ProductsManagement() {
           </div>
         </div>
 
-        {/* ADD PRODUCT / CATEGORIES SLIDE-IN — slides over sidebar from left */}
-        <div style={{
+        {/* ADD PRODUCT / CATEGORIES SLIDE-IN — slides over sidebar from left.
+            Desktop/tablet only; on mobile the same `panel` state instead
+            opens a MobileOverlay bottom sheet (see pm-main below). */}
+        <div className="pm-addPanel" style={{
           position: "absolute", top: 0, left: 0, bottom: 0, width: panelOpen ? 380 : 0,
           overflow: "hidden", zIndex: 20,
           transition: "width .32s cubic-bezier(.4,0,.2,1)",
@@ -2414,8 +2492,8 @@ export default function ProductsManagement() {
           </div>
         </div>
 
-        {/* ── PRODUCT DETAIL PANEL ── */}
-        <div style={{
+        {/* ── PRODUCT DETAIL PANEL — desktop/tablet only (hidden on mobile) ── */}
+        <div className="pm-detail" style={{
           width: selectedProduct ? 270 : 0, overflow: "hidden", background: "#070f1d",
           borderRight: "1px solid rgba(255,255,255,.06)", flexShrink: 0,
           transition: "width .28s cubic-bezier(.4,0,.2,1)", display: "flex", flexDirection: "column",
@@ -2442,7 +2520,7 @@ export default function ProductsManagement() {
       </div>
 
       {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="pm-main" ref={mainRef} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Action tabs: Products / Orders / Analysis (like ExchangeDashboard) */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 20px 12px 25px", flexShrink: 0 }}>
@@ -2474,7 +2552,7 @@ export default function ProductsManagement() {
         </div>
 
         {/* ── PRODUCTS VIEW ── */}
-        {mainView === "products" && (
+        {mainView === "products" && !isMobile && (
           <>
             {(effectiveTab === "pending" || effectiveTab === "rejected") && (
               <div style={{
@@ -2513,6 +2591,162 @@ export default function ProductsManagement() {
           </>
         )}
 
+        {/* mobile Products tab content — same mechanism as ExchangeDashboard's
+            mobile Pairs tab: the same category-grouped list the desktop
+            sidebar shows, plus an Add button, tapping a row opens the
+            Detail sheet, Add opens the Add sheet (both via MobileOverlay). */}
+        {mainView === "products" && isMobile && (
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <Package size={16} color="#3b82f6" />
+                <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Products</span>
+                <span style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa", borderRadius: 20, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{currentProducts.length}</span>
+              </div>
+              <PermButton
+                user={currentUser}
+                permission="products.service"
+                onClick={() => setPanel("add-product")}
+                className="pm-addBtn"
+              >
+                <Plus size={12} />Add
+              </PermButton>
+            </div>
+
+            {loading && currentProducts.length === 0
+              ? [...Array(5)].map((_, i) => <div key={i} style={{ padding: "9px 11px", marginBottom: 3 }}><Sk h={14} /></div>)
+              : currentProducts.length === 0
+                ? <div style={{ color: "#536b8c", fontSize: 12, textAlign: "center", padding: "30px 10px", fontWeight: 600 }}>No products found</div>
+                : (() => {
+                    const uncategorized = currentProducts.filter(p => !p.category_id || !categories.find(c => Number(c.id) === Number(p.category_id)));
+                    return (
+                      <>
+                        {categories.map((cat) => {
+                          const catProducts = currentProducts.filter(p => Number(p.category_id) === Number(cat.id));
+                          if (catProducts.length === 0) return null;
+                          return (
+                            <div key={cat.id} style={{ marginBottom: 10 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px 4px", borderBottom: "1px solid #232323cc" }}>
+                                <div style={{ width: 3, height: 12, borderRadius: 4, background: "#3b82f6" }} />
+                                <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>{cat.name}</span>
+                                <span style={{ color: "#475569", fontSize: 10, fontWeight: 700 }}>{catProducts.length}</span>
+                              </div>
+                              {catProducts.map(p => (
+                                <ProductRow key={p.id} p={p} selected={false} onClick={() => setSelectedProduct(p)} />
+                              ))}
+                            </div>
+                          );
+                        })}
+                        {uncategorized.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px 4px" }}>
+                              <div style={{ width: 3, height: 12, borderRadius: 4, background: "#475569" }} />
+                              <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>Uncategorized</span>
+                              <span style={{ color: "#475569", fontSize: 10, fontWeight: 700 }}>{uncategorized.length}</span>
+                            </div>
+                            {uncategorized.map(p => (
+                              <ProductRow key={p.id} p={p} selected={false} onClick={() => setSelectedProduct(p)} />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
+            }
+          </div>
+        )}
+
+        {/* mobile-only: Add product, Add/manage category, and Product detail —
+            same `panel`/`selectedProduct` state the desktop sidebar uses,
+            just rendered as a bottom sheet instead of the slide-in column. */}
+        <MobileOverlay
+          open={isMobile && panel === "add-product"}
+          icon={Plus} iconBg="rgba(59,130,246,.15)" iconColor="#60a5fa"
+          title="Add new product"
+          onClose={() => setPanel(null)}
+          boundsStyle={sheetBoundsStyle}
+        >
+          <ProductForm
+            users={users}
+            data={form} setData={setForm} token={token}
+            onSubmit={addProduct} submitLabel="Create Product"
+            onCancel={() => setPanel(null)}
+            featureInput={featureInput} setFeatureInput={setFeatureInput}
+            categories={categories} currencies={currencies} networks={networks} isMaster={currentUser.role === "master"}
+          />
+        </MobileOverlay>
+
+        <MobileOverlay
+          open={isMobile && panel === "add-category"}
+          icon={Grid3X3} iconBg="rgba(165,180,252,.15)" iconColor="#a5b4fc"
+          title="Manage categories"
+          onClose={() => setPanel(null)}
+          boundsStyle={sheetBoundsStyle}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%", overflow: "hidden" }}>
+            <div style={{ background: "#050a14", border: "1px solid #1d2b4bff", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+              <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>New Category</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="pm-input" style={{ flex: 1 }} placeholder="Category name…" value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCategory()} />
+                <button className="pm-submitBtn" style={{ width: "auto", padding: "0 18px", margin: 0 }} onClick={addCategory}>Add</button>
+              </div>
+            </div>
+            <div style={{ color: "#64748b", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Existing — {categories.length}</div>
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+              {categories.map((cat) => (
+                <div key={cat.id} style={{ background: "#050a14", border: "1px solid #202e4eff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: "#0b1525", border: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Layers size={14} color="#475569" />
+                  </div>
+                  {editingCategory?.id === cat.id ? (
+                    <>
+                      <input className="pm-input" style={{ flex: 1, padding: "8px 12px", fontSize: 13 }}
+                        value={editingCategory.name}
+                        onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                        onKeyDown={(e) => e.key === "Enter" && updateCategory()} />
+                      <button className="pm-submitBtn" style={{ margin: 0, padding: "8px 12px", fontSize: 12, whiteSpace: "nowrap" }} onClick={updateCategory}>Save</button>
+                      <button className="pm-closeIconBtn" onClick={() => setEditingCategory(null)}><X size={14} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ color: "#cbd5e1", fontSize: 14, fontWeight: 500, flex: 1 }}>{cat.name}</span>
+                      <button className="pm-iconBtnEdit" onClick={() => setEditingCategory(cat)}><Edit3 size={13} /></button>
+                      <button className="pm-iconBtnDelete" onClick={() => deleteCategory(cat.id)}><Trash2 size={13} /></button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </MobileOverlay>
+
+        <MobileOverlay
+          open={isMobile && !!selectedProduct && !editingProduct && !approveTarget && !rejectTarget}
+          icon={Package} iconBg="rgba(59,130,246,.15)" iconColor="#60a5fa"
+          title={selectedProduct?.name || "Product"}
+          onClose={() => setSelectedProduct(null)}
+          boundsStyle={sheetBoundsStyle}
+        >
+          {selectedProduct && (
+            <ProductDetailPanel
+              key={selectedProduct.id}
+              product={selectedProduct}
+              categories={categories}
+              safeExtra={safeExtra}
+              currentUser={currentUser}
+              viewMode={effectiveTab}
+              onEdit={openEdit}
+              onToggleActive={toggleActive}
+              onDelete={deleteProduct}
+              onApprove={(p) => setApproveTarget(p)}
+              onReject={(p) => setRejectTarget(p)}
+              onResubmit={resubmitProduct}
+            />
+          )}
+        </MobileOverlay>
+
         {/* ── ORDERS VIEW (merged from OrdersManagement) ── */}
         {mainView === "orders" && (
           <div id="orders-panel" style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", padding: "0 20px 20px 25px" }}>
@@ -2535,7 +2769,7 @@ export default function ProductsManagement() {
                 ) : filteredOrders.length === 0 ? (
                     <EmptyState icon={FileText} title="No orders found" sub="Try adjusting your filters" />
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div className="pm-orderList">
                     {filteredOrders.map((o) => (
                       <OrderRow
                         key={o.id}
@@ -2554,7 +2788,7 @@ export default function ProductsManagement() {
 
         {/* ── ANALYSIS VIEW ── */}
         {mainView === "analysis" && (
-          <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", padding: "0 20px 20px 25px" }}>
+          <div className="pm-analysisWrap" style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex", padding: "0 20px 20px 25px" }}>
             <OrderAnalysisPanel
               visible={true}
               fullWidth
@@ -2594,7 +2828,7 @@ export default function ProductsManagement() {
 
       {/* ── EDIT MODAL ── */}
       {editingProduct && (
-        <div className="pm-modalOverlay" onClick={(e) => e.target === e.currentTarget && setEditingProduct(null)}>
+        <div className="pm-modalOverlay" style={isMobile ? sheetBoundsStyle : undefined} onClick={(e) => e.target === e.currentTarget && setEditingProduct(null)}>
           <div className="pm-modalCard">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <div>

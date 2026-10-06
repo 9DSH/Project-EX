@@ -1,0 +1,18 @@
+/* AnalysisTab — rest of the component is inline-styled (JS style objects);
+   this file only holds what inline styles can't do: responsive breakpoints. */
+
+.ax-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Tablet: still 2 columns is fine down to 1024, charts have room */
+@media (max-width: 1024px) {
+  .ax-grid2 { gap: 10px; }
+}
+
+/* Mobile: stack the charts in rows, on top of each other */
+@media (max-width: 640px) {
+  .ax-grid2 { grid-template-columns: 1fr; }
+}

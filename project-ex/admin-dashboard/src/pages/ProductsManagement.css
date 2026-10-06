@@ -59,8 +59,8 @@
 
 .pm-chip {
   background: #0b1525; border: 1px solid #313d58ff; color: #94a3b8;
-  padding: 5px 11px; border-radius: 99px; font-size: 12px; cursor: pointer;
-  display: inline-flex; align-items: center;
+  padding: 3px 11px; border-radius: 99px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;
 }
 
 .pm-closeIconBtn {
@@ -143,4 +143,159 @@
 .pm-scrollThin {
   scrollbar-width: thin;
   scrollbar-color: #1e293b #060b16;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Mobile responsive additions
+   ══════════════════════════════════════════════════════════════ */
+
+.pm-addBtn {
+  display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,.14);
+  border: 1px solid rgba(59,130,246,.28); color: #93c5fd; border-radius: 7px; padding: 7px 9px;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+
+/* ── mobile bottom sheet (Add product / Manage categories / Product detail) ──
+   Same mechanism as ExchangeDashboard/WireTransferDashboard/OrderSidebar:
+   dimmed rgba(2,6,23,.6) + blur(1px) backdrop, slides up from the bottom,
+   bounded to the page's real on-screen box (sheetBoundsStyle, measured via
+   JS), scrolls internally. */
+.pm-mobileOverlay {
+  position: fixed; inset: 0; z-index: 99998;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none; visibility: hidden;
+  transition: visibility 0s linear .3s;
+}
+.pm-mobileOverlay.is-open {
+  pointer-events: auto; visibility: visible; transition: none;
+}
+.pm-mobileOverlay-backdrop {
+  position: absolute; inset: 0; background: rgba(2,6,23,.6); backdrop-filter: blur(1px);
+  opacity: 0; transition: opacity .25s ease;
+}
+.pm-mobileOverlay.is-open .pm-mobileOverlay-backdrop { opacity: 1; }
+.pm-mobileOverlay-panel {
+  position: relative; width: 100%; max-height: 100%;
+  background: #0d1424; border-radius: 20px 20px 0 0; border: 1px solid rgba(255,255,255,.08);
+  border-bottom: none; box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+  height: 88%;
+}
+.pm-mobileOverlay.is-open .pm-mobileOverlay-panel { transform: translateY(0); }
+.pm-mobileOverlay-head { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.pm-mobileOverlay-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pm-mobileOverlay-title { color: white; font-weight: 700; font-size: 16px; flex: 1; }
+.pm-mobileOverlay-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; }
+.pm-mobileOverlay-body > * { flex: 1; }
+
+/* ── Order row: EXACT original design on desktop/tablet — same px values,
+   same 9-column grid, untouched. Only the mobile media query below changes
+   anything, restructuring it into a compact 2-column card with a full-width
+   timeline footer (Created/Approved/Delivered/…). ── */
+.pm-orderRow {
+  width: 100%; box-sizing: border-box;
+  background: #0b1424; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+  display: grid;
+grid-template-columns: 0.2fr 0.6fr 1fr 1fr 0.5fr 100px 0.2fr minmax(60px,1fr);
+  align-items: center; gap: 18px;
+  border: 1px solid #1e293b;
+  transition: border-color .15s, background .15s;
+}
+.pm-orderList { display: flex; flex-direction: column; gap: 8px; }
+.pm-orderRow-mobileProduct { display: none; }
+.pm-chip--sm { padding: 3px 8px; font-size: 11px; gap: 4px; white-space: nowrap; flex-shrink: 0; max-width: 130px; }
+.pm-chip { white-space: nowrap; }
+.pm-orderRow:hover { border-color: #17376c; }
+.pm-orderRow.is-selected { border-color: #17376c; }
+.pm-orderRow-id { color: #475569; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.pm-orderRow-cell { min-width: 0; justify-content: flex-start; }
+.pm-orderRow-user { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.pm-orderRow-username { color: white; justify-content: flex-start; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;  }
+.pm-orderRow-product { display: flex; align-items: flex-start; flex-direction: column; min-width: 0; }
+.pm-orderRow-productLine { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.pm-orderRow-productLine .pm-orderRow-productName { flex: 0 1 auto; min-width: 0; }
+.pm-orderRow-plan { flex-shrink: 0; margin-top: 0; }
+.pm-orderRow-typeLine { margin-top: 5px; }
+.pm-orderRow-productName { color: white; font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-orderRow-price { text-align: center; }
+.pm-orderRow-priceOld { font-size: 11px; color: #64748b; text-decoration: line-through; white-space: nowrap; }
+.pm-orderRow-discount { font-size: 10px; color: #4ade80; font-weight: 700; margin-left: 5px; }
+.pm-orderRow-priceNow { font-size: 14px; font-weight: 800; }
+.pm-orderRow-currency { font-size: 11px; color: #64748b; font-weight: 600; }
+.pm-orderRow-label { font-size: 10px; color: #8a98ac; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+.pm-orderRow-ownerName { display: flex; align-items: center; gap: 4px; color: #a78bfa; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-orderRow-ownerNone { font-size: 12px; color: #475569; }
+.pm-orderRow-status { display: flex; align-items: center; gap: 5px; justify-content: center; padding: 4px 0; border-radius: 999px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.pm-orderRow-created { text-align: left; }
+.pm-orderRow-createdDate { font-size: 11px; color: #94a3b87b; white-space: nowrap; }
+.pm-orderRow-events { display: flex; gap: 16px; overflow-x: auto; justify-content: flex-end; min-width: 0; }
+.pm-orderRow-noEvents { font-size: 11px; color: #334155; }
+/* desktop: invisible to the grid — Created and events render as their own
+   direct grid children exactly as in the original 9-column layout */
+.pm-orderRow-timelineFooter { display: contents; }
+
+@media (max-width: 640px) {
+  /* desktop sidebar/add-panel/detail are replaced by the mobile Products
+     tab content + MobileOverlay sheets. !important is required: these
+     elements carry inline style={{ display: "flex" }}, which always beats
+     an external stylesheet rule regardless of media query/specificity. */
+  .pm-left { display: none !important; }
+  .pm-detail { display: none !important; }
+
+  /* This wrapper's inline padding (0 20px 20px 25px, asymmetric, fixed
+     regardless of screen size) is what was pushing OrderAnalysisPanel's
+     width:100% child past the edge of its parent and getting it clipped —
+     !important needed since it's an inline style. */
+  .pm-analysisWrap { padding: 0 !important; }
+
+  /* Add/Edit modal (ApproveModal, RejectModal, Edit-product) → bottom sheet */
+  .pm-modalOverlay { align-items: flex-end; padding: 0; z-index: 100000; }
+  .pm-modalCard {
+    width: 100%; max-width: 100%; height: 85dvh; max-height: 85dvh;
+    border-radius: 20px 20px 0 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Orders: adaptive compact cards for tablet and below (≤1023px)
+   • one card per row, full width of the container
+   Card = user/status · [plan][type] product name (ONE row) ·
+          price/owner · Created → events timeline footer.
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 1480px) {
+  .pm-orderRow {
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    grid-template-areas:
+      "user    status"
+      "product product"
+      "price   owner"
+      "timeline timeline";
+    gap: 8px 10px; padding: 10px 12px; align-items: start;
+  }
+  .pm-orderRow-id { display: none; }
+  .pm-orderRow-product, .pm-orderRow-type { display: none; } /* replaced by .pm-orderRow-mobileProduct */
+
+  .pm-orderRow-user { grid-area: user; }
+  .pm-orderRow-status { grid-area: status; justify-self: end; align-self: start; padding: 4px 10px; }
+  .pm-orderRow-price { grid-area: price; text-align: left; }
+  .pm-orderRow-owner { grid-area: owner; text-align: right; min-width: 0; }
+  .pm-orderRow-ownerName { justify-content: flex-end; }
+
+  .pm-orderRow-mobileProduct {
+    grid-area: product; display: flex; align-items: center; justify-content: flex-start;
+    gap: 8px; min-width: 0;
+  }
+  .pm-orderRow-pills { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .pm-orderRow-mobileProduct .pm-orderRow-productName { flex: 0 1 auto; min-width: 0; }
+  .pm-chip--sm > svg { flex-shrink: 0; }
+  .pm-chip--sm { overflow: hidden; text-overflow: ellipsis; }
+
+  .pm-orderRow-timelineFooter {
+    grid-area: timeline; display: flex; align-items: center; gap: 14px;
+    overflow-x: auto; margin-top: 2px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,.06);
+  }
+  .pm-orderRow-timelineFooter .pm-orderRow-created { text-align: left; flex-shrink: 0; }
+  .pm-orderRow-timelineFooter .pm-orderRow-events { justify-content: flex-start; flex-shrink: 0; }
 }

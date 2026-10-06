@@ -60,6 +60,7 @@
 }
 
 .tx-table-scroll {
+  overflow-x: hidden;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -68,11 +69,21 @@
 }
 
 /* Sticky, always-visible header row */
+.tx-table-head,
+.tx-row {
+  /* Fluid: columns share the container width and content wraps inside them, so
+     nothing is clipped at any desktop width.
+     TX | Type | User | References | Amount | Chain | Wallet | Hash | Confirm | Status | Created */
+  grid-template-columns:
+    minmax(0, .7fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, .55fr) minmax(0, 1.3fr) minmax(0, 1.2fr);
+}
+
 .tx-table-head {
   display: grid;
   gap: 12px;
   align-items: center;
-  padding: 14px 40px;
+  padding: 14px 37px;
   color: #94a3b8;
   font-size: 10px;
   font-weight: 700;
@@ -84,7 +95,14 @@
   z-index: 3;
 }
 
+.tx-table-head > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .tx-sortable {
+  flex-wrap: wrap;
+  max-width: 100%;
   cursor: pointer;
   user-select: none;
   display: inline-flex;
@@ -112,15 +130,15 @@
   display: grid;
   gap: 12px;
   align-items: center;
-  padding: 14px 16px;
-  background: #0d1526;
-  border: 1px solid #1a2540;
-  border-radius: 14px;
-  transition: border-color 0.15s ease;
+  padding: 10px 16px;
+  background: #0b1424;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .tx-row:hover {
-  border-color: #2a3a5c;
+  border-color: #405d8c;
 }
 
 .tx-cell-label {
@@ -133,6 +151,7 @@
 }
 
 .tx-id {
+  overflow-wrap: anywhere;
   color: #94a3b8;
   font-weight: 700;
   font-size: 13px;
@@ -143,12 +162,12 @@
   align-items: center;
   background: #1e293b;
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: 14px;
   font-size: 11px;
   font-weight: 600;
   text-transform: capitalize;
   color: #cbd5e1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .tx-user-link {
@@ -156,9 +175,7 @@
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .tx-user-sub {
@@ -188,6 +205,7 @@
 }
 
 .tx-amount {
+  overflow-wrap: anywhere;
   font-weight: 700;
   font-size: 13px;
 }
@@ -204,9 +222,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .tx-blockchain-badge {
@@ -230,6 +246,7 @@
   font-size: 12px;
   color: #cbd5e1;
   cursor: default;
+  word-break: break-all;
 }
 
 .tx-status-badge {
@@ -242,6 +259,7 @@
   font-weight: 700;
   text-transform: capitalize;
   white-space: nowrap;
+  padding-inline: 8px;
 }
 
 .tx-created {
@@ -261,4 +279,130 @@
   min-height: 300px;
   text-align: center;
   color: #64748b;
+}
+/* ══════════════════════════════════════════════════════════════
+   Adaptive transaction rows
+   • Desktop  (≥1024px): the original 11-column grid row.
+   • Tablet   (641–1023px): compact full-width card, 4 columns.
+   • Mobile   (≤640px): compact card, 2 columns.
+   Same elements throughout — only grid-areas change.
+   ══════════════════════════════════════════════════════════════ */
+
+.tx-cell { min-width: 0; }
+.tx-row .tx-cell-label { display: none; }   /* desktop uses the column header */
+.tx-c-head { display: none; }               /* compact-only id + type block */
+.tx-sortBar { display: none; }              /* compact-only sort chips */
+
+.tx-sortChip {
+  flex-shrink: 0; background: transparent; border: 1px solid #313d58ff;
+  color: #94a3b8; border-radius: 10px; padding: 6px 12px;
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.tx-sortChip.is-active {
+  color: #60a5fa; border-color: rgba(59,130,246,.4); background: rgba(59,130,246,.1);
+}
+
+@media (max-width: 1023px) {
+  .tx-table-head { display: none; }
+  .tx-sortBar {
+    display: flex; gap: 5px; overflow-x: auto; padding: 10px;
+    position: sticky; top: 0; z-index: 3; background: #060b16;
+  }
+  .tx-table-body { padding: 0 10px 20px; }
+
+  .tx-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      "head  user   amount status"
+      "chain wallet hash   conf"
+      "refs  refs   refs   created";
+    gap: 10px 14px; padding: 12px 14px; align-items: start;
+  }
+  .tx-row .tx-cell-label { display: block; }
+
+  .tx-c-id, .tx-c-type { display: none; }  /* replaced by .tx-c-head */
+  .tx-c-wallet .tx-hash-text, .tx-c-hash .tx-hash-text {
+    word-break: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tx-c-head .tx-type-badge { white-space: nowrap; }
+  .tx-c-head { grid-area: head; display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .tx-c-user { grid-area: user; }
+  .tx-c-amount { grid-area: amount; }
+  .tx-c-status { grid-area: status; justify-self: end; }
+  .tx-c-chain { grid-area: chain; }
+  .tx-c-wallet { grid-area: wallet; }
+  .tx-c-hash { grid-area: hash; }
+  .tx-c-conf { grid-area: conf; text-align: right; }
+
+  .tx-c-refs {
+    grid-area: refs; flex-direction: row; flex-wrap: wrap; gap: 4px 14px;
+    padding-top: 8px; border-top: 1px solid rgba(255,255,255,.06);
+  }
+  .tx-c-refs .tx-cell-label { flex-basis: 100%; margin-bottom: 0; }
+  .tx-c-created {
+    grid-area: created; text-align: right;
+    padding-top: 8px; border-top: 1px solid rgba(255,255,255,.06);
+  }
+}
+
+@media (max-width: 640px) {
+  .tx-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "head   status"
+      "user   amount"
+      "chain  conf"
+      "wallet hash"
+      "refs   refs"
+      "created created";
+    gap: 8px 10px; padding: 10px 12px;
+  }
+  .tx-c-amount, .tx-c-hash, .tx-c-conf { text-align: right; }
+  .tx-c-created { text-align: left; padding-top: 0; border-top: none; }
+}
+
+/* ── mobile bottom sheet (User / Order sidebars) ──
+   Same mechanism as ProductsManagement's pm-mobileOverlay: dimmed backdrop,
+   slides up from the bottom, bounded to the page's on-screen box, scrolls
+   internally. The body is flush (no padding) because it hosts the existing
+   sidebar components, whose fixed side-panel positioning is neutralised so they
+   fill the sheet instead. */
+.tx-closeIconBtn {
+  background: #0b1525; border: 1px solid #313d58ff; color: #475569;
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.tx-mobileOverlay {
+  position: fixed; inset: 0; z-index: 99998;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none; visibility: hidden;
+  transition: visibility 0s linear .3s;
+}
+.tx-mobileOverlay.is-open {
+  pointer-events: auto; visibility: visible; transition: none;
+}
+.tx-mobileOverlay-backdrop {
+  position: absolute; inset: 0; background: rgba(2,6,23,.6); backdrop-filter: blur(1px);
+  opacity: 0; transition: opacity .25s ease;
+}
+.tx-mobileOverlay.is-open .tx-mobileOverlay-backdrop { opacity: 1; }
+.tx-mobileOverlay-panel {
+  position: relative; width: 100%; max-height: 100%;
+  background: #0d1424; border-radius: 20px 20px 0 0; border: 1px solid rgba(255,255,255,.08);
+  border-bottom: none; box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+  height: 88%;
+}
+.tx-mobileOverlay.is-open .tx-mobileOverlay-panel { transform: translateY(0); }
+.tx-mobileOverlay-head { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tx-mobileOverlay-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.tx-mobileOverlay-title { color: white; font-weight: 700; font-size: 16px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-mobileOverlay-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.tx-mobileOverlay-body > * {
+  position: static !important; inset: auto !important; transform: none !important;
+  width: 100% !important; max-width: 100% !important; height: auto !important;
+  flex: 1; border: none !important; border-radius: 0 !important; box-shadow: none !important;
 }

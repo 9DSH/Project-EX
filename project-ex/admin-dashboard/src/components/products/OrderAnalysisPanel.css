@@ -1,0 +1,131 @@
+/* ── OrderAnalysisPanel — extracted static styles ──────────────────
+   ColumnChart's bars/tooltip stay inline (computed per-data-point
+   rendering, not decorative styling) — see the note in the .jsx. */
+
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.oap-sk {
+  background: linear-gradient(90deg,#0e1a2e 25%,#1a2a40 50%,#0e1a2e 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ── MetaCard ── */
+.oap-metaCard { flex: 1; background: #0a1628; border-radius: 12px; padding: 11px 14px; min-width: 0; }
+.oap-metaCard-label { font-size: 9px; color: #808fa4; font-weight: 700; letter-spacing: .8px; margin-bottom: 10px; text-transform: uppercase; }
+.oap-metaCard-body { display: flex; align-items: center; gap: 10px; }
+.oap-metaCard-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.oap-metaCard-content { margin-left: 10px; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.oap-metaCard-line1 { font-size: 12px; font-weight: 700; color: #e2e8f0; white-space: nowrap; }
+.oap-metaCard-line2 { font-size: 10px; color: #64748b; white-space: nowrap; }
+.oap-metaCard-line3 { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.oap-metaCard-nodata { font-size: 11px; color: #334155; }
+
+/* ── Panel shell (width/padding/border stay inline — driven by `visible`/
+   `fullWidth` state) ── */
+.oap-panel {
+  /* border-box is what actually fixes the mobile clipping bug: the panel
+     gets width:100% (see the mobile rule below) AND its own inline
+     padding/border at the same time — without border-box those stack on
+     TOP of the 100% width, overflowing the parent and getting clipped on
+     one side by the parent's overflow:hidden, with the corners that poke
+     out past the parent's own border-radius reading as square. */
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: width 0.35s cubic-bezier(0.4,0,0.2,1), min-width 0.35s cubic-bezier(0.4,0,0.2,1);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #060d1a;
+  border-radius: 20px;
+}
+.oap-panel * { box-sizing: border-box; }
+.oap-panel-inner { display: flex; flex-direction: column; height: 100%; min-width: 320px; }
+
+/* ── Header + toggles ── */
+.oap-header { padding: 12px 14px 10px; border-bottom: 1px solid #1a2540; background: #07101d; flex-shrink: 0; }
+.oap-header--compact { padding: 12px 14px; display: flex; align-items: center; gap: 8px; }
+.oap-header-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.oap-header-title { color: white; font-weight: 700; font-size: 14px; flex: 1; }
+
+.oap-toggleGroup { display: flex; gap: 3px; background: #0b1424; border-radius: 8px; padding: 3px; border: 1px solid #1a2540; flex-shrink: 0; }
+.oap-toggleBtn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 9px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 11px; font-weight: 700; background: transparent; color: #475569;
+  transition: all 0.15s; white-space: nowrap;
+}
+.oap-toggleBtn.is-active-blue { background: rgba(59,130,246,0.2); color: #60a5fa; }
+.oap-toggleBtn.is-active-purple { background: rgba(139,92,246,0.2); color: #a78bfa; }
+
+/* ── Filter row ── */
+.oap-filterRow { display: flex; gap: 7px; flex-wrap: wrap; }
+.oap-filterField { position: relative; min-width: 120px; }
+.oap-filterField--search { flex: 1; min-width: 120px; }
+.oap-filterField--date { flex: 1; min-width: 140px; }
+.oap-filterField--select { min-width: 120px; }
+
+.oap-filterIcon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: #334155; pointer-events: none; }
+.oap-filterIcon--right { left: auto; right: 8px; }
+
+.oap-input {
+  width: 100%; box-sizing: border-box;
+  background: #0b1424; border: 1px solid #1a2540;
+  color: white; padding: 6px 10px 6px 26px;
+  border-radius: 8px; outline: none; font-size: 11px;
+}
+.oap-dateInput { padding: 6px 28px 6px 26px; cursor: pointer; }
+.oap-select {
+  background: #0b1424; border: 1px solid #1a2540;
+  padding: 6px 10px 6px 26px;
+  border-radius: 8px; outline: none; font-size: 11px;
+  appearance: none; cursor: pointer; min-width: 120px; width: 100%;
+}
+
+/* ── Meta footer + chart area ── */
+.oap-metaFooterRow { margin-top: 10px; display: flex; gap: 9px; }
+.oap-chartArea {
+  flex: 1; text-align: center;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 14px 16px;
+  scrollbar-width: thin; scrollbar-color: #1e293b #060d1a;
+  margin-top: 20px;
+}
+.oap-chartArea-caption { font-size: 10px; font-weight: 700; color: #8294ae; letter-spacing: 1px; margin-bottom: 14px; }
+
+/* ═══════════ TABLET ≤ 1024 ═══════════ */
+@media (max-width: 1024px) {
+  .oap-filterField--search, .oap-filterField--date { flex: 1 1 45%; }
+  .oap-filterField--select { flex: 1 1 45%; }
+}
+
+/* ═══════════ MOBILE ≤ 640 ═══════════
+   This panel is normally a 50%-width side-by-side pane (set inline via
+   `width: fullWidth ? "100%" : "50%"`) — on mobile that's too narrow to be
+   usable, so it always goes full width/height here regardless of the
+   `fullWidth` prop, and stacks its header controls. */
+@media (max-width: 640px) {
+  /* box-sizing fix below is what actually resolves the clipping/square-corner
+     bug — see the note on .oap-panel above */
+  .oap-panel { width: 100% !important; min-width: 0 !important; border-left: none !important; }
+  .oap-panel-inner { min-width: 0; }
+
+  /* both toggle groups (metric + view-mode) stay in one row on every
+     breakpoint — nowrap plus letting each group shrink/scroll internally
+     if it ever doesn't fit, rather than wrapping to a second line */
+  .oap-header-top { flex-wrap: nowrap; }
+  .oap-toggleGroup { flex-shrink: 1; overflow-x: auto; }
+  .oap-header--compact { flex-wrap: nowrap; }
+
+  .oap-filterRow { gap: 8px; }
+  .oap-filterField, .oap-filterField--search, .oap-filterField--date, .oap-filterField--select {
+    flex: 1 1 100%; min-width: 0;
+  }
+
+  /* stats stay side by side on mobile too, not stacked */
+  .oap-metaFooterRow { flex-direction: row; gap: 8px; }
+  .oap-metaCard { padding: 9px 10px; }
+  .oap-metaCard-content { flex-wrap: wrap; }
+
+  .oap-chartArea { padding: 10px; margin-top: 14px; }
+}

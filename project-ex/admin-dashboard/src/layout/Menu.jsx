@@ -20,14 +20,16 @@ import {
 } from "lucide-react";
 import { TOPBAR_HEIGHT, COLLAPSED_WIDTH, EXPANDED_WIDTH } from "./AdminLayout";
 
-export default function Menu({ pinned, setPinned }) {
+export default function Menu({ pinned, setPinned, isMobile, mobileOpen, onClose }) {
   const location = useLocation();
   const [hovered, setHovered] = useState(false);
   const [open, setOpen] = useState({ platforms: false });
 
-  const expanded = pinned || hovered;
-  const width = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
-  const floating = !pinned && hovered;
+  // On mobile the menu is always "expanded" (labels visible) since it's a
+  // full overlay drawer rather than a hover-to-expand rail.
+  const expanded = isMobile ? true : pinned || hovered;
+  const width = isMobile ? Math.min(EXPANDED_WIDTH, 280) : expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
+  const floating = !isMobile && !pinned && hovered;
 
   const toggle = (key) =>
     setOpen((prev) => ({
@@ -37,6 +39,11 @@ export default function Menu({ pinned, setPinned }) {
   const isActive = (path) => location.pathname === path;
   const isGroupActive = (paths) => paths.some((p) => location.pathname === p);
   const user = { role: localStorage.getItem("role") || "user" };
+
+  // Close the mobile overlay whenever a nav link is used
+  const handleNavigate = () => {
+    if (isMobile && onClose) onClose();
+  };
 
   // Section visibility based on whether user has access to at least one item
   const showPlatforms =
@@ -151,194 +158,229 @@ export default function Menu({ pinned, setPinned }) {
   };
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "fixed",
-        top: TOPBAR_HEIGHT,
-        left: 0,
-        bottom: 0,
-        width,
-        background: "#0b1220",
-        borderRight: "1px solid #1a2333",
-        display: "flex",
-        flexDirection: "column",
-        padding: expanded ? "14px 10px" : "14px 6px",
-        boxSizing: "border-box",
-        overflowX: "hidden",
-        overflowY: "auto",
-        transition: "width .25s cubic-bezier(.4,0,.2,1), padding .25s",
-        zIndex: floating ? 6 : 2,
-        boxShadow: floating ? "8px 0 30px rgba(0,0,0,.55)" : "none",
-      }}
-    >
-      <Link
-        to="/my_account"
-        style={linkStyle(
-          isActive("/") || isActive("/overview") || isActive("/my_account")
-        )}
-        title="My Account"
+    <>
+      {/* Backdrop: only rendered on mobile while the drawer is open */}
+      {isMobile && (
+        <div
+          onClick={onClose}
+          style={{
+            position: "fixed",
+            top: TOPBAR_HEIGHT,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(2,6,23,.6)",
+            backdropFilter: "blur(1px)",
+            opacity: mobileOpen ? 1 : 0,
+            pointerEvents: mobileOpen ? "auto" : "none",
+            transition: "opacity .2s ease",
+            zIndex: 8,
+          }}
+        />
+      )}
+
+      <div
+        onMouseEnter={() => !isMobile && setHovered(true)}
+        onMouseLeave={() => !isMobile && setHovered(false)}
+        style={{
+          position: "fixed",
+          top: TOPBAR_HEIGHT,
+          left: isMobile ? (mobileOpen ? 0 : -width) : 0,
+          bottom: 0,
+          width,
+          maxWidth: isMobile ? "85vw" : undefined,
+          background: "#0b1220",
+          borderRight: "1px solid #1a2333",
+          display: "flex",
+          flexDirection: "column",
+          padding: expanded ? "14px 10px" : "14px 6px",
+          boxSizing: "border-box",
+          overflowX: "hidden",
+          overflowY: "auto",
+          transition: isMobile
+            ? "left .25s cubic-bezier(.4,0,.2,1)"
+            : "width .25s cubic-bezier(.4,0,.2,1), padding .25s",
+          zIndex: isMobile ? 9 : floating ? 6 : 2,
+         boxShadow: (isMobile && mobileOpen) || floating ? "8px 0 30px rgba(0,0,0,.55)" : "none",
+        }}
       >
-        <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
-        {label("My Account")}
-      </Link>
+        <Link
+          to="/my_account"
+          onClick={handleNavigate}
+          style={linkStyle(
+            isActive("/") || isActive("/overview") || isActive("/my_account")
+          )}
+          title="My Account"
+        >
+          <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
+          {label("My Account")}
+        </Link>
 
-      <Link to="/users" style={linkStyle(isActive("/users"))} title="Users">
-        <Users size={17} style={{ flexShrink: 0 }} />
-        {label("Users")}
-      </Link>
+        <Link to="/users" onClick={handleNavigate} style={linkStyle(isActive("/users"))} title="Users">
+          <Users size={17} style={{ flexShrink: 0 }} />
+          {label("Users")}
+        </Link>
 
-      {showPlatforms && (
-        <>
-          <div style={sectionTitleWrap}>
-            <div style={sectionTitle}>PLATFORMS</div>
-            <div style={sectionDivider} />
-          </div>
-
-          <div>
-            <div
-              onClick={() => expanded && toggle("platforms")}
-              style={{
-                ...linkStyle(
-                  !expanded &&
-                    isGroupActive([
-                      "/telegram_management",
-                      "/website_management",
-                    ])
-                ),
-                cursor: "pointer",
-              }}
-              title="Platforms"
-            >
-              <Layers size={17} style={{ flexShrink: 0 }} />
-              {label("Platforms")}
-              {arrow(open.platforms)}
+        {showPlatforms && (
+          <>
+            <div style={sectionTitleWrap}>
+              <div style={sectionTitle}>PLATFORMS</div>
+              <div style={sectionDivider} />
             </div>
 
-            <div style={submenu(expanded && open.platforms)}>
-              {hasPermission(user, "telegram.personal.bot") && (
-                <Link
-                  to="/telegram_management"
-                  style={linkStyle(isActive("/telegram_management"))}
-                >
-                  <Bot size={14} style={{ flexShrink: 0 }} />
-                  {label("Telegram Management")}
-                </Link>
-              )}
-              {hasPermission(user, "website_personal") && (
-                <Link
-                  to="/website_management"
-                  style={linkStyle(isActive("/website_management"))}
-                >
-                  <Link2 size={14} style={{ flexShrink: 0 }} />
-                  {label("Website Management")}
-                </Link>
-              )}
+            <div>
+              <div
+                onClick={() => expanded && toggle("platforms")}
+                style={{
+                  ...linkStyle(
+                    !expanded &&
+                      isGroupActive([
+                        "/telegram_management",
+                        "/website_management",
+                      ])
+                  ),
+                  cursor: "pointer",
+                }}
+                title="Platforms"
+              >
+                <Layers size={17} style={{ flexShrink: 0 }} />
+                {label("Platforms")}
+                {arrow(open.platforms)}
+              </div>
+
+              <div style={submenu(expanded && open.platforms)}>
+                {hasPermission(user, "telegram.personal.bot") && (
+                  <Link
+                    to="/telegram_management"
+                    onClick={handleNavigate}
+                    style={linkStyle(isActive("/telegram_management"))}
+                  >
+                    <Bot size={14} style={{ flexShrink: 0 }} />
+                    {label("Telegram Management")}
+                  </Link>
+                )}
+                {hasPermission(user, "website_personal") && (
+                  <Link
+                    to="/website_management"
+                    onClick={handleNavigate}
+                    style={linkStyle(isActive("/website_management"))}
+                  >
+                    <Link2 size={14} style={{ flexShrink: 0 }} />
+                    {label("Website Management")}
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {showServices && (
-        <>
-          <div style={sectionTitleWrap}>
-            <div style={sectionTitle}>SERVICES</div>
-            <div style={sectionDivider} />
-          </div>
+        {showServices && (
+          <>
+            <div style={sectionTitleWrap}>
+              <div style={sectionTitle}>SERVICES</div>
+              <div style={sectionDivider} />
+            </div>
 
-          {hasPermission(user, "products.service") && (
+            {hasPermission(user, "products.service") && (
+              <Link
+                to="/ProductsManagement"
+                onClick={handleNavigate}
+                style={linkStyle(isActive("/ProductsManagement"))}
+                title="Products"
+              >
+                <Package size={17} style={{ flexShrink: 0 }} />
+                {label("Products")}
+              </Link>
+            )}
+
+            {hasPermission(user, "exchange.service") && (
+              <Link
+                to="/exchange_dashboard"
+                onClick={handleNavigate}
+                style={linkStyle(isActive("/exchange_dashboard"))}
+                title="Exchange"
+              >
+                <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
+                {label("Exchange")}
+              </Link>
+            )}
+
+            {hasPermission(user, "transfer.service") && (
+              <Link
+                to="/wire_transfer"
+                onClick={handleNavigate}
+                style={linkStyle(isActive("/wire_transfer"))}
+                title="Wire Transfer"
+              >
+                <Landmark size={17} style={{ flexShrink: 0 }} />
+                {label("Wire Transfer")}
+              </Link>
+            )}
+          </>
+        )}
+
+        {showFinance && (
+          <>
+            <div style={sectionTitleWrap}>
+              <div style={sectionTitle}>FINANCE</div>
+              <div style={sectionDivider} />
+            </div>
+
+            {hasPermission(user, "platform.asset") && (
+              <Link
+                to="/asset_manager"
+                onClick={handleNavigate}
+                style={linkStyle(isActive("/asset_manager"))}
+                title="Asset Management"
+              >
+                <Wallet size={17} style={{ flexShrink: 0 }} />
+                {label("Asset Management")}
+              </Link>
+            )}
+
             <Link
-              to="/ProductsManagement"
-              style={linkStyle(isActive("/ProductsManagement"))}
-              title="Products"
+              to="/transactions"
+              onClick={handleNavigate}
+              style={linkStyle(isActive("/transactions"))}
+              title="Transactions"
             >
-              <Package size={17} style={{ flexShrink: 0 }} />
-              {label("Products")}
+              <CreditCard size={17} style={{ flexShrink: 0 }} />
+              {label("Transactions")}
             </Link>
-          )}
 
-          {hasPermission(user, "exchange.service") && (
+            {hasPermission(user, "finance.withdraw") && (
+              <Link
+                to="/withdraws"
+                onClick={handleNavigate}
+                style={linkStyle(isActive("/withdraws"))}
+                title="Withdrawals"
+              >
+                <Wallet size={17} style={{ flexShrink: 0 }} />
+                {label("Withdrawals")}
+              </Link>
+            )}
+          </>
+        )}
+
+        {showCommunication && (
+          <>
+            <div style={sectionTitleWrap}>
+              <div style={sectionTitle}>COMMUNICATION</div>
+              <div style={sectionDivider} />
+            </div>
+
             <Link
-              to="/exchange_dashboard"
-              style={linkStyle(isActive("/exchange_dashboard"))}
-              title="Exchange"
+              to="/messages"
+              onClick={handleNavigate}
+              style={linkStyle(isActive("/messages"))}
+              title="Messages"
             >
-              <ArrowLeftRight size={17} style={{ flexShrink: 0 }} />
-              {label("Exchange")}
+              <MessageSquare size={17} style={{ flexShrink: 0 }} />
+              {label("Messages")}
             </Link>
-          )}
-
-          {hasPermission(user, "transfer.service") && (
-            <Link
-              to="/wire_transfer"
-              style={linkStyle(isActive("/wire_transfer"))}
-              title="Wire Transfer"
-            >
-              <Landmark size={17} style={{ flexShrink: 0 }} />
-              {label("Wire Transfer")}
-            </Link>
-          )}
-        </>
-      )}
-
-      {showFinance && (
-        <>
-          <div style={sectionTitleWrap}>
-            <div style={sectionTitle}>FINANCE</div>
-            <div style={sectionDivider} />
-          </div>
-
-          {hasPermission(user, "platform.asset") && (
-            <Link
-              to="/asset_manager"
-              style={linkStyle(isActive("/asset_manager"))}
-              title="Asset Management"
-            >
-              <Wallet size={17} style={{ flexShrink: 0 }} />
-              {label("Asset Management")}
-            </Link>
-          )}
-
-          <Link
-            to="/transactions"
-            style={linkStyle(isActive("/transactions"))}
-            title="Transactions"
-          >
-            <CreditCard size={17} style={{ flexShrink: 0 }} />
-            {label("Transactions")}
-          </Link>
-
-          {hasPermission(user, "finance.withdraw") && (
-            <Link
-              to="/withdraws"
-              style={linkStyle(isActive("/withdraws"))}
-              title="Withdrawals"
-            >
-              <Wallet size={17} style={{ flexShrink: 0 }} />
-              {label("Withdrawals")}
-            </Link>
-          )}
-        </>
-      )}
-
-      {showCommunication && (
-        <>
-          <div style={sectionTitleWrap}>
-            <div style={sectionTitle}>COMMUNICATION</div>
-            <div style={sectionDivider} />
-          </div>
-
-          <Link
-            to="/messages"
-            style={linkStyle(isActive("/messages"))}
-            title="Messages"
-          >
-            <MessageSquare size={17} style={{ flexShrink: 0 }} />
-            {label("Messages")}
-          </Link>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

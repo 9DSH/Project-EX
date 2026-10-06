@@ -15,73 +15,41 @@ import {
   Users,
   Radio,
   Megaphone,
-   Speaker
+  Speaker,
+  ArrowLeft
 } from "lucide-react";
 import useMessagesSocket from "../hooks/useMessagesSocket";
 import { hasPermission } from "../utils/permissions";
+import "./Messages.css";
 
 // ── Skeleton ──────────────────────────────────────────────────
 function Sk({ w = "100%", h = 16, r = 6 }) {
     return (
-        <div style={{
-            width: w, height: h, borderRadius: r,
-            background: "linear-gradient(90deg,#151f30 25%,#1e2d44 50%,#151f30 75%)",
-            backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite"
-        }} />
+        <div
+            className="msg-sk"
+            style={{ width: w, height: h, borderRadius: r }}
+        />
     );
 }
 
 // ── Stat Pill ─────────────────────────────────────────────────
 function StatPill({ icon: Icon, label, value, accent, loading }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        background: "#071020ff",
-        borderRadius: 12,
-        padding: "10px 10px",
-      }}
-    >
+    <div className="msg-statpill">
       <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: accent + "18",
-          color: accent,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
+        className="msg-statpill-icon"
+        style={{ background: accent + "18", color: accent }}
       >
         <Icon size={17} />
       </div>
       <div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "#475569",
-            fontWeight: 700,
-            letterSpacing: 0.6,
-            marginBottom: 3,
-          }}
-        >
+        <div className="msg-statpill-label">
           {label}
         </div>
         {loading ? (
           <Sk w={56} h={22} />
         ) : (
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: accent,
-              letterSpacing: -0.5,
-            }}
-          >
+          <div className="msg-statpill-value" style={{ color: accent }}>
             {value ?? "—"}
           </div>
         )}
@@ -95,22 +63,22 @@ function Avatar({ name, size = 38, online }) {
     const colors = ["#3b82f6","#8b5cf6","#06b6d4","#10b981","#f59e0b","#ef4444","#ec4899"];
     const color = colors[(name?.charCodeAt(0) || 0) % colors.length];
     return (
-        <div style={{ position: "relative", flexShrink: 0 }}>
-            <div style={{
-                width: size, height: size, borderRadius: "50%",
-                background: color + "22", border: `1.5px solid ${color}44`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: size * 0.38, fontWeight: 700, color,
-            }}>
+        <div className="msg-avatar-wrap">
+            <div
+                className="msg-avatar"
+                style={{
+                    width: size, height: size,
+                    background: color + "22", border: `1.5px solid ${color}44`,
+                    fontSize: size * 0.38, color,
+                }}
+            >
                 {name?.[0]?.toUpperCase() || "?"}
             </div>
             {online !== undefined && (
-                <div style={{
-                    position: "absolute", bottom: 0, right: 0,
-                    width: 9, height: 9, borderRadius: "50%",
-                    background: online ? "#22c55e" : "#475569",
-                    border: "2px solid #0b1728",
-                }} />
+                <div
+                    className="msg-avatar-status"
+                    style={{ background: online ? "#22c55e" : "#475569" }}
+                />
             )}
         </div>
     );
@@ -166,72 +134,36 @@ function BroadcastPanel({ users, onSend, canBroadcast }) {
 
     if (!canBroadcast) {
         return (
-            <div style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#475569",
-                fontSize: 13
-            }}>
+            <div className="bc-empty">
                 No broadcast permission
             </div>
         );
     }
 
     return (
-        <div style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            padding: 20,
-            background: "#08111f",
-            borderRadius: 8,
-            overflow: "hidden"
-        }}>
+        <div className="bc-panel">
 
             {/* HEADER */}
-            <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 10,
-                alignItems: "center"
-            }}>
+            <div className="bc-header">
 
-                <div style={{ color: "#a78bfa", fontWeight: 700 , marginLeft:10}}>
-                <Megaphone size={15} /> Broadcast
+                <div className="bc-title">
+                    <Megaphone size={15} /> Broadcast
                     {activeUsers.length > 0 &&(
-                            <span style={{
-                                background: "rgba(139,92,246,0.3)", border: "1px solid rgba(139,92,246,0.4)",
-                                color: "#c4b5fd", borderRadius: 99, fontSize: 11,
-                                fontWeight: 700, padding: "1px 7px", marginLeft:10
-                            }}>{activeUsers.length}</span>
-                        )}
+                        <span className="count">{activeUsers.length}</span>
+                    )}
                 </div>
 
-             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
- 
-                <div style={{ fontSize: 11, color: "#6f7987ff" }}>
-                    {selectedUsers.length} selected
+                <div className="bc-header-right">
+                    <div className="bc-selected-count">
+                        {selectedUsers.length} selected
+                    </div>
+                    <button
+                        onClick={toggleSelectAll}
+                        className="bc-select-all-btn"
+                    >
+                        Select All Active
+                    </button>
                 </div>
-                <button
-                    onClick={toggleSelectAll}
-                    style={{
-                        background: "rgba(59,130,246,0.12)",
-                        border: "1px solid rgba(59,130,246,0.3)",
-                        color: "#60a5fa",
-                        borderRadius: 8,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: "4px 8px",
-                        cursor: "pointer"
-                    }}
-                >
-                    Select All Active
-                </button>
-
-
-            </div>
             </div>
 
             {/* SEARCH */}
@@ -239,24 +171,11 @@ function BroadcastPanel({ users, onSend, canBroadcast }) {
                 value={userSearch}
                 onChange={e => setUserSearch(e.target.value)}
                 placeholder="Search users..."
-                style={{
-                    background: "#06101e",
-                    border: "1px solid #1a2d4a",
-                    color: "white",
-                    padding: 8,
-                    borderRadius: 10,
-                    marginBottom: 8
-                }}
+                className="bc-search"
             />
 
             {/* USER LIST */}
-            <div style={{
-                flex: 1,
-                overflowY: "auto",
-                border: "1px solid #1a2d4a",
-                borderRadius: 10,
-                marginBottom: 10
-            }}>
+            <div className="bc-userlist">
                 {filteredUsers.map(user => {
                     const selected = selectedUsers.some(u => u.user_id === user.user_id);
 
@@ -264,18 +183,11 @@ function BroadcastPanel({ users, onSend, canBroadcast }) {
                         <div
                             key={user.user_id}
                             onClick={() => toggleUser(user)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 10,
-                                padding: 10,
-                                cursor: "pointer",
-                                background: selected ? "rgba(139,92,246,0.12)" : "transparent"
-                            }}
+                            className={`bc-user-row${selected ? " selected" : ""}`}
                         >
                             <input type="checkbox" checked={selected} readOnly />
                             <Avatar name={user.username} size={26} online={user.is_online} />
-                            <div style={{ color: "#cbd5e1", fontSize: 13 }}>
+                            <div className="bc-user-name">
                                 {user.username}
                             </div>
                         </div>
@@ -288,32 +200,14 @@ function BroadcastPanel({ users, onSend, canBroadcast }) {
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 placeholder="Write broadcast message..."
-                style={{
-                    minHeight: 130,
-                    background: "#06101e",
-                    border: "1px solid #1a2d4a",
-                    color: "white",
-                    padding: 10,
-                    borderRadius: 10,
-                    resize: "vertical",
-                    marginBottom: 10
-                }}
+                className="bc-message"
             />
 
             {/* SEND */}
             <button
                 onClick={handleSend}
                 disabled={!message.trim() || selectedUsers.length === 0}
-                style={{
-                    background: "rgba(139,92,246,0.2)",
-                    border: "1px solid rgba(139,92,246,0.4)",
-                    color: "#a78bfa",
-                    padding: 10,
-                    borderRadius: 10,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    opacity: (!message.trim() || selectedUsers.length === 0) ? 0.5 : 1
-                }}
+                className="bc-send-btn"
             >
                 Send Broadcast ({selectedUsers.length})
             </button>
@@ -328,53 +222,35 @@ function NewChatDropdown({ users, search, setSearch, onStart, onClose, dropdownR
     );
 
     return (
-        <div ref={dropdownRef} style={{
-            position: "absolute", top: "calc(100% + 8px)", left: 0,
-            width: 280, background: "#0a1628",
-            border: "1px solid #1a2d4a", borderRadius: 14,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-            zIndex: 100, overflow: "hidden",
-        }}>
+        <div ref={dropdownRef} className="msg-dropdown">
             {/* Search */}
-            <div style={{ padding: "12px 12px 8px" }}>
-                <div style={{ position: "relative" }}>
-                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#334155" }}>🔍</span>
+            <div className="msg-dropdown-search">
+                <div className="msg-dropdown-search-wrap">
+                    <span className="msg-dropdown-search-icon">🔍</span>
                     <input
                         autoFocus
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Search users…"
-                        style={{
-                            width: "100%", background: "#06101e",
-                            border: "1px solid #1a2d4a", color: "white",
-                            padding: "8px 10px 8px 32px", borderRadius: 9,
-                            fontSize: 13, outline: "none", boxSizing: "border-box",
-                        }}
                     />
                 </div>
             </div>
 
             {/* User list */}
-            <div style={{ maxHeight: 260, overflowY: "auto", padding: "4px 0 8px" }}>
+            <div className="msg-dropdown-list">
                 {filtered.length === 0 ? (
-                    <div style={{ padding: "20px 16px", textAlign: "center", color: "#334155", fontSize: 13 }}>No users found</div>
+                    <div className="msg-dropdown-empty">No users found</div>
                 ) : (
                     filtered.map(u => (
                         <div
                             key={u.user_id}
                             onClick={() => onStart(u)}
-                            style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                padding: "8px 12px", cursor: "pointer",
-                                transition: "background 0.15s",
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#0f1f38"}
-                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            className="msg-dropdown-item"
                         >
                             <Avatar name={u.username} size={32} online={u.is_online} />
                             <div>
-                                <div style={{ color: "#e2e8f0", fontSize: 13, fontWeight: 600 }}>{u.username}</div>
-                                {u.email && <div style={{ color: "#334155", fontSize: 11 }}>{u.email}</div>}
+                                <div className="msg-dropdown-item-name">{u.username}</div>
+                                {u.email && <div className="msg-dropdown-item-email">{u.email}</div>}
                             </div>
                         </div>
                     ))
@@ -396,6 +272,10 @@ export default function MessagesPage() {
     const [showNewChat, setShowNewChat] = useState(false);
     const [loadingConvs, setLoadingConvs] = useState(true);
     const [convSearch, setConvSearch] = useState("");
+    // Mobile: which single panel is visible ("list" | "chat")
+    const [mobileView, setMobileView] = useState("list");
+    // Tablet/mobile: broadcast slide-over open state
+    const [showBroadcast, setShowBroadcast] = useState(false);
     const dropdownRef = useRef(null);
     const newChatBtnRef = useRef(null);
     const token = localStorage.getItem("token");
@@ -573,6 +453,7 @@ export default function MessagesPage() {
             });
             setShowNewChat(false);
             setSearch("");
+            setMobileView("chat");
             await loadConversations();
         } catch (err) {
             console.log(err);
@@ -646,20 +527,39 @@ export default function MessagesPage() {
           ]
         : allConversations;
 
+    const handleSelectConversation = (conv) => {
+        if (conv.isNew) {
+            handleStartChat({ user_id: conv.user_id, username: conv.username });
+            setConvSearch("");
+            return;
+        }
+        setActiveChat(conv);
+        setMobileView("chat");
+        // Mark as read (local optimistic update)
+        if (conv.kind === "internal") {
+            setInternalItems(prev =>
+                prev.map(c =>
+                    c.conversation_id === conv.conversation_id
+                        ? { ...c, unread_count: 0 }
+                        : c
+                )
+            );
+        } else {
+            setConversations(prev =>
+                prev.map(c =>
+                    c.conversation_id === conv.conversation_id
+                        ? { ...c, unread_count: 0 }
+                        : c
+                )
+            );
+        }
+    };
+
     return (
 
-            <div
-                style={{
-                    width: "100%",
-                    height: "100vh",
-                    display: "flex",
-                    flexDirection: "column",
-                    background: "transparent",
-                    overflow: "hidden",
-                }}
-            >
+            <div className="msg-page">
           {/* ── HERO HUB — ONE fixed filter set, shared and applied across Products / Orders / Analysis ── */}
-            <div style={{  flexShrink: 0 }}>
+            <div className="msg-hero-wrap">
                 <HeroHub
                 title="Messages"
                 subtitle="Direct conversations &amp; broadcasts"
@@ -677,87 +577,30 @@ export default function MessagesPage() {
                 />
             </div>
 
-            {/* CENTER AREA (THIS IS THE FIX) */}
-            <div
-            style={{
-                flex: 1,
-                display: "flex",
-                justifyContent: "flex-start",
-                alignItems: "center",
-                padding: "8px 8px 8px 8px",
-                overflow: "hidden",
-                marginLeft: "5px"
-                
-            }}
-            >
+            {/* CENTER AREA */}
+            <div className="msg-center">
             {/* CHAT CONTAINER */}
-            <div
-                style={{
-                flex : 1,
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
-                height: "100%",
-                maxHeight: "calc(100vh - 120px)", // prevents clipping
-                color: "white",
-                fontFamily: "'Inter', sans-serif",
-                borderRadius: 8,
-                overflow: "hidden",
-                }}
-            >
+            <div className="msg-container">
 
             {/* ═══ BODY ═══════════════════════════════════════════ */}
-            <div style={{ 
-                flex: 1,
-                 display: "flex", 
-                 overflow: "hidden" , 
-                 background: "transparent", 
-                 borderRadius: 8 , 
-                 gap: 10,
-                 
-                 }}>
+            <div className="msg-body" data-view={mobileView}>
 
                 {/* LEFT: Conversation list */}
-                <div style={{
-                    width: "25%",
-                    display: "flex", 
-                    flexDirection: "column",
-                    background: "#0b1424", 
-                    border: "1px solid #313d58bc",
-                    overflow: "hidden",
-                    borderRadius: 8
-                    
-                }}>
+                <div className="msg-col-list">
                     {/* Search bar inside sidebar */}
-                    <div style={{display: "flex",  padding: "10px 12px", borderBottom: "1px solid #0d1e35" }}>
+                    <div className="msg-sidebar-header">
                     {/* Bottom row: action buttons */}
-                        <div style={{ 
-                            
-                            display: "flex", 
-                            alignItems: "center", 
-                            gap: 8 }}>
+                        <div className="msg-sidebar-actions">
                             {/* New Chat button with dropdown */}
                             <div style={{ position: "relative" }}>
                                 <button
                                     ref={newChatBtnRef}
                                     onClick={() => { setShowNewChat(v => !v); setSearch(""); }}
-                                    style={{
-                                        display: "flex", alignItems: "center", gap: 7,
-                                        background: showNewChat ? "rgba(59,130,246,0.25)" : "rgba(59,130,246,0.12)",
-                                        border: `1px solid ${showNewChat ? "#3b82f6" : "rgba(59,130,246,0.3)"}`,
-                                        color: showNewChat ? "white" : "#60a5fa",
-                                        borderRadius: 10, padding: "8px 16px",
-                                        cursor: "pointer", fontWeight: 600, fontSize: 13,
-                                        transition: "all 0.2s",
-                                    }}
+                                    className={`msg-newchat-btn${showNewChat ? " active" : ""}`}
                                 >
-                                    <span style={{ fontSize: 15 }}><MessageCircle size={20}/></span>
+                                    <span style={{ fontSize: 15, display: "flex" }}><MessageCircle size={20}/></span>
                                     New Chat
-                                    <span style={{
-                                        fontSize: 10, display: "inline-block",
-                                        transform: showNewChat ? "rotate(180deg)" : "rotate(0deg)",
-                                        transition: "transform 0.2s",
-                                    }}>▾</span>
+                                    <span className={`msg-newchat-caret${showNewChat ? " open" : ""}`}>▾</span>
                                 </button>
 
                                 {showNewChat && (
@@ -775,135 +618,86 @@ export default function MessagesPage() {
 
                             {/* Unread badge shortcut */}
                             {totalUnread > 0 && (
-                                <div style={{
-                                    display: "flex", alignItems: "center", gap: 6,
-                                    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-                                    borderRadius: 10, padding: "8px 14px", fontSize: 13, color: "#fca5a5",
-                                    fontWeight: 600,
-                                }}>
-                                    <span style={{
-                                        background: "#ef4444", color: "white",
-                                        borderRadius: 99, fontSize: 11, fontWeight: 800,
-                                        padding: "1px 7px", minWidth: 18, textAlign: "center",
-                                    }}>{totalUnread}</span>
+                                <div className="msg-unread-shortcut">
+                                    <span className="badge">{totalUnread}</span>
                                     unread
                                 </div>
                             )}
+
+                            {/* Broadcast toggle — visible on tablet/mobile only (see CSS).
+                                On mobile it switches the single visible panel; on tablet
+                                it opens the slide-over. */}
+                            <button
+                                type="button"
+                                className="msg-broadcast-toggle"
+                                onClick={() => {
+                                    setMobileView("broadcast");
+                                    setShowBroadcast(true);
+                                }}
+                            >
+                                <Megaphone size={15} />
+                                Broadcast
+                            </button>
 
                         </div>
                         
                     </div>
 
                     {/* Conversation list */}
-                    <div style={{ 
-                            flex: 1, 
-                            overflowY: "auto", 
-                            scrollbarWidth: "thin", 
-                            scrollbarColor: "#0d1e35 transparent",
-                            }}>
+                    <div className="msg-list-scroll">
                             {loadingConvs ? (
-                                <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                                <div className="msg-list-skeleton">
                                     {[1,2,3,4,5].map(i => (
-                                        <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0" }}>
+                                        <div key={i} className="msg-list-skeleton-row">
                                             <Sk w={40} h={40} r={20} />
-                                            <div style={{ flex: 1 }}>
+                                            <div className="msg-list-skeleton-body">
                                                 <Sk w="60%" h={13} r={6} />
-                                                <div style={{ marginTop: 6 }}><Sk w="90%" h={11} r={5} /></div>
+                                                <div className="msg-list-skeleton-gap"><Sk w="90%" h={11} r={5} /></div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             ) : displayedConversations.length === 0 ? (
-                                 <div style={{ padding: 32, textAlign: "center" }}>
-                                     <div style={{ color: "#28528aff",fontSize: 36, marginBottom: 12 }}><MessagesSquare/></div>
-                                   <div style={{ color: "#28528aff", fontWeight: 600, fontSize: 14 }}>
+                                 <div className="msg-list-empty">
+                                     <div className="msg-list-empty-icon"><MessagesSquare/></div>
+                                   <div className="msg-list-empty-title">
                                         {normalizedConvSearch ? "No matching conversations or users" : "No conversations yet"}
                                     </div>
-                                   <div style={{ color: "#3a4962ff", fontSize: 12, marginTop: 6 }}>
+                                   <div className="msg-list-empty-sub">
                                         {normalizedConvSearch ? "Try a different search" : "Start a new chat to begin"}
                                     </div>
                                  </div>
                              ) : (
                                  <ConversationList
-
                                      conversations={displayedConversations}
                                      activeChat={activeChat}
-                                     setActiveChat={(conv) => {
-                                        if (conv.isNew) {
-                                            handleStartChat({ user_id: conv.user_id, username: conv.username });
-                                            setConvSearch("");
-                                            return;
-                                        }
-                                         setActiveChat(conv);
-                                         // Mark as read (local optimistic update)
-                                         if (conv.kind === "internal") {
-                                             setInternalItems(prev =>
-                                                 prev.map(c =>
-                                                     c.conversation_id === conv.conversation_id
-                                                         ? { ...c, unread_count: 0 }
-                                                         : c
-                                                 )
-                                             );
-                                         } else {
-                                             setConversations(prev =>
-                                                 prev.map(c =>
-                                                     c.conversation_id === conv.conversation_id
-                                                         ? { ...c, unread_count: 0 }
-                                                         : c
-                                                 )
-                                             );
-                                         }
-                                     }}
+                                     setActiveChat={handleSelectConversation}
                                  />
                              )}
                         </div>
                     </div>
 
                 {/* center: Chat window */}
-                <div style={{ 
-                    width: "50%",
-                    display: "flex", 
-                    flexDirection: "column", 
-                    background: "#060d1a",  
-                    border: "1px solid #34343dbe",
-                    borderRadius: 8,
-                    overflow: "hidden" ,
-                    }}>
+                <div className="msg-col-chat">
                     {activeChat ? (
                         <ChatWindow
                             activeChat={activeChat}
                             token={token}
                             refreshConversations={refreshAll}
                             mode="message"
+                            onBack={() => setMobileView("list")}
                         />
                     ) : (
                         /* Empty state */
-                        <div style={{
-                            flex: 1, display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 16,
-                        }}>
-                            <div style={{
-                                width: 80, height: 80, borderRadius: 24,
-                                background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12))",
-                                border: "1px solid rgba(59,130,246,0.15)",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: 36, marginBottom: 8,
-                            }}><MessagesSquare/></div>
-                            <div style={{ color: "#334155", fontWeight: 700, fontSize: 18 }}>Select a conversation</div>
-                            <div style={{ color: "#1e3a5f", fontSize: 13, textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>
+                        <div className="chat-emptystate">
+                            <div className="chat-emptystate-icon"><MessagesSquare/></div>
+                            <div className="chat-emptystate-title">Select a conversation</div>
+                            <div className="chat-emptystate-sub">
                                 Choose a conversation from the left, or start a new chat with any user.
                             </div>
                             <button
                                 onClick={() => setShowNewChat(true)}
-                                style={{
-                                    marginTop: 8, display: "flex", alignItems: "center", gap: 8,
-                                    background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)",
-                                    color: "#60a5fa", borderRadius: 12, padding: "10px 22px",
-                                    cursor: "pointer", fontWeight: 600, fontSize: 14,
-                                    transition: "all 0.2s",
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = "rgba(59,130,246,0.25)"}
-                                onMouseLeave={e => e.currentTarget.style.background = "rgba(59,130,246,0.15)"}
+                                className="chat-emptystate-btn"
                             >
                                 ✏️ Start new chat
                             </button>
@@ -911,19 +705,31 @@ export default function MessagesPage() {
                     )}
                 </div>
 
-                   {/* RIGHT: Broadcast window */}
-                <div style={{ 
-                    width: "25%",
-                    flex: 1, 
-                    display: "flex", 
-                    flexDirection: "column", 
-                    background: "#060d1a", 
-                    marginRight: "5px", 
-  
-                 border: "1px solid #34343dbe",
-                    borderRadius: 8,
-                    overflow: "auto" ,
-                    }}>
+                {/* Backdrop for broadcast slide-over (tablet only; hidden on mobile) */}
+                <div
+                    className={`msg-broadcast-backdrop${showBroadcast ? " open" : ""}`}
+                    onClick={() => setShowBroadcast(false)}
+                />
+
+                   {/* RIGHT: Broadcast window.
+                       Tablet: slide-over (open/close via the toggle + backdrop).
+                       Mobile: a normal full-width panel, shown via data-view. */}
+                <div className={`msg-col-broadcast${showBroadcast ? " open" : ""}`}>
+
+                  {/* Mobile-only header with a back button (hidden on desktop/tablet via CSS) */}
+                  <div className="msg-broadcast-header-mobile">
+                      <button
+                          type="button"
+                          className="msg-mobile-back"
+                          onClick={() => { setMobileView("list"); setShowBroadcast(false); }}
+                          aria-label="Back to conversations"
+                      >
+                          <ArrowLeft size={18} />
+                      </button>
+                      <div className="msg-broadcast-header-mobile-title">
+                          <Megaphone size={15} /> Broadcast
+                      </div>
+                  </div>
 
                   <BroadcastPanel
                     users={users}
@@ -937,16 +743,6 @@ export default function MessagesPage() {
 
          
 
-            <style>{`
-                @keyframes shimmer {
-                    0% { background-position: 200% 0 }
-                    100% { background-position: -200% 0 }
-                }
-                * { box-sizing: border-box; }
-                ::-webkit-scrollbar { width: 4px; height: 4px; }
-                ::-webkit-scrollbar-track { background: transparent; }
-                ::-webkit-scrollbar-thumb { background: #0d1e35; border-radius: 4px; }
-            `}</style>
         </div>
          </div>
           </div>

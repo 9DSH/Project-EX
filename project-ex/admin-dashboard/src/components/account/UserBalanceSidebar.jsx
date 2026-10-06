@@ -1,35 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import {
-  Activity,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Copy,
-  Landmark,
-  LoaderCircle,
-  MessageSquare,
-  QrCode,
-  Save,
-  Wallet,
-  X,
+  Activity, ArrowDownToLine, ArrowUpFromLine, Copy, Landmark, LoaderCircle,
+  MessageSquare, QrCode, Save, Wallet,
 } from "lucide-react";
 import QRCode from "qrcode";
 import axios from "axios";
 import { API_URL } from "../../config";
+import { authHeaders, fmt } from "./accountUtils";
+import { SidePanel, TxRow } from "./AccountBits";
+import "../../pages/MyAccount.css";
 
 const api = axios.create({ baseURL: API_URL });
-
-const fmt = (value, digits = 6) =>
-  value != null
-    ? Number(value).toLocaleString("en-US", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: digits,
-      })
-    : "—";
-
-const fmtDate = (value) => (value ? new Date(value).toLocaleString() : "—");
-
-const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });
 
 const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -39,8 +20,12 @@ const fileToDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
+/**
+ * Desktop / tablet: slides in from the right.
+ * Mobile (<= 640px): bottom sheet rising from the very bottom with a small
+ * dimmed strip left at the top (see .ma-side-* in myaccount.css).
+ */
 export default function UserBalanceSidebar({ balance, token, onClose, onRefresh }) {
-  const [visible, setVisible] = useState(false);
   const [details, setDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState("");
@@ -112,7 +97,6 @@ export default function UserBalanceSidebar({ balance, token, onClose, onRefresh 
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setVisible(true);
       setActionMode("overview");
       setStatusMessage(null);
       setWatchState(null);
@@ -126,7 +110,6 @@ export default function UserBalanceSidebar({ balance, token, onClose, onRefresh 
     }, 0);
     return () => {
       clearTimeout(timer);
-      setVisible(false);
     };
   }, [balance?.currency_id, balance?.network_id, token]);
 
@@ -345,554 +328,179 @@ export default function UserBalanceSidebar({ balance, token, onClose, onRefresh 
     });
   };
 
-  return createPortal(
-    <>
-      <div style={styles.overlay(visible)} onClick={onClose} />
-      <div style={styles.panel(visible)}>
-        <div style={styles.header}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={styles.walletIcon}>
-              <Wallet size={18} />
-            </div>
-            <div>
-              <div style={styles.title}>{balance?.currency || "Wallet"}</div>
-              <div style={styles.subtitle}>
-                {balance?.network_chain || balance?.network || "Primary Balance View"}
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} style={styles.closeBtn} type="button">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div style={styles.hero}>
-          <div style={styles.totalLabel}>Total Balance</div>
-          <div style={styles.totalValue}>{fmt(total)}</div>
-          <div style={styles.splitRow}>
-            <div style={styles.splitCard}>
-              <span style={styles.splitLabel}>Available</span>
-              <strong style={{ color: "#10b981" }}>{fmt(balance?.available)}</strong>
-            </div>
-            <div style={styles.splitCard}>
-              <span style={styles.splitLabel}>Frozen</span>
-              <strong style={{ color: "#f59e0b" }}>{fmt(balance?.frozen)}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div style={styles.actionsRow}>
-          <button
-            onClick={() => setActionMode("deposit")}
-            style={{ ...styles.actionBtn, ...styles.depositBtn, ...(actionMode === "deposit" ? styles.actionBtnActive : null) }}
-            type="button"
-          >
-            <ArrowDownToLine size={14} />
-            Deposit
-          </button>
-          <button
-            onClick={() => setActionMode("withdraw")}
-            style={{ ...styles.actionBtn, ...styles.withdrawBtn, ...(actionMode === "withdraw" ? styles.actionBtnActive : null) }}
-            type="button"
-          >
-            <ArrowUpFromLine size={14} />
-            Withdraw
-          </button>
-        </div>
-
-        {statusMessage && (
-          <div style={statusMessage.type === "error" ? styles.errorBox : styles.successBox}>{statusMessage.text}</div>
-        )}
-
-
-        {actionMode === "deposit" && details?.method === "crypto" && (
-          <div style={styles.section}>
-            <div style={styles.sectionTitle}>
-              <QrCode size={14} />
-              Crypto Deposit
-            </div>
-            {details?.tatum_api_warning && (
-              <div style={styles.warningBox}>
-                ⚠️ Deposit confirmation service is currently unavailable — your deposit will be credited once connectivity is restored.
-              </div>
-            )}
-            <div style={styles.qrWrap}>
-              {qrSrc ? <img src={qrSrc} alt="Deposit QR" style={styles.qrImage} /> : <div style={styles.dimText}>QR code unavailable.</div>}
-            </div>
-            <div style={styles.addressCard}>
-              <div style={styles.metaLabel}>Deposit Address</div>
-              <div style={styles.addressValue}>{details.deposit_address}</div>
-              <button onClick={() => copyToClipboard(details.deposit_address)} style={styles.inlineBtn} type="button">
-                <Copy size={13} /> Copy address
-              </button>
-            </div>
-            <div style={styles.infoList}>
-              <InfoRow label="Confirmations required" value={details.confirmations_required} />
-              <InfoRow label="Min deposit" value={fmt(details.min_deposit)} />
-              <InfoRow label="Max deposit" value={details.max_deposit ? fmt(details.max_deposit) : "No configured cap"} />
-              <InfoRow label="Current available balance" value={fmt(balance.available)} />
-            </div>
-            <button onClick={startCryptoWatch} style={styles.primaryBtn} type="button">
-              <Activity size={14} /> Watch for confirmation
-            </button>
-            {watchState?.kind === "crypto-deposit" && (
-              <div style={styles.watchBox}>Waiting for Tatum/webhook confirmation and balance credit...</div>
-            )}
-          </div>
-        )}
-
-        {actionMode === "deposit" && details?.method === "irt_manual" && (
-          <div style={styles.section}>
-            <div style={styles.sectionTitle}>
-              <Landmark size={14} />
-              IRT Deposit
-            </div>
-            <div style={styles.bankGrid}>
-              <Meta label="Bank" value={details.platform_bank_account?.bank_name || "—"} />
-              <Meta label="Holder" value={details.platform_bank_account?.bank_holder_name || "—"} />
-              <Meta label="Card Number" value={details.platform_bank_account?.bank_card_number || "—"} mono />
-              <Meta label="Sheba" value={details.platform_bank_account?.bank_sheba || "—"} mono />
-            </div>
-            <div style={styles.formStack}>
-              <Field
-                label="Transferred Amount"
-                value={irtDepositAmount}
-                onChange={setIrtDepositAmount}
-                placeholder="Enter the amount you transferred"
-                type="number"
-              />
-              <label style={styles.fieldWrap}>
-                <span style={styles.metaLabel}>Note to master (optional)</span>
-                <textarea
-                  value={irtDepositNote}
-                  onChange={(event) => setIrtDepositNote(event.target.value)}
-                  rows={3}
-                  style={styles.textarea}
-                  placeholder="Add any payment note or receipt context"
-                />
-              </label>
-              <label style={styles.fieldWrap}>
-                <span style={styles.metaLabel}>Receipt Photo</span>
-                <input type="file" accept="image/*" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} style={styles.input} />
-              </label>
-              {receiptFile && <div style={styles.note}>Selected receipt: {receiptFile.name}</div>}
-              <button onClick={submitIrtReceipt} style={styles.primaryBtn} disabled={submittingReceipt} type="button">
-                <MessageSquare size={14} /> {submittingReceipt ? "Sending..." : "Upload Receipt to Master"}
-              </button>
-              {watchState?.kind === "irt-deposit" && (
-                <div style={styles.watchBox}>Waiting for manual approval. This panel watches your balance and closes after approval.</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {actionMode === "withdraw" && (
-          <div style={styles.section}>
-            <div style={styles.sectionTitle}>
-              <ArrowUpFromLine size={14} />
-              {isIrt ? "IRT Withdrawal" : "Crypto Withdrawal"}
-            </div>
-            <div style={styles.formStack}>
-              {!isIrt && (
-                <>
-                  <Field
-                    label="External Wallet Address"
-                    value={withdrawAddress}
-                    onChange={setWithdrawAddress}
-                    placeholder="Your private wallet address"
-                  />
-                  <div style={styles.inlineActions}>
-                    <button onClick={saveExternalWallet} style={styles.inlineBtn} disabled={savingAddress} type="button">
-                      <Save size={13} /> {savingAddress ? "Saving..." : "Save Wallet"}
-                    </button>
-                  </div>
-                </>
-              )}
-              {isIrt && !details?.user_bank_info_complete && (
-                <div style={styles.warningText}>Add or update your bank info here before requesting an IRT withdrawal.</div>
-              )}
-              {isIrt && (
-                <div style={styles.bankEditCard}>
-                  <div style={styles.sectionTitle}>My Bank Account</div>
-                  <Field label="Bank name" value={irtBankDraft.bank_name} onChange={(value) => setIrtBankDraft((prev) => ({ ...prev, bank_name: value }))} />
-                  <Field
-                    label="Holder name"
-                    value={irtBankDraft.bank_holder_name}
-                    onChange={(value) => setIrtBankDraft((prev) => ({ ...prev, bank_holder_name: value }))}
-                  />
-                  <Field
-                    label="Card number"
-                    value={irtBankDraft.bank_card_number}
-                    onChange={(value) => setIrtBankDraft((prev) => ({ ...prev, bank_card_number: value }))}
-                  />
-                  <Field
-                    label="Sheba"
-                    value={irtBankDraft.bank_sheba}
-                    onChange={(value) => setIrtBankDraft((prev) => ({ ...prev, bank_sheba: value }))}
-                  />
-                </div>
-              )}
-              <Field
-                label="Amount"
-                value={withdrawAmount}
-                onChange={setWithdrawAmount}
-                placeholder="Enter amount"
-                type="number"
-              />
-              <label style={styles.fieldWrap}>
-                <span style={styles.metaLabel}>Note (optional)</span>
-                <textarea
-                  value={withdrawNote}
-                  onChange={(event) => setWithdrawNote(event.target.value)}
-                  rows={3}
-                  style={styles.textarea}
-                  placeholder={isIrt ? "Add payout instructions if needed" : "Optional withdrawal note"}
-                />
-              </label>
-              {isIrt && (
-                <div style={styles.bankGrid}>
-                  <Meta label="My Bank" value={details?.user_bank_info?.bank_name || "—"} />
-                  <Meta label="Holder" value={details?.user_bank_info?.bank_holder_name || "—"} />
-                  <Meta label="Card Number" value={details?.user_bank_info?.bank_card_number || "—"} mono />
-                  <Meta label="Sheba" value={details?.user_bank_info?.bank_sheba || "—"} mono />
-                </div>
-              )}
-              <button
-                onClick={submitWithdraw}
-                style={styles.primaryBtn}
-                disabled={submittingWithdraw}
-                type="button"
-              >
-                <ArrowUpFromLine size={14} /> {submittingWithdraw ? "Submitting..." : "Submit Withdrawal"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>
-            <Activity size={14} />
-            Recent Activity
-          </div>
-          {!Array.isArray(balance?.recentActivity) || balance.recentActivity.length === 0 ? (
-            <div style={styles.dimText}>No recent transactions for this wallet pair.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {balance.recentActivity.slice(0, 8).map((tx, index) => (
-                
-                <div key={tx.id || `${tx.type}-${index}`} style={styles.activityRow}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={styles.activityType}>#{tx.id} - {(tx.type || "transaction").toUpperCase()}</span>
-                    <span style={styles.activityDate}>{fmtDate(tx.created_at)}</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                    <strong style={styles.activityAmount}>{fmt(tx.amount)}</strong>
-                    <span style={styles.activityDate}>{tx.status || "—"}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+  return (
+    <SidePanel
+      onClose={onClose}
+      icon={Wallet}
+      title={balance?.currency || "Wallet"}
+      subtitle={balance?.network_chain || balance?.network || "Primary Balance View"}
+    >
+      <div className="ma-sb-hero">
+        <div className="ma-sb-totalLabel">Total Balance</div>
+        <div className="ma-sb-total">{fmt(total)}</div>
+        <div className="ma-sb-split">
+          <div className="ma-bal-part"><small>Available</small><strong style={{ color: "#10b981" }}>{fmt(balance?.available)}</strong></div>
+          <div className="ma-bal-part"><small>Frozen</small><strong style={{ color: "#f59e0b" }}>{fmt(balance?.frozen)}</strong></div>
         </div>
       </div>
-    </>,
-    document.body
+
+      <div className="ma-sb-actions">
+        <button type="button" onClick={() => setActionMode("deposit")} className={`ma-btn ma-btn--primary${actionMode === "deposit" ? " is-on" : ""}`} style={actionMode === "deposit" ? { borderColor: "#10b981", color: "#a7f3d0", background: "rgba(16,185,129,.16)" } : undefined}>
+          <ArrowDownToLine size={14} /> Deposit
+        </button>
+        <button type="button" onClick={() => setActionMode("withdraw")} className="ma-btn ma-btn--primary" style={actionMode === "withdraw" ? { borderColor: "#f59e0b", color: "#fde68a", background: "rgba(245,158,11,.16)" } : undefined}>
+          <ArrowUpFromLine size={14} /> Withdraw
+        </button>
+      </div>
+
+      {loadingDetails && (
+        <div className="ma-subtle ma-row"><LoaderCircle size={14} className="ma-spin" /> Loading wallet details…</div>
+      )}
+      {detailsError && <div className="ma-alert ma-alert--err">{detailsError}</div>}
+      {statusMessage && (
+        <div className={`ma-alert ${statusMessage.type === "error" ? "ma-alert--err" : "ma-alert--ok"}`}>{statusMessage.text}</div>
+      )}
+
+      {actionMode === "deposit" && details?.method === "crypto" && (
+        <div className="ma-sb-section">
+          <div className="ma-sb-title"><QrCode size={14} /> Crypto Deposit</div>
+          {details?.tatum_api_warning && (
+            <div className="ma-alert ma-alert--warn">⚠️ Deposit confirmation service is currently unavailable — your deposit will be credited once connectivity is restored.</div>
+          )}
+          <div className="ma-qr">
+            {qrSrc ? <img src={qrSrc} alt="Deposit QR" width={200} height={200} /> : <div className="ma-subtle" style={{ color: "#334155" }}>QR code unavailable.</div>}
+          </div>
+          <div className="ma-infoCell">
+            <small>Deposit Address</small>
+            <div className="ma-addr">{details.deposit_address}</div>
+            <button type="button" onClick={() => copyToClipboard(details.deposit_address)} className="ma-btn ma-btn--sm" style={{ marginTop: 8 }}>
+              <Copy size={13} /> Copy address
+            </button>
+          </div>
+          <div className="ma-metaList">
+            <InfoRow label="Confirmations required" value={details.confirmations_required} />
+            <InfoRow label="Min deposit" value={fmt(details.min_deposit)} />
+            <InfoRow label="Max deposit" value={details.max_deposit ? fmt(details.max_deposit) : "No configured cap"} />
+            <InfoRow label="Current available balance" value={fmt(balance.available)} />
+          </div>
+          <button type="button" onClick={startCryptoWatch} className="ma-btn ma-btn--primary"><Activity size={14} /> Watch for confirmation</button>
+          {watchState?.kind === "crypto-deposit" && (
+            <div className="ma-alert ma-alert--ok">Waiting for Tatum/webhook confirmation and balance credit...</div>
+          )}
+        </div>
+      )}
+
+      {actionMode === "deposit" && details?.method === "irt_manual" && (
+        <div className="ma-sb-section">
+          <div className="ma-sb-title"><Landmark size={14} /> IRT Deposit</div>
+          <div className="ma-infoGrid">
+            <Meta label="Bank" value={details.platform_bank_account?.bank_name || "—"} />
+            <Meta label="Holder" value={details.platform_bank_account?.bank_holder_name || "—"} />
+            <Meta label="Card Number" value={details.platform_bank_account?.bank_card_number || "—"} mono />
+            <Meta label="Sheba" value={details.platform_bank_account?.bank_sheba || "—"} mono />
+          </div>
+          <Field label="Transferred Amount" value={irtDepositAmount} onChange={setIrtDepositAmount} placeholder="Enter the amount you transferred" type="number" />
+          <label className="ma-field">
+            <span className="ma-label">Note to master (optional)</span>
+            <textarea className="ma-textarea" value={irtDepositNote} onChange={(e) => setIrtDepositNote(e.target.value)} rows={3} placeholder="Add any payment note or receipt context" />
+          </label>
+          <label className="ma-field">
+            <span className="ma-label">Receipt Photo</span>
+            <input className="ma-input" type="file" accept="image/*" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} />
+          </label>
+          {receiptFile && <div className="ma-subtle">Selected receipt: {receiptFile.name}</div>}
+          <button type="button" onClick={submitIrtReceipt} disabled={submittingReceipt} className="ma-btn ma-btn--primary">
+            <MessageSquare size={14} /> {submittingReceipt ? "Sending..." : "Upload Receipt to Master"}
+          </button>
+          {watchState?.kind === "irt-deposit" && (
+            <div className="ma-alert ma-alert--ok">Waiting for manual approval. This panel watches your balance and closes after approval.</div>
+          )}
+        </div>
+      )}
+
+      {actionMode === "withdraw" && (
+        <div className="ma-sb-section">
+          <div className="ma-sb-title"><ArrowUpFromLine size={14} /> {isIrt ? "IRT Withdrawal" : "Crypto Withdrawal"}</div>
+          {!isIrt && (
+            <>
+              <Field label="External Wallet Address" value={withdrawAddress} onChange={setWithdrawAddress} placeholder="Your private wallet address" />
+              <div>
+                <button type="button" onClick={saveExternalWallet} disabled={savingAddress} className="ma-btn ma-btn--sm">
+                  <Save size={13} /> {savingAddress ? "Saving..." : "Save Wallet"}
+                </button>
+              </div>
+            </>
+          )}
+          {isIrt && !details?.user_bank_info_complete && (
+            <div className="ma-alert ma-alert--warn">Add or update your bank info here before requesting an IRT withdrawal.</div>
+          )}
+          {isIrt && (
+            <div className="ma-sb-section" style={{ background: "#081224" }}>
+              <div className="ma-sb-title">My Bank Account</div>
+              <Field label="Bank name" value={irtBankDraft.bank_name} onChange={(v) => setIrtBankDraft((p) => ({ ...p, bank_name: v }))} />
+              <Field label="Holder name" value={irtBankDraft.bank_holder_name} onChange={(v) => setIrtBankDraft((p) => ({ ...p, bank_holder_name: v }))} />
+              <Field label="Card number" value={irtBankDraft.bank_card_number} onChange={(v) => setIrtBankDraft((p) => ({ ...p, bank_card_number: v }))} />
+              <Field label="Sheba" value={irtBankDraft.bank_sheba} onChange={(v) => setIrtBankDraft((p) => ({ ...p, bank_sheba: v }))} />
+            </div>
+          )}
+          <Field label="Amount" value={withdrawAmount} onChange={setWithdrawAmount} placeholder="Enter amount" type="number" />
+          <label className="ma-field">
+            <span className="ma-label">Note (optional)</span>
+            <textarea className="ma-textarea" value={withdrawNote} onChange={(e) => setWithdrawNote(e.target.value)} rows={3} placeholder={isIrt ? "Add payout instructions if needed" : "Optional withdrawal note"} />
+          </label>
+          {isIrt && (
+            <div className="ma-infoGrid">
+              <Meta label="My Bank" value={details?.user_bank_info?.bank_name || "—"} />
+              <Meta label="Holder" value={details?.user_bank_info?.bank_holder_name || "—"} />
+              <Meta label="Card Number" value={details?.user_bank_info?.bank_card_number || "—"} mono />
+              <Meta label="Sheba" value={details?.user_bank_info?.bank_sheba || "—"} mono />
+            </div>
+          )}
+          <button type="button" onClick={submitWithdraw} disabled={submittingWithdraw} className="ma-btn ma-btn--primary">
+            <ArrowUpFromLine size={14} /> {submittingWithdraw ? "Submitting..." : "Submit Withdrawal"}
+          </button>
+        </div>
+      )}
+
+      <div className="ma-sb-section">
+        <div className="ma-sb-title"><Activity size={14} /> Recent Activity</div>
+        {!Array.isArray(balance?.recentActivity) || balance.recentActivity.length === 0 ? (
+          <div className="ma-subtle">No recent transactions for this wallet pair.</div>
+        ) : (
+          <div className="ma-activity">
+            {balance.recentActivity.slice(0, 8).map((tx, index) => (
+              <TxRow key={tx.id || `${tx.type}-${index}`} tx={tx} showUser={false} showHash={false} showNetwork={false} />
+            ))}
+          </div>
+        )}
+      </div>
+    </SidePanel>
   );
 }
 
 function Meta({ label, value, mono = false }) {
   return (
-    <div style={styles.metaCard}>
-      <div style={styles.metaLabel}>{label}</div>
-      <div style={{ ...styles.metaValue, fontFamily: mono ? "monospace" : "inherit" }}>{value ?? "—"}</div>
+    <div className="ma-infoCell">
+      <small>{label}</small>
+      <div className={mono ? "ma-mono" : ""}>{value ?? "—"}</div>
     </div>
   );
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div style={styles.infoRow}>
-      <span>{label}</span>
-      <strong>{value ?? "—"}</strong>
+    <div className="ma-metaRow">
+      <span className="ma-metaLabel" style={{ textTransform: "none", letterSpacing: 0, fontSize: 12 }}>{label}</span>
+      <strong className="ma-metaValue">{value ?? "—"}</strong>
     </div>
   );
 }
 
 function Field({ label, value, onChange, placeholder, type = "text" }) {
   return (
-    <label style={styles.fieldWrap}>
-      <span style={styles.metaLabel}>{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        style={styles.input}
-      />
+    <label className="ma-field">
+      <span className="ma-label">{label}</span>
+      <input className="ma-input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} />
     </label>
   );
 }
-
-const styles = {
-  overlay: (visible) => ({
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    zIndex: 1800,
-    opacity: visible ? 1 : 0,
-    transition: "opacity 180ms ease",
-  }),
-  panel: (visible) => ({
-    position: "fixed",
-    top: 0,
-    right: 0,
-    width: 560,
-    maxWidth: "94vw",
-    height: "100vh",
-    zIndex: 1900,
-    background: "linear-gradient(170deg,#051120 0%,#0a1427 40%,#101a32 100%)",
-    borderLeft: "1px solid #22324e",
-    boxShadow: "-20px 0 60px rgba(0,0,0,.55)",
-    color: "white",
-    padding: 18,
-    overflowY: "auto",
-    transform: visible ? "translateX(0)" : "translateX(100%)",
-    transition: "transform 200ms ease",
-  }),
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  walletIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    background: "rgba(59,130,246,.2)",
-    color: "#60a5fa",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { fontSize: 18, fontWeight: 800 },
-  subtitle: { fontSize: 11, color: "#7c8ca8" },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    border: "1px solid #31425f",
-    background: "#0b1527",
-    color: "#94a3b8",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  hero: {
-    background: "linear-gradient(155deg,#12213d,#0b1831)",
-    border: "1px solid #2a3f65",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-  },
-  totalLabel: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#7c8ca8", marginBottom: 6 },
-  totalValue: { fontSize: 28, fontWeight: 900, color: "#e2e8f0", letterSpacing: -0.7 },
-  splitRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 },
-  splitCard: {
-    background: "rgba(2,6,23,.55)",
-    border: "1px solid #24344f",
-    borderRadius: 10,
-    padding: "8px 10px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: 12,
-  },
-  splitLabel: { color: "#8ea1bf", fontSize: 11 },
-  section: {
-    background: "rgba(2,6,23,.45)",
-    border: "1px solid #24344f",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#cdd8eb",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 10,
-  },
-  metaGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
-  metaCard: { background: "#091629", border: "1px solid #20314e", borderRadius: 10, padding: 10 },
-  metaLabel: { fontSize: 10, color: "#6f82a3", marginBottom: 5, textTransform: "uppercase" },
-  metaValue: { fontSize: 12, fontWeight: 700, color: "#dbe7fb", wordBreak: "break-word" },
-  note: { marginTop: 10, fontSize: 12, color: "#94a3b8", lineHeight: 1.5 },
-  warningText: { marginTop: 10, color: "#fcd34d", fontSize: 12, lineHeight: 1.5 },
-  actionsRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 },
-  actionBtn: {
-    borderRadius: 10,
-    border: "1px solid transparent",
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 800,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    cursor: "pointer",
-  },
-  actionBtnActive: {
-    boxShadow: "0 0 0 1px rgba(255,255,255,.12) inset",
-  },
-  depositBtn: { background: "rgba(16,185,129,.14)", borderColor: "rgba(16,185,129,.4)", color: "#34d399" },
-  withdrawBtn: { background: "rgba(245,158,11,.14)", borderColor: "rgba(245,158,11,.4)", color: "#fbbf24" },
-  dimText: { color: "#7084a7", fontSize: 12, display: "flex", alignItems: "center", gap: 8 },
-  errorText: { color: "#f87171", fontSize: 12 },
-  successBox: {
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
-    background: "rgba(16,185,129,.14)",
-    border: "1px solid rgba(16,185,129,.35)",
-    color: "#a7f3d0",
-    fontSize: 12,
-  },
-  errorBox: {
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
-    background: "rgba(239,68,68,.14)",
-    border: "1px solid rgba(239,68,68,.35)",
-    color: "#fecaca",
-    fontSize: 12,
-  },
-  warningBox: {
-   marginBottom: 12,
-   padding: 12,
-   borderRadius: 12,
-   background: "rgba(245,158,11,.14)",
-   border: "1px solid rgba(245,158,11,.35)",
-   color: "#fde68a",
-   fontSize: 12,
-   lineHeight: 1.5,
-  },
-  qrWrap: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  qrImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 12,
-    border: "1px solid #24344f",
-    background: "#071120",
-    padding: 8,
-  },
-  addressCard: {
-    background: "#091629",
-    border: "1px solid #20314e",
-    borderRadius: 12,
-    padding: 12,
-  },
-  addressValue: { fontSize: 12, wordBreak: "break-all", color: "#dbeafe", marginBottom: 8 },
-  infoList: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12, marginBottom: 12 },
-  infoRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    background: "#091629",
-    border: "1px solid #20314e",
-    borderRadius: 10,
-    padding: "9px 10px",
-    fontSize: 12,
-  },
-  primaryBtn: {
-    borderRadius: 10,
-    border: "1px solid rgba(59,130,246,.4)",
-    background: "rgba(37,99,235,.18)",
-    color: "#bfdbfe",
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 800,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    cursor: "pointer",
-  },
-  inlineBtn: {
-    borderRadius: 10,
-    border: "1px solid #2a3f65",
-    background: "#081224",
-    color: "#cbd5e1",
-    padding: "8px 10px",
-    fontSize: 12,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    cursor: "pointer",
-  },
-  input: {
-    width: "100%",
-    borderRadius: 10,
-    border: "1px solid #29405e",
-    background: "#081224",
-    color: "white",
-    padding: "10px 12px",
-    fontSize: 13,
-    boxSizing: "border-box",
-  },
-  textarea: {
-    width: "100%",
-    borderRadius: 12,
-    border: "1px solid #29405e",
-    background: "#081224",
-    color: "white",
-    padding: 12,
-    fontSize: 13,
-    boxSizing: "border-box",
-    resize: "vertical",
-  },
-  fieldWrap: { display: "grid", gap: 6 },
-  formStack: { display: "grid", gap: 12 },
-  bankGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 },
-  bankEditCard: {
-    display: "grid",
-    gap: 10,
-    borderRadius: 14,
-    border: "1px solid #20314e",
-    background: "#091629",
-    padding: 12,
-  },
-  inlineActions: { display: "flex", justifyContent: "flex-end" },
-  watchBox: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 12,
-    background: "rgba(59,130,246,.12)",
-    border: "1px solid rgba(59,130,246,.3)",
-    color: "#bfdbfe",
-    fontSize: 12,
-  },
-  activityRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    background: "#091629",
-    border: "1px solid #20314e",
-    borderRadius: 10,
-    padding: "8px 10px",
-  },
-  activityType: { fontSize: 11, fontWeight: 700, color: "#cbd5e1" },
-  activityDate: { fontSize: 10, color: "#64748b" },
-  activityAmount: { fontSize: 12, color: "#60a5fa" },
-  spin: { animation: "spin 1s linear infinite" },
-};

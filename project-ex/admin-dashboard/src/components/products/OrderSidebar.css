@@ -1,0 +1,462 @@
+/* ── OrderSidebar — extracted from the inline `styles` object ──── */
+
+.os-modal-overlay {
+  /* Fail/Deliver modals must sit ABOVE the sidebar's own overlay+container
+     (z-index 99998/99999) — this was the bug: at 1100 it was stacked BELOW
+     them, so a click on the modal was being intercepted by the sidebar's
+     full-screen backdrop underneath it, closing the sidebar instead of
+     hitting the modal's button. */
+  position: fixed;
+  inset: 0px;
+  background: rgba(2,6,23,.6);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(1px);
+}
+
+.os-modal-card {
+  width: 92%;
+  max-width: 480px;
+  background: #0d1424;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+  padding: clamp(16px, calc(16px + 6 * ((100vw - 340px) / 1060)), 22px) clamp(17px, calc(17px + 7 * ((100vw - 340px) / 1060)), 24px);
+  box-shadow: 0 32px 80px rgba(0,0,0,.6);
+}
+
+.os-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.os-modal-title {
+  color: white;
+  font-weight: 700;
+  font-size: clamp(12px, calc(12px + 5 * ((100vw - 340px) / 1060)), 17px);
+}
+
+.os-modal-close-icon {
+  background: #0b1525;
+  border: 1px solid #313d58ff;
+  color: #475569;
+  width: clamp(24px, calc(24px + 6 * ((100vw - 340px) / 1060)), 30px);
+  height: clamp(24px, calc(24px + 6 * ((100vw - 340px) / 1060)), 30px);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.os-modal-label {
+  color: #94a3b8;
+  font-size: clamp(10px, calc(10px + 2 * ((100vw - 340px) / 1060)), 12px);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.os-modal-cancel-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.1);
+  color: #94a3b8;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px) clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(11px, calc(11px + 4 * ((100vw - 340px) / 1060)), 15px);
+}
+
+/* Overlay + container: same open/close mechanism as UserSidebar
+   (is-visible fade/slide on open, .3s reverse on close via JS delay),
+   same rgba(2,6,23,.6) blur(1px) backdrop and mobile bottom-sheet
+   breakpoint as the rest of the app. */
+.os-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,0.6);
+  backdrop-filter: blur(1px);
+  z-index: 99998;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+.os-overlay.is-visible { opacity: 1; }
+
+.os-container {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 580px;
+  height: 100vh;
+  background: #0f172a;
+  color: white;
+  padding: 24px;
+  overflow-y: auto;
+  z-index: 99999;
+  box-shadow: -10px 0 40px rgba(0,0,0,0.6);
+  border-left: 1px solid #1e293b;
+  transform: translateX(100%);
+  opacity: 0;
+  transition: transform 200ms ease, opacity 250ms ease;
+}
+.os-container.is-visible {
+  transform: translateX(0%);
+  opacity: 1;
+}
+
+@media (max-width: 1100px) {
+  .os-container { width: min(460px, 100vw); }
+}
+
+@media (max-width: 700px) {
+  .os-container {
+    top: auto !important;
+    right: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 88dvh !important;
+    max-height: 88dvh !important;
+    border-left: none !important;
+    border-top: 2px solid #1e293b !important;
+    border-radius: 20px 20px 0 0 !important;
+    transform: translateY(100%);
+    opacity: 1 !important;
+    transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+  .os-container.is-visible { transform: translateY(0%); }
+
+  /* drag-handle affordance at the top of the sheet */
+  .os-container::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: #334155;
+  }
+  .os-header { padding-top: 22px; }
+}
+
+@media (max-width: 420px) {
+  .os-container { height: 92dvh !important; max-height: 92dvh !important; }
+}
+
+/* Hero card was a fixed 140px/1fr/130px 3-column grid — doesn't fit a
+   narrow mobile sheet, so it stacks instead. */
+@media (max-width: 700px) {
+  .os-hero-grid { grid-template-columns: 1fr; gap: 16px; }
+  .os-hero-timeline-col {
+    border-right: none; border-bottom: 1px solid rgba(255,255,255,.06);
+    padding-right: 0; padding-bottom: 14px; width: 100%;
+  }
+  .os-hero-user-col {
+    border-left: none; border-top: 1px solid rgba(255,255,255,.06);
+    padding-top: 14px;
+  }
+  .os-container { padding: 16px; }
+}
+
+.os-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.os-order-id {
+  font-size: clamp(20px, calc(20px + 8 * ((100vw - 340px) / 1060)), 28px);
+  font-weight: 700;
+}
+
+.os-date {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: clamp(10px, calc(10px + 3 * ((100vw - 340px) / 1060)), 13px);
+}
+
+.os-close-icon {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: clamp(17px, calc(17px + 7 * ((100vw - 340px) / 1060)), 24px);
+  cursor: pointer;
+}
+
+.os-hero-card {
+  position: relative;
+  background: linear-gradient(to bottom right, #111827, #0f172a);
+  border: 1px solid #1e293b;
+  border-radius: 24px;
+  padding: clamp(17px, calc(17px + 7 * ((100vw - 340px) / 1060)), 24px) clamp(14px, calc(14px + 6 * ((100vw - 340px) / 1060)), 20px);
+  margin-bottom: 18px;
+}
+
+.os-status-badge {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: clamp(10px, calc(10px + 2 * ((100vw - 340px) / 1060)), 12px);
+  margin-bottom: 14px;
+}
+
+.os-hero-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr 130px;
+  align-items: center;
+  gap: 14px;
+}
+
+.os-hero-timeline-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border-right: 1px solid rgba(255,255,255,.06);
+  padding-right: 12px;
+}
+
+.os-hero-center-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.os-hero-user-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  height: 100%;
+  border-left: 1px solid rgba(255,255,255,.06);
+  padding-left: 12px;
+}
+
+.os-user-quick-btn {
+  width: clamp(32px, calc(32px + 8 * ((100vw - 340px) / 1060)), 40px);
+  height: clamp(32px, calc(32px + 8 * ((100vw - 340px) / 1060)), 40px);
+  border-radius: 50%;
+  background: #6f7dfab2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+  border: 1px solid #1e293b;
+}
+/* scale the lucide icon inside proportionally with the box, overriding its
+   fixed size={} JSX prop (CSS width/height beat the SVG's own HTML attrs) */
+.os-user-quick-btn svg { width: 50%; height: 50%; }
+
+.os-user-quick-name {
+  font-size: clamp(10px, calc(10px + 2 * ((100vw - 340px) / 1060)), 12px);
+  font-weight: 700;
+  color: white;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-user-quick-meta {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.os-product-icon-container {
+  width: clamp(64px, calc(64px + 28 * ((100vw - 340px) / 1060)), 92px);
+  height: clamp(64px, calc(64px + 28 * ((100vw - 340px) / 1060)), 92px);
+  border-radius: 24px;
+  border: 1px solid #3b3b35ed;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  margin-top: 14px;
+}
+
+.os-product-icon {
+  font-size: clamp(29px, calc(29px + 11 * ((100vw - 340px) / 1060)), 40px);
+}
+
+.os-product-name {
+  font-size: clamp(16px, calc(16px + 6 * ((100vw - 340px) / 1060)), 22px);
+  font-weight: 700;
+  text-align: center;
+}
+
+.os-product-plan {
+  margin-top: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: clamp(10px, calc(10px + 3 * ((100vw - 340px) / 1060)), 13px);
+}
+
+.os-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 22px;
+  padding: clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  margin-bottom: 18px;
+}
+
+.os-section-title {
+  font-size: clamp(12px, calc(12px + 5 * ((100vw - 340px) / 1060)), 17px);
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.os-row-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.os-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 4px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+
+.os-detail-label {
+  color: #94a3b8;
+  font-size: clamp(10px, calc(10px + 2 * ((100vw - 340px) / 1060)), 12px);
+  text-transform: capitalize;
+}
+
+.os-detail-value {
+  font-weight: 700;
+  font-size: clamp(10px, calc(10px + 3 * ((100vw - 340px) / 1060)), 13px);
+  color: white;
+  text-align: right;
+  word-break: break-word;
+}
+
+.os-description {
+  color: #cbd5e1;
+  line-height: 1.7;
+  font-size: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+}
+
+.os-input {
+  width: 100%;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+  background: #020617;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  color: white;
+  margin-bottom: 14px;
+  font-size: clamp(11px, calc(11px + 4 * ((100vw - 340px) / 1060)), 15px);
+}
+
+.os-textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+  background: #0206177b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  color: white;
+  resize: vertical;
+  font-size: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.os-actions-row {
+  display: flex;
+  gap: 12px;
+}
+
+.os-approve {
+  flex: 1;
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px) clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(11px, calc(11px + 4 * ((100vw - 340px) / 1060)), 15px);
+}
+
+.os-reject {
+  flex: 1;
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px) clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(11px, calc(11px + 4 * ((100vw - 340px) / 1060)), 15px);
+}
+
+.os-update-btn {
+  width: 100%;
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(11px, calc(11px + 4 * ((100vw - 340px) / 1060)), 15px);
+}
+
+.os-deliver-btn {
+  width: 100%;
+  background: #7c3aed;
+  color: white;
+  border: none;
+  padding: clamp(12px, calc(12px + 4 * ((100vw - 340px) / 1060)), 16px);
+  border-radius: 16px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(12px, calc(12px + 4 * ((100vw - 340px) / 1060)), 16px);
+}
+
+.os-delivery-box {
+  background: #0206177b;
+  border: 1px solid #1e293b;
+  padding: clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  border-radius: 16px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: #e2e8f0;
+  font-size: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+}
+
+.os-rejection-box {
+  background: rgba(239,68,68,.07);
+  border: 1px solid rgba(239,68,68,.2);
+  padding: clamp(13px, calc(13px + 5 * ((100vw - 340px) / 1060)), 18px);
+  border-radius: 16px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: #fca5a5;
+  font-size: clamp(10px, calc(10px + 4 * ((100vw - 340px) / 1060)), 14px);
+}
+
+.os-delivered-at {
+  margin-top: 14px;
+  color: #94a3b8;
+  font-size: clamp(10px, calc(10px + 3 * ((100vw - 340px) / 1060)), 13px);
+}

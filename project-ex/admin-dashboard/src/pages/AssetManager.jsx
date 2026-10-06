@@ -55,9 +55,7 @@ function SectionHeader({ icon: Icon, title, count, accent, onAdd, addLabel }) {
       <Icon size={16} color={accent} />
       <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>{title}</span>
       <span style={{ background: "#0b1525", border: "1px solid #30415cff", color: "#657b99ff", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 99 }}>{count}</span>
-      <button onClick={onAdd} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.3)", color: "#60a5fa", borderRadius: 10, padding: "7px 13px", cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
-        <Plus size={13} /> {addLabel}
-      </button>
+
     </div>
   );
 }
@@ -342,16 +340,39 @@ export default function AssetManager() {
     pair: { title: editTarget ? "Edit Pair" : "New Pair", sub: editTarget ? `Editing ${editTarget.currency?.symbol} · ${editTarget.network?.name}` : "Link a currency to a network" },
   };
 
-  return (
-    <div style={{ display: "flex", height: "100vh", background: "#060b16", overflow: "hidden", fontFamily: "'Inter', sans-serif" }}>
+return (
+  <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#060b16", overflow: "hidden", fontFamily: "'Inter', sans-serif" }}>
+
+    {/* ── HERO HUB (full width, never covered by the panel) ── */}
+    <div style={S.header}>
+      <HeroHub
+        title="Asset Management"
+        subtitle="Manage currencies, networks and pairs"
+        statPills={[
+          { key: "currency", icon: Coins, label: "Active Currencies", value: stats.activeCurrencies, accent: "#34d399", loading },
+          { key: "network", icon: Network, label: "Active Networks", value: stats.activeNetworks, accent: "#fbbf24", loading },
+          { key: "pair", icon: GitCompare, label: "Active Pairs", value: stats.activePairs, accent: "#3b82f6", loading },
+        ]}
+        onRefresh={loadAll}
+        refreshing={loading}
+        actions={[
+          { key: "addCurrency", visible: true, label: "Add Currency", icon: Coins, active: panel, onClick: () => openPanel("currency") },
+          { key: "addNetwork", visible: true, label: "Add Network", icon: Network, active: panel, onClick: () => openPanel("network") },
+          { key: "addPair", visible: true, label: "Add Pair", icon: GitCompare, active: panel, onClick: () => openPanel("pair") },
+        ]}
+      />
+    </div>
+
+    {/* ── BODY ROW: side panel + main content ── */}
+    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
 
       {/* ── SIDE PANEL ── */}
       <div style={{ width: panelOpen ? 390 : 0, minWidth: panelOpen ? 390 : 0, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", overflow: "hidden", borderRight: panelOpen ? "1px solid #0f172a" : "none", background: "#080e1a", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ width: 390, height: "100%", display: "flex", flexDirection: "column", padding: 24, boxSizing: "border-box" }}>
+        <div style={{ width: 390, height: "100%", display: "flex", flexDirection: "column", padding: 24, boxSizing: "border-box", overflowY: "auto" }}>
 
-          {/* Panel header */}
           {panel && (
             <>
+              {/* Panel header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
                 <div>
                   <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>{panelMeta[panel]?.title}</div>
@@ -362,46 +383,27 @@ export default function AssetManager() {
 
               {/* ── CURRENCY FORM ── */}
               {panel === "currency" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, overflowY: "auto" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                  }}
-                >
-                  <Field label="Symbol">
-                    <input
-                      placeholder="USDT"
-                      value={currencyForm.symbol}
-                      disabled={!!editTarget}
-                      onChange={(e) =>
-                        setCurrencyForm((f) => ({
-                          ...f,
-                          symbol: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      style={{
-                        ...S.input,
-                        opacity: editTarget ? 0.6 : 1,
-                      }}
-                    />
-                  </Field>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <Field label="Symbol">
+                      <input
+                        placeholder="USDT"
+                        value={currencyForm.symbol}
+                        disabled={!!editTarget}
+                        onChange={e => setCurrencyForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
+                        style={{ ...S.input, opacity: editTarget ? 0.6 : 1 }}
+                      />
+                    </Field>
+                    <Field label="Name">
+                      <input
+                        placeholder="Tether USD"
+                        value={currencyForm.name}
+                        onChange={e => setCurrencyForm(f => ({ ...f, name: e.target.value }))}
+                        style={S.input}
+                      />
+                    </Field>
+                  </div>
 
-                  <Field label="Name">
-                    <input
-                      placeholder="Tether USD"
-                      value={currencyForm.name}
-                      onChange={(e) =>
-                        setCurrencyForm((f) => ({
-                          ...f,
-                          name: e.target.value,
-                        }))
-                      }
-                      style={S.input}
-                    />
-                  </Field>
-                </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Type">
                       <select style={S.input} value={currencyForm.type} onChange={e => setCurrencyForm(f => ({ ...f, type: e.target.value }))}>
@@ -413,9 +415,11 @@ export default function AssetManager() {
                       <input type="number" style={S.input} value={currencyForm.decimals} onChange={e => setCurrencyForm(f => ({ ...f, decimals: Number(e.target.value) }))} />
                     </Field>
                   </div>
+
                   <Field label="Icon URL">
                     <input style={S.input} placeholder="https://…" value={currencyForm.icon} onChange={e => setCurrencyForm(f => ({ ...f, icon: e.target.value }))} />
                   </Field>
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Min Deposit">
                       <input type="number" style={S.input} value={currencyForm.min_deposit} onChange={e => setCurrencyForm(f => ({ ...f, min_deposit: Number(e.target.value) }))} />
@@ -424,6 +428,7 @@ export default function AssetManager() {
                       <input type="number" style={S.input} value={currencyForm.min_withdraw} onChange={e => setCurrencyForm(f => ({ ...f, min_withdraw: Number(e.target.value) }))} />
                     </Field>
                   </div>
+
                   <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 16, borderTop: "1px solid #0f172a" }}>
                     <button style={S.cancelBtn} onClick={closePanel}>Cancel</button>
                     <button style={S.submitBtn} onClick={saveCurrency}>{editTarget ? "Save Changes" : "Create Currency"}</button>
@@ -449,7 +454,7 @@ export default function AssetManager() {
 
               {/* ── PAIR FORM ── */}
               {panel === "pair" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Currency">
                       <select style={{ ...S.input, opacity: editTarget ? 0.6 : 1 }} value={pairForm.currency_id} disabled={!!editTarget} onChange={e => setPairForm(f => ({ ...f, currency_id: e.target.value }))}>
@@ -464,6 +469,7 @@ export default function AssetManager() {
                       </select>
                     </Field>
                   </div>
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Min Deposit">
                       <input type="number" step="0.00000001" style={S.input} value={pairForm.min_deposit} onChange={e => setPairForm(f => ({ ...f, min_deposit: Number(e.target.value) }))} />
@@ -472,6 +478,7 @@ export default function AssetManager() {
                       <input type="number" step="0.00000001" style={S.input} value={pairForm.max_deposit} onChange={e => setPairForm(f => ({ ...f, max_deposit: Number(e.target.value) }))} />
                     </Field>
                   </div>
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Min Withdraw">
                       <input type="number" step="0.00000001" style={S.input} value={pairForm.min_withdraw} onChange={e => setPairForm(f => ({ ...f, min_withdraw: Number(e.target.value) }))} />
@@ -480,6 +487,7 @@ export default function AssetManager() {
                       <input type="number" step="0.00000001" style={S.input} value={pairForm.withdraw_fee} onChange={e => setPairForm(f => ({ ...f, withdraw_fee: Number(e.target.value) }))} />
                     </Field>
                   </div>
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Field label="Confirmations">
                       <input type="number" style={S.input} value={pairForm.confirmations_required} onChange={e => setPairForm(f => ({ ...f, confirmations_required: Number(e.target.value) }))} />
@@ -512,107 +520,74 @@ export default function AssetManager() {
         </div>
       </div>
 
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-                {/* ── HERO HUB (title/subtitle + users filter + search + stat pill) ── */}
-        <div  style={S.header}>
-          <HeroHub
-            title="Asset Management"
-            subtitle="Manage currencies, networks and pairs"
-            statPills={[
-                { key: "currecny", icon: Coins, label: "Active Currencies", value: stats.activeCurrencies, accent: "#34d399", loading: loading },
-                { key: "network", icon: Network, label: "Active Networks", value: stats.activeNetworks, accent: "#fbbf24", loading: loading },
-                { key: "pair", icon: GitCompare, label: "Active Pairs", value: stats.activePairs, accent: "#3b82f6", loading: loading },
-            ]}
-            onRefresh={loadAll}
-            refreshing={loading}
-          />
+      {/* ── MAIN CONTENT (3 columns) ── */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflowY: "auto",
+          padding: "20px 24px 28px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 10,
+          alignContent: "stretch",
+          scrollbarWidth: "thin",
+          scrollbarColor: "#1e293b #060b16",
+        }}
+      >
+        {/* ── CURRENCIES ── */}
+        <div style={{ display: "flex", flexDirection: "column", paddingRight: 20, borderRight: "1px solid #1e293b", minHeight: "100%" }}>
+          <SectionHeader icon={Coins} title="Currencies" count={currencies.length} accent="#34d399" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {currencies.map(c => (
+              <CurrencyCard key={c.id} c={c} onEdit={c => openPanel("currency", c)} onToggle={toggleCurrency} onDelete={deleteCurrency} />
+            ))}
+            {currencies.length === 0 && !loading && (
+              <div style={S.emptyState}>
+                <Coins size={32} strokeWidth={1} color="#1e293b" />
+                <span style={{ color: "#334155", fontSize: 13 }}>No currencies yet</span>
+              </div>
+            )}
+          </div>
         </div>
-        
 
-
-        {/* 3-column layout */}
-        <div style={{ 
-          flex: 1, 
-          overflowY: "auto", 
-          padding: "20px 24px 28px", 
-          display: "grid", 
-          gridTemplateColumns: "1fr 1fr 1fr", 
-          gap: 10, 
-          alignContent: "start", 
-          scrollbarWidth: "thin", 
-          scrollbarColor: "#1e293b #060b16" ,
-              alignContent: "stretch",   // 👈 important change
-    height: "100%",  
-          }}
-          >
-
-          {/* ── CURRENCIES ── */}
-          <div style={{ 
-            display: "flex", 
-            flexDirection: "column",
-            paddingRight: 20,
-            borderRight: "1px solid #1e293b",
-            minHeight: "100%"
-            }}>
-            <SectionHeader icon={Coins} title="Currencies" count={currencies.length} accent="#34d399" onAdd={() => openPanel("currency")} addLabel="Add Currency" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {currencies.map(c => (
-                <CurrencyCard key={c.id} c={c} onEdit={c => openPanel("currency", c)} onToggle={toggleCurrency} onDelete={deleteCurrency} />
-              ))}
-              {currencies.length === 0 && !loading && (
-                <div style={S.emptyState}>
-                  <Coins size={32} strokeWidth={1} color="#1e293b" />
-                  <span style={{ color: "#334155", fontSize: 13 }}>No currencies yet</span>
-                </div>
-              )}
-            </div>
+        {/* ── NETWORKS ── */}
+        <div style={{ display: "flex", flexDirection: "column", padding: "0 20px", borderRight: "1px solid #1e293b", minHeight: "100%" }}>
+          <SectionHeader icon={Network} title="Networks" count={networks.length} accent="#fbbf24" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {networks.map(n => (
+              <NetworkCard key={n.id} n={n} onEdit={n => openPanel("network", n)} onToggle={toggleNetwork} onDelete={deleteNetwork} />
+            ))}
+            {networks.length === 0 && !loading && (
+              <div style={S.emptyState}>
+                <Network size={32} strokeWidth={1} color="#1e293b" />
+                <span style={{ color: "#334155", fontSize: 13 }}>No networks yet</span>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* ── NETWORKS ── */}
-          <div style={{ 
-            display: "flex", 
-            flexDirection: "column",
-            paddingRight: 20,
-             paddingLeft: 20,
-            borderRight: "1px solid #1e293b",
-            minHeight: "100%" }}>
-            <SectionHeader icon={Network} title="Networks" count={networks.length} accent="#fbbf24" onAdd={() => openPanel("network")} addLabel="Add Network" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {networks.map(n => (
-                <NetworkCard key={n.id} n={n} onEdit={n => openPanel("network", n)}  onToggle={toggleNetwork} onDelete={deleteNetwork} />
-              ))}
-              {networks.length === 0 && !loading && (
-                <div style={S.emptyState}>
-                  <Network size={32} strokeWidth={1} color="#1e293b" />
-                  <span style={{ color: "#334155", fontSize: 13 }}>No networks yet</span>
-                </div>
-              )}
-            </div>
+        {/* ── PAIRS ── */}
+        <div style={{ display: "flex", flexDirection: "column", paddingLeft: 20 }}>
+          <SectionHeader icon={GitCompare} title="Currency Pairs" count={pairs.length} accent="#3b82f6" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {pairs.map(p => (
+              <PairCard key={p.id} p={p} onEdit={p => openPanel("pair", p)} onToggle={togglePair} onToggleDeposit={toggleDeposit} onToggleWithdraw={toggleWithdraw} onDelete={deletePair} />
+            ))}
+            {pairs.length === 0 && !loading && (
+              <div style={S.emptyState}>
+                <GitCompare size={32} strokeWidth={1} color="#1e293b" />
+                <span style={{ color: "#334155", fontSize: 13 }}>No pairs yet</span>
+              </div>
+            )}
           </div>
-
-          {/* ── PAIRS ── */}
-          <div style={{ display: "flex", flexDirection: "column" ,paddingLeft: 20}}>
-            <SectionHeader icon={GitCompare} title="Currency Pairs" count={pairs.length} accent="#3b82f6" onAdd={() => openPanel("pair")} addLabel="Add Pair" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {pairs.map(p => (
-                <PairCard key={p.id} p={p} onEdit={p => openPanel("pair", p)} onToggle={togglePair} onToggleDeposit={toggleDeposit} onToggleWithdraw={toggleWithdraw} onDelete={deletePair} />
-              ))}
-              {pairs.length === 0 && !loading && (
-                <div style={S.emptyState}>
-                  <GitCompare size={32} strokeWidth={1} color="#1e293b" />
-                  <span style={{ color: "#334155", fontSize: 13 }}>No pairs yet</span>
-                </div>
-              )}
-            </div>
-          </div>
-
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
+
 
 // ── Styles ────────────────────────────────────────────────────
 const S = {

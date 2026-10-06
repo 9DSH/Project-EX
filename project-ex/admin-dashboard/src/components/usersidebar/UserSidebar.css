@@ -1,0 +1,2432 @@
+/* ── UserSidebar — base styles (desktop) ────────────────────────
+   Previously an inline `styles` object in the JSX; now plain CSS
+   classes so every rule can be overridden cleanly by media queries. */
+
+.user-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,.6); 
+  backdrop-filter: blur(1px);
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.user-sidebar-overlay.is-visible {
+  opacity: 1;
+}
+
+.user-sidebar-container {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 580px;
+  height: 100vh;
+  background: #0f172a;
+  border-left: 2px solid #1e293b;
+  color: white;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+
+  transform: translateX(100%);
+  opacity: 0;
+  transition: transform 200ms ease, opacity 250ms ease;
+}
+
+.user-sidebar-container.is-visible {
+  transform: translateX(0%);
+  opacity: 1;
+}
+
+.user-sidebar-header {
+  padding: clamp(14px, 3vw, 20px);
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-sidebar-user-title {
+  font-size: clamp(15px, 3.2vw, 20px);
+  font-weight: 700;
+}
+
+.user-sidebar-user-sub {
+  font-size: clamp(10px, 2vw, 12px);
+  color: #94a3b8;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.user-sidebar-close-btn {
+  width: clamp(30px, 6vw, 36px);
+  height: clamp(30px, 6vw, 36px);
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #111827;
+  color: rgba(255, 255, 255, 0.532);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: clamp(12px, 2.5vw, 14px);
+}
+
+.user-sidebar-tabs {
+  display: flex;
+  gap: 6px;
+  padding: clamp(8px, 2vw, 14px);
+  overflow-x: auto;
+  border-bottom: 1px solid #1e293b;
+  scrollbar-width: none;
+}
+
+.user-sidebar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.user-sidebar-tab {
+  display: flex;
+  align-items: center;
+  padding: clamp(6px, 1.6vw, 10px) clamp(8px, 2.2vw, 14px);
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+  background: rgba(255, 255, 255, 0.03);
+  color: #94a3b8;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: clamp(11px, 2.4vw, 13px);
+  flex-shrink: 0;
+}
+
+.user-sidebar-tab.is-active {
+  border-color: #2563eb;
+  background: rgba(59, 130, 246, 0.18);
+  color: white;
+  font-weight: 600;
+}
+
+.user-sidebar-tab-icon {
+  margin-right: 5px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.user-sidebar-content {
+  flex: 1;
+  padding: clamp(10px, 3vw, 18px);
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #1e293b;
+  font-size: clamp(12px, 2vw, 14px);
+}
+
+.user-sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.user-sidebar-content::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.user-sidebar-content::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 999px;
+}
+
+.user-sidebar-chat-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Shared tab-content compatibility layer ──────────────────────
+   OrdersTab / TransactionsTab / WalletTab / ProfileTab still style
+   most of their own markup with inline `style={}` objects. Rather
+   than fight every inline width/font declaration individually,
+   these rules give every tab a single, shared, responsive baseline
+   for the most common elements (inputs, selects, buttons, generic
+   text) inside `.user-sidebar-content`. Anything more specific a
+   tab sets inline still wins for layout, but sizing is clamped so
+   nothing can force horizontal overflow on a small screen. */
+
+.user-sidebar-content input,
+.user-sidebar-content select,
+.user-sidebar-content textarea {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  font-size: clamp(11px, 2.4vw, 13px) !important;
+}
+
+.user-sidebar-content button {
+  font-size: clamp(11px, 2.4vw, 13px) !important;
+}
+
+.user-sidebar-content > * {
+  max-width: 100%;
+}
+
+/* Buttons used purely as layout triggers (expand/collapse headers,
+   tab pills, toggle switches) should never pick up a browser default
+   hover/tap highlight — the shared classes above already define the
+   only visual states we want. */
+.us-identity-trigger,
+.us-section-header-trigger,
+.us-tab-btn,
+.us-btn-ghost,
+.us-toggle-track,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.us-identity-trigger:hover,
+.us-identity-trigger:focus,
+.us-section-header-trigger:hover,
+.us-section-header-trigger:focus {
+  background: none;
+  outline: none;
+}
+
+/* Reusable filter-row: a horizontally-scrollable row of filter
+   fields (date range / status / type / currency), used by
+   OrdersTab and TransactionsTab history filters. */
+.us-filter-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.us-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.us-filter-item {
+  flex: 1 1 130px;
+  min-width: 130px;
+}
+
+@media (max-width: 700px) {
+  .us-filter-row {
+    gap: 8px;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .us-filter-item {
+    flex: 1 1 42%;
+    min-width: 42%;
+  }
+  .us-filter-item input,
+  .us-filter-item select {
+    width: 100% !important;
+  }
+}
+
+/* Any react-datepicker calendar rendered via portalId floats above
+   everything and is never clipped by a scrolling ancestor. The portal
+   host div react-datepicker creates for a given portalId has no
+   position/z-index of its own, so without this it can render *behind*
+   the sidebar (which is position:fixed with z-index:2000) even though
+   it's later in the DOM — position:fixed + a z-index above the sidebar
+   guarantees the calendar is always visible and clickable.        */
+.react-datepicker-portal,
+#user-sidebar-datepicker-portal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 6000;
+}
+
+/* ── Collapsible box (New Order / Exchange creation panels) ──── */
+
+.us-collapsible-box {
+  background: linear-gradient(135deg, #131a2e 0%, #0c1120 100%);
+  border: 1px solid rgba(37, 99, 235, 0.39);
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.us-collapsible-header {
+  padding: clamp(18px, 3vw, 22px) clamp(12px, 3vw, 18px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid #1e293b;
+  gap: 10px;
+}
+
+.us-collapsible-icon {
+  font-size: 16px;
+  color: #60a5fa;
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.us-collapsible-title {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: clamp(12px, 2.6vw, 14px);
+}
+
+.us-collapsible-sub {
+  font-size: clamp(9px, 2vw, 11px);
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.us-collapsible-body {
+  padding: clamp(10px, 2.6vw, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Smooth expand/collapse for any collapsible section ──────────
+   Content is always rendered in the DOM; only the wrapper's row
+   size animates via grid-template-rows (0fr → 1fr), which — unlike
+   max-height — animates smoothly to/from the content's real height
+   with no need to measure it in JS. `.us-collapse-inner` clips the
+   content while it's collapsing/expanding. */
+.us-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.us-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.us-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.us-btn-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.us-eyebrow {
+  font-size: clamp(10px, 2.2vw, 12px);
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.us-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.us-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+  font-size: clamp(10px, 2.2vw, 12px);
+  font-weight: 600;
+}
+
+/* Two (or more) fields side by side. Always a 2-column grid — on
+   mobile it stays 2 columns (just tighter), it never stacks to 1. */
+.us-two-col-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Boxed sub-panel (bonus box, rate config, pricing preview) ── */
+
+.us-subpanel {
+  background: linear-gradient(180deg, #0f172a 0%, #09101d 100%);
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: clamp(10px, 2.6vw, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.us-subpanel-title {
+  font-size: clamp(11px, 2.4vw, 13px);
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.us-subpanel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-subpanel-note {
+  font-size: clamp(9px, 2vw, 11px);
+  color: #64748b;
+}
+
+.us-subpanel-note.is-accent {
+  color: #60a5fa;
+}
+
+.us-subpanel-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: clamp(11px, 2.4vw, 13px);
+  color: #94a3b8;
+  text-align: center;
+}
+
+.us-subpanel-center.is-muted {
+  color: #64748b;
+}
+
+/* ── Pricing breakdown (order preview) ─────────────────────────── */
+
+.us-pricing-box {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: clamp(10px, 2.6vw, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.us-pricing-row-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(11px, 2.4vw, 13px);
+  padding-bottom: 15px;
+  border-bottom: 1px solid #1e293b;
+  color: #b2c0d4;
+  font-weight: 600;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.us-pricing-step {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: clamp(10px, 2.2vw, 12px);
+  flex-wrap: wrap;
+}
+
+.us-pricing-step-remaining {
+  color: #64748b;
+  font-size: clamp(9px, 2vw, 11px);
+  margin-top: 2px;
+}
+
+.us-pricing-summary {
+  border-top: 1px solid #1e293b;
+  padding-top: 10px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.us-pricing-summary-row {
+  display: flex;
+  justify-content: space-between;
+  color: #a8ccebff;
+  font-size: clamp(10px, 2.2vw, 12px);
+  font-weight: 500;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.us-pricing-final-row {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #1e293b;
+  padding-top: 10px;
+  margin-top: 4px;
+  font-size: clamp(13px, 3vw, 16px);
+  font-weight: 700;
+  color: #22c55e;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Exchange preview box ─────────────────────────────────────── */
+
+.us-preview-box {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 12px;
+  color: #cbd5e1;
+  font-size: clamp(11px, 2.4vw, 13px);
+  margin-top: 10px;
+}
+
+/* ── Divider with centered label + record wrapper responsive ──── */
+
+@media (max-width: 560px) {
+  .us-two-col-row {
+    gap: 8px;
+  }
+
+  .us-collapsible-body {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .us-subpanel {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .us-stat-grid {
+    gap: 8px;
+  }
+
+  .us-stat-box {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  /* Order / exchange / transaction cards: tighter but same content */
+  .us-record-card {
+    padding: 12px;
+    gap: 10px;
+    border-radius: 16px;
+  }
+
+  .us-record-title {
+    font-size: 14px;
+    margin-bottom: 3px;
+  }
+
+  .us-record-sub {
+    font-size: 11px;
+  }
+
+  .us-amount {
+    font-size: 18px;
+    gap: 6px;
+  }
+
+  .us-amount.is-large {
+    font-size: 19px;
+  }
+
+  .us-badge {
+    font-size: 10px;
+    padding: 5px 9px;
+  }
+
+  .us-currency-tag,
+  .us-network-tag {
+    font-size: 10px;
+    height: 19px;
+    padding: 1px 8px;
+  }
+
+  .us-info-row {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .us-info-label,
+  .us-info-value {
+    font-size: 11px;
+  }
+
+  /* Tighter stat boxes (Created/Delivered, Date/Status, Rate/Fee):
+     labels stack above values instead of sitting side-by-side, so
+     each box stays narrow and legible at phone widths. */
+  .us-stat-box {
+    flex-direction: column;
+    gap: 3px !important;
+  }
+
+  .us-stat-label {
+    margin-bottom: 0;
+  }
+
+  /* Provider / product meta tag wraps onto its own line under the
+     title instead of squeezing the row horizontally. */
+  .us-meta-tag {
+    flex-basis: 100%;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .us-record-sub {
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 400px) {
+  .us-record-card {
+    padding: 10px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+
+  .us-amount.is-large {
+    font-size: 17px;
+  }
+
+  .us-stat-grid {
+    gap: 6px;
+  }
+
+  .us-stat-box {
+    padding: 7px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   HeroHub-themed filter bar (used by OrdersTab / TransactionsTab
+   history filters). Ported from HeroHub.css's icy/blur theme so
+   these filters look and feel like the rest of the app's filter
+   bars. Always a single row — on mobile only the date range field
+   swaps to an icon-only trigger (via MiniDateRange), everything
+   else keeps its place.
+   ════════════════════════════════════════════════════════════ */
+
+.us-hh-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: rgba(47, 52, 89, 0.09);
+  border: 1px  solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: clamp(8px, 2vw, 12px);
+  box-shadow: 0 1px 0 rgba(14, 13, 13, 0) inset, 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+}
+
+.us-hh-filter-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.us-hh-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.us-hh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 0;
+  min-width: 78px;
+}
+
+.us-hh-field-compact {
+  flex: 0 0 auto;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.us-hh-field-label {
+  font-size: 9px;
+  color: #5b6b85;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 1px;
+}
+
+.us-hh-date-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.us-hh-date-wrap .react-datepicker-wrapper {
+  width: 100%;
+}
+
+.us-hh-field-icon {
+  position: absolute;
+  left: 9px;
+  color: #4b5a75;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.us-hh-input {
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  padding: 6px 10px 6px 28px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 12px;
+  height: 30px;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.us-hh-input::placeholder {
+  color: #4b5a75;
+}
+
+.us-hh-input:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.us-hh-input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.us-hh-date-input {
+  padding-left: 28px;
+}
+
+.us-hh-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 8px;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.us-hh-select-wrap:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.us-hh-select-wrap.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.us-hh-select {
+  display: flex;
+  align-items: center;
+  color: #e2e8f0;
+  padding: 6px 22px 6px 10px;
+  font-size: 12px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.us-hh-select-icon {
+  position: absolute;
+  right: 8px;
+  color: #4b5a75;
+  pointer-events: none;
+}
+
+.us-hh-icon-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #8a96ab;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.us-hh-icon-trigger:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+}
+
+.us-hh-icon-trigger.is-active {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
+.us-hh-dropdown-panel {
+  position: fixed;
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: linear-gradient(165deg, rgba(21, 37, 66, 0.92), rgba(11, 20, 36, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: us-hh-dropdown-in 0.12s ease-out;
+}
+
+@keyframes us-hh-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.us-hh-dropdown-option {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.us-hh-dropdown-option:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.us-hh-dropdown-option.is-active {
+  background: rgba(59, 130, 246, 0.22);
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+/* stat pills — deliberately no background here; only the filter row
+   (inside .us-hh-bar) gets the icy container background. */
+.us-hh-pills-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: transparent;
+}
+
+.us-hh-row-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+.us-hh-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 6px 11px 6px 8px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.us-hh-pill:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.us-hh-pill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.us-hh-pill-label {
+  font-size: 9px;
+  color: #5b6b85;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.us-hh-pill-value {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile: keep everything on one row, just tighten spacing; the date
+   field itself compacts to an icon via MiniDateRange's own JS check. */
+@media (max-width: 700px) {
+  .us-hh-bar {
+    padding: 8px;
+    gap: 10px;
+  }
+  .us-hh-filter-row {
+    gap: 6px;
+  }
+  .us-hh-field {
+    min-width: 64px;
+  }
+  .us-hh-pill {
+    flex: 1 1 100px;
+    padding: 5px 8px 5px 6px;
+  }
+}
+
+/* ── Responsive overrides ───────────────────────────────────────
+   Below 1100px the sidebar narrows to fit smaller laptop screens;
+   below 700px it becomes a bottom sheet that rises from the
+   bottom of the screen instead of sliding in from the right. */
+
+@media (max-width: 1100px) {
+  .user-sidebar-container {
+    width: min(460px, 100vw);
+  }
+}
+
+@media (max-width: 700px) {
+  .user-sidebar-container {
+    top: auto !important;
+    right: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 88dvh !important;
+    max-height: 88dvh !important;
+    border-left: none !important;
+    border-top: 2px solid #1e293b !important;
+    border-radius: 20px 20px 0 0 !important;
+    transform: translateY(100%);
+    opacity: 1 !important;
+    transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
+  .user-sidebar-container.is-visible {
+    transform: translateY(0%);
+  }
+
+  /* drag-handle affordance at the top of the sheet */
+  .user-sidebar-container::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: #334155;
+  }
+
+  .user-sidebar-header {
+    padding-top: 22px;
+  }
+
+  .user-sidebar-user-title {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 420px) {
+  .user-sidebar-container {
+    height: 92dvh !important;
+    max-height: 92dvh !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   SHARED TAB DESIGN SYSTEM
+   Used by ProfileTab, OrdersTab, TransactionsTab and WalletTab.
+   Every visual pattern that repeats across those tabs (cards,
+   dividers, pills, inputs, buttons, tab strips, grids...) lives
+   here as a single reusable class, instead of each tab keeping
+   its own copy of the same style object. Font sizes and spacing
+   use clamp() so they scale down on narrow / mobile screens
+   without needing separate mobile-only rules.
+   ════════════════════════════════════════════════════════════ */
+
+.us-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Identity header (ProfileTab) ─────────────────────────── */
+
+.us-identity-card {
+  background: linear-gradient(135deg, #131a2e 0%, #0c1120 100%);
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  padding: clamp(12px, 3vw, 16px) clamp(12px, 3vw, 18px);
+}
+
+.us-identity-trigger {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 14px);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.us-identity-expanded {
+  animation: none;
+}
+
+.us-identity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.us-identity-name {
+  color: #e2e8f0;
+  font-weight: 700;
+  font-size: clamp(13px, 3vw, 16px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.us-identity-handle {
+  color: #64748b;
+  font-size: clamp(11px, 2.4vw, 13px);
+  margin-top: 2px;
+}
+
+.us-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.us-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.us-avatar {
+  width: clamp(28px, 6vw, 34px);
+  height: clamp(28px, 6vw, 34px);
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: clamp(12px, 2.6vw, 14px);
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.us-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(10px, 2.2vw, 12px);
+  font-weight: 600;
+  padding: 5px clamp(8px, 2vw, 12px);
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.us-status-pill.is-active {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+}
+
+.us-status-pill.is-inactive {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+
+.us-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Section / card wrapper (all tabs) ───────────────────────── */
+
+.us-section {
+  background: linear-gradient(180deg, #111827 0%, #0a1226 100%);
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.us-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.us-section-header-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.us-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 12px);
+  min-width: 0;
+}
+
+.us-icon-badge {
+  width: clamp(28px, 6vw, 34px);
+  height: clamp(28px, 6vw, 34px);
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.us-title {
+  font-size: clamp(13px, 3vw, 15px);
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.us-subtitle {
+  font-size: clamp(11px, 2.4vw, 12.5px);
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.us-divider {
+  height: 1px;
+  background: #1c2333;
+  margin: 18px 0;
+}
+
+/* ── Form fields (all tabs) ──────────────────────────────────── */
+
+.us-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 860px) {
+  .us-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Required Customer Information (dynamic product fields): always
+   2 fields per row, on mobile as well as desktop. */
+.us-req-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.us-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.us-label {
+  margin-bottom: 7px;
+  font-size: clamp(11px, 2.2vw, 12.5px);
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.us-input-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 0 12px;
+  transition: border-color 0.15s;
+}
+
+.us-input-shell.is-disabled {
+  opacity: 0.55;
+}
+
+.us-input-icon {
+  color: #4b5872;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.us-input,
+.us-select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 11px 0;
+  color: #e2e8f0;
+  font-size: clamp(12px, 2.4vw, 14px);
+}
+
+.us-eye-btn {
+  background: none;
+  border: none;
+  color: #4b5872;
+  cursor: pointer;
+  display: flex;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+/* Standalone bordered input/select, used outside an .us-input-shell
+   (e.g. history filters). Deliberately matches the original filter
+   field look exactly (12px radius/padding, white text, 13px type) —
+   do not restyle this, only layout/positioning around it may change. */
+.us-input-standalone,
+.user-sidebar-content .us-input-standalone {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 12px;
+  color: white;
+  font-size: 13px !important;
+  outline: none;
+}
+
+/* ── Buttons (all tabs) ──────────────────────────────────────── */
+
+.us-btn-danger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: clamp(28px, 8vw, 35px);
+  background: #ef4444;
+  border: none;
+  border-radius: 8px;
+  padding: 0 clamp(12px, 3vw, 18px);
+  color: white;
+  font-weight: 600;
+  font-size: clamp(12px, 2.4vw, 13.5px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.us-btn-danger.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.us-btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #26324a;
+  border-radius: 9px;
+  padding: clamp(6px, 1.6vw, 9px) clamp(10px, 2.4vw, 14px);
+  color: #94a3b8;
+  font-size: clamp(11px, 2.4vw, 12.5px);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.us-btn-ghost.is-active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+/* ── Danger zone ─────────────────────────────────────────────── */
+
+.us-security-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.us-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.us-danger-zone-text {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  min-width: 200px;
+}
+
+.us-danger-zone-title {
+  font-size: clamp(12px, 2.6vw, 14px);
+  font-weight: 700;
+  color: #fca5a5;
+}
+
+/* ── Toggle switch (all tabs) ────────────────────────────────── */
+
+.us-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.us-toggle-row.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.us-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.us-toggle-label-text {
+  font-size: clamp(12px, 2.6vw, 14px);
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.us-toggle-desc {
+  font-size: clamp(10px, 2.2vw, 12px);
+  color: #64748b;
+}
+
+.us-toggle-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 12px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  background: #1c2333;
+  border: 1px solid #2a3348;
+  cursor: pointer;
+}
+
+.us-toggle-track.is-checked {
+  background: var(--toggle-color, #6366f1);
+  border-color: var(--toggle-color, #6366f1);
+}
+
+.us-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: left 0.2s;
+  background: #5b6478;
+}
+
+.us-toggle-knob.is-checked {
+  left: 21px;
+  background: #fff;
+}
+
+/* ── Tab strip (permission groups, sub-tabs, etc.) ───────────── */
+
+.us-tabs-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.us-tabs-row::-webkit-scrollbar {
+  display: none;
+}
+
+.us-tab-btn {
+  padding: clamp(5px, 1.4vw, 7px) clamp(10px, 2.4vw, 14px);
+  border-radius: 8px;
+  font-size: clamp(11px, 2.4vw, 12.5px);
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #26324a;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.us-tab-btn.is-active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+/* ── Generic 2-column grid + small card (permissions, balances) ── */
+
+.us-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-content: flex-start;
+  min-height: 280px;
+}
+
+.us-card-sm {
+  background: #0b1220;
+  border: 1px solid #1c2333;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.us-save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 0 4px;
+}
+
+/* ── Section divider with centered label (ORDER HISTORY, etc.) ── */
+
+.us-labeled-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.us-labeled-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #334155, transparent);
+}
+
+.us-labeled-divider-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── History filter row (Orders / Transactions) ──────────────── */
+
+.us-filter-title {
+  font-size: 11px;
+  color: #64748b;
+  padding: 0 0 5px 5px;
+}
+
+/* ── Status/summary pill row (filtered counts) ───────────────── */
+
+.us-pills-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  border-radius: 14px;
+}
+
+.us-pill-stat {
+  flex: 1;
+  min-width: 120px;
+  align-items: center;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: linear-gradient(180deg, #0f172a 30%, #070e1d 100%);
+  border: 1px solid #1e293b;
+}
+
+.us-pill-stat-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.us-pill-stat-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: white;
+}
+
+/* ── Record card (order / transaction / exchange row) ────────── */
+
+.us-record-card {
+  background: linear-gradient(180deg, #111827 0%, #0a1226 100%);
+  border: 1px solid #2c384d;
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.us-record-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.us-record-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: white;
+  line-height: 1.3;
+  margin-bottom: 5px;
+}
+
+.us-record-title.is-capitalize {
+  text-transform: capitalize;
+  margin-bottom: 0;
+}
+
+.us-record-title.is-capitalize + .us-record-sub {
+  margin-top: 6px;
+}
+
+.us-record-sub {
+  margin-top: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.us-amount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-amount {
+  display: flex;
+  align-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+  gap: 10px;
+}
+
+.us-amount.is-large {
+  font-size: 24px;
+  gap: 0;
+}
+
+.us-ids-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.us-currency-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  padding: 2px 10px;
+  font-size: 12px;
+  margin-left: 8px;
+  color: #94a3b8;
+  font-weight: 600;
+  line-height: 1;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+.us-network-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.us-meta-tag {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(148, 163, 184, 0.75);
+  white-space: nowrap;
+}
+
+.us-date-tag {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.us-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.us-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.us-info-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.us-info-value {
+  font-size: 12px;
+  color: #e2e8f0;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+/* ── Transaction card (compact, distinct from Orders' record card) ──
+   Four tight rows: type+status, amount+date, one truncated meta
+   line (ids/product/network), and — only when present — a wrapped
+   row of small blockchain chips. No boxed sub-panels, so the card
+   stays short even with every field populated. */
+
+.us-tx-card {
+  background: linear-gradient(180deg, #111827 0%, #0a1226 100%);
+  border: 1px solid #2c384d;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.us-tx-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.us-tx-type {
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+  line-height: 1.2;
+}
+
+.us-tx-type.is-capitalize {
+  text-transform: capitalize;
+}
+
+.us-tx-badge {
+  font-size: 10px;
+  padding: 4px 9px;
+  flex-shrink: 0;
+}
+
+.us-tx-amount-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.us-tx-amount {
+  display: flex;
+  align-items: baseline;
+  font-size: 19px;
+  font-weight: 800;
+  gap: 4px;
+  min-width: 0;
+}
+
+.us-tx-currency {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-left: 2px;
+}
+
+.us-tx-date {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.us-tx-meta-line {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.us-tx-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.us-tx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-family: monospace;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.us-tx-chip-k {
+  font-family: inherit;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 560px) {
+  .us-tx-card {
+    padding: 10px 12px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+
+  .us-tx-type {
+    font-size: 13px;
+  }
+
+  .us-tx-amount {
+    font-size: 16px;
+  }
+
+  .us-tx-date {
+    font-size: 10px;
+  }
+
+  .us-tx-meta-line {
+    font-size: 10px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.4;
+  }
+
+  .us-tx-chip {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+}
+
+.us-empty-state {
+  padding: 80px;
+  border-radius: 18px;
+  text-align: center;
+  border: 1px dashed #334155;
+  background: #111827;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.us-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #1e293b;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 15px;
+
+}
+
+/* 2-column stat grid used for order dates etc. */
+.us-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.us-stat-box {
+  display: flex;
+  gap: 20px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.us-stat-label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.us-stat-value {
+  font-size: 13px;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.us-stat-value-lg {
+  font-size: clamp(15px, 4vw, 20px);
+  font-weight: 700;
+}
+
+.us-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.us-badge.is-success { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.25); color: #22c55e; }
+.us-badge.is-warning { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.25); color: #f59e0b; }
+.us-badge.is-danger  { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.25); color: #ef4444; }
+.us-badge.is-neutral { background: rgba(148, 163, 184, 0.12); border-color: rgba(184, 156, 148, 0.25); color: #b89994; }
+.us-badge.is-info    { background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.25); color: #60a5fa; }
+
+/* ════════════════════════════════════════════════════════════
+   WalletTab — balance list, IRT bank panel, wallet-pair addresses,
+   Balance Management / Internal Transfer. Built entirely from the
+   shared classes above (collapsible box, collapse animation,
+   record-card typography, req-info-grid, card-sm, danger-zone)
+   plus a small set of wallet-specific classes below.
+   ════════════════════════════════════════════════════════════ */
+
+.us-wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.us-wallet-card {
+  background: linear-gradient(180deg, #111827 0%, #0a1226 100%);
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.us-wallet-card.is-open {
+  border-color: #2c3a56;
+}
+
+.us-wallet-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(12px, 3vw, 16px);
+  background: none;
+  border: none;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  flex-wrap: wrap;
+}
+
+.us-wallet-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.us-wallet-coin-badge {
+  width: clamp(32px, 8vw, 40px);
+  height: clamp(32px, 8vw, 40px);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.us-wallet-coin-badge.is-crypto {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(37, 99, 235, 0.08));
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+}
+
+.us-wallet-coin-badge.is-irt {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25), rgba(34, 197, 94, 0.08));
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+
+.us-wallet-labels {
+  min-width: 0;
+}
+
+.us-wallet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.us-wallet-symbol {
+  font-size: clamp(14px, 3.4vw, 16px);
+  font-weight: 700;
+  color: white;
+}
+
+.us-wallet-meta {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.us-wallet-balances {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.us-wallet-balance-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.us-wallet-balance-label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+}
+
+.us-wallet-balance-value {
+  font-weight: 700;
+  font-size: clamp(13px, 3.2vw, 15px);
+}
+
+.us-wallet-balance-value.is-available { color: #22c55e; }
+.us-wallet-balance-value.is-frozen { color: #f59e0b; }
+
+.us-wallet-balance-divider {
+  width: 1px;
+  height: 26px;
+  background: #1e293b;
+}
+
+.us-wallet-panel {
+  border-top: 1px solid #1e293b;
+  background: #0b1220;
+  padding: clamp(12px, 3vw, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.us-wallet-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 6px 2px;
+}
+
+.us-wallet-spinner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  opacity: 0.8;
+  animation: us-wallet-pulse 1s ease-in-out infinite;
+}
+
+@keyframes us-wallet-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.us-inline-msg {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.us-inline-msg.is-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.us-inline-msg.is-success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+/* ── Internal Transfer specific bits ─────────────────────────── */
+
+.us-input-standalone.is-selected {
+  border: 1px solid rgba(34, 197, 94, 0.4) !important;
+  background: rgba(34, 197, 94, 0.04) !important;
+}
+
+.us-transfer-selected-badge {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.us-transfer-spinner {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  transform: translateY(-50%);
+  animation: us-wallet-pulse 1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.us-transfer-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  z-index: 999;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.us-transfer-drop-item {
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid #1e293b;
+  transition: background 0.12s;
+}
+
+.us-transfer-drop-item:last-child {
+  border-bottom: none;
+}
+
+.us-transfer-drop-item:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.us-transfer-balance-hint {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.us-transfer-max-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(37, 99, 235, 0.2);
+  border: 1px solid rgba(37, 99, 235, 0.4);
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+
+.us-transfer-preview {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.us-transfer-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1e293b;
+}
+
+.us-transfer-preview-row:last-child {
+  border-bottom: none;
+}
+
+
+/* No hover / focus / press feedback on balance cards — the only visual
+   state is the open one. Also beats any app-level `button:hover`. */
+.us-wallet-trigger,
+.us-wallet-trigger:hover,
+.us-wallet-trigger:focus,
+.us-wallet-trigger:focus-visible,
+.us-wallet-trigger:active {
+  background: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+  outline: none;
+  border: none;
+}
+
+.us-wallet-card:hover { border-color: #1e293b; }
+.us-wallet-card.is-open:hover { border-color: #2c3a56; }
+
+/* Compact "one row per field" list (crypto pairs + IRT bank details) */
+.us-kv-caption {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: -6px;
+}
+
+.us-kv-list {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.us-kv-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 128px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #16202f;
+}
+
+.us-kv-row:last-child { border-bottom: none; }
+
+.us-kv-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.us-kv-label svg { flex-shrink: 0; color: #64748b; }
+
+.us-kv-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.us-kv-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  color: #e2e8f0;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.us-kv-input:focus { border-color: rgba(59, 130, 246, 0.6); }
+.us-kv-input::placeholder { color: #475569; }
+.us-kv-input.is-mono,
+.us-kv-value.is-mono { font-family: monospace; }
+
+.us-kv-value {
+  font-size: 12.5px;
+  color: #e2e8f0;
+  line-height: 1.4;
+  word-break: break-all;
+  min-width: 0;
+}
+
+.us-kv-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px;
+}
+
+.us-kv-hint {
+  flex: 1 1 160px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.us-wallet-panel .us-btn-compact {
+  min-height: 30px;
+  min-width: 78px;
+  padding: 5px 14px;
+  border-radius: 9px;
+  margin-left: auto;
+}
+
+/* Slim delete strip */
+.us-wallet-delete-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.04);
+  border-radius: 10px;
+}
+
+.us-wallet-delete-text { min-width: 0; }
+.us-wallet-delete-title { font-size: 12px; font-weight: 700; color: #fca5a5; }
+.us-wallet-delete-desc { font-size: 10.5px; color: #64748b; margin-top: 1px; }
+
+.us-btn-danger.us-btn-danger-sm {
+  min-height: 28px;
+  padding: 4px 10px;
+  gap: 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 420px) {
+  .us-kv-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 6px 8px;
+  }
+  .us-kv-label { font-size: 10.5px; }
+  .us-kv-hint { display: none; }
+  .us-wallet-delete-desc { display: none; }
+}
+
+@media (max-width: 560px) {
+  .us-wallet-trigger {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .us-wallet-balances {
+    gap: 10px;
+  }
+
+  .us-wallet-balance-divider {
+    height: 20px;
+  }
+
+  .us-wallet-balance-value {
+    font-size: 12.5px;
+  }
+
+  .us-wallet-panel {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .us-wallet-coin-badge {
+    border-radius: 10px;
+  }
+}
+
+/* ── Balance grid (WalletTab) ─────────────────────────────────── */
+
+.us-balance-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.us-balance-card {
+  background: linear-gradient(180deg, #111827 0%, #0a1226 100%);
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  padding: clamp(12px, 2.8vw, 16px);
+}
+
+.us-balance-card-label {
+  font-size: clamp(10px, 2.2vw, 11.5px);
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.us-balance-card-value {
+  font-size: clamp(16px, 4vw, 22px);
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-top: 4px;
+}
+
+/* Responsive breakpoints shared by every tab: 2-col grids collapse
+   to a single column on narrow phones so nothing gets squeezed —
+   except .us-stat-grid (e.g. Created/Delivered, Rate/Fee), which is
+   deliberately kept as a single row even on mobile, and .us-two-col-row
+   (Exchange-for-user fields), kept as a 2-column grid on mobile too. */
+@media (max-width: 560px) {
+  .us-form-grid,
+  .us-grid-2,
+  .us-balance-grid-2 {
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+  }
+
+  .us-section-header {
+    gap: 8px;
+  }
+}

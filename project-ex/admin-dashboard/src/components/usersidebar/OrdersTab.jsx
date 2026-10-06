@@ -1,16 +1,14 @@
 import { 
-  AlignCenterVerticalIcon, 
-  AlignEndVertical, 
-  ListVideo,
- ChevronDown,
+  ChevronDown,
  ShoppingCart,
  ArrowLeftRight,
  } from "lucide-react";
 import PermissionGate from "../../components/PermissionGate";
-import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import "./UserSidebar.css";
 import { useMemo, useState, useEffect } from "react";
 import {formatBigNumber , getNumberSuffixColor} from "../../components/HelperFunctions";
+import { FilterBar, MiniDropdown, MiniDateRange, StatPillsRow } from "./HubFilterControls";
 
 export default function OrdersTab({
   user,
@@ -24,7 +22,6 @@ export default function OrdersTab({
   selectedCategory,
   setSelectedCategory,
   products,
-  transferOpen,
   selectedProduct,
   setSelectedProduct,
   loadProductsByCategory,
@@ -43,7 +40,6 @@ export default function OrdersTab({
   setExchangeOpen,
   loadingExchangeOrders,
   exchangeOrders,
-  currencies,
   exchangePairs,
   currencyExchangeFrom,
   balanceMap,
@@ -76,7 +72,6 @@ export default function OrdersTab({
   setExchangeAmount,
   formatRate,
   setCustomRate,
-  
 }) {
 
   // =====================
@@ -96,8 +91,6 @@ export default function OrdersTab({
   const [exchangeStartDate, exchangeEndDate] = exchangeDateRange;
   const [exchangeStatusFilter, setExchangeStatusFilter] = useState("");
   const [exchangeCurrencyFilter, setExchangeCurrencyFilter] = useState("");
-  
-
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -205,8 +198,6 @@ export default function OrdersTab({
     return `${day} ${month} ${year} ${hours}:${minutes}`;
   };
 
-
-
   // Currencies actually present in this user's orders / exchange orders,
   // used to populate the currency selector options below.
   const orderCurrencyOptions = useMemo(() => {
@@ -287,12 +278,11 @@ export default function OrdersTab({
 
       const statusMatch =
         !exchangeStatusFilter || o.status === exchangeStatusFilter;
-       
+
       return inDateRange && statusMatch;
     });
   }, [exchangeOrders, exchangeStartDate, exchangeEndDate, exchangeStatusFilter]);
-  
-  {console.log(filteredExchangeOrders)}
+
   // Exchange orders filtered further by the selected "from" currency — used
   // only for the "Total Exchanged" stat.
   const currencyFilteredExchangeOrders = useMemo(() => {
@@ -300,7 +290,7 @@ export default function OrdersTab({
       (o) => !exchangeCurrencyFilter || o.from_currency?.symbol === exchangeCurrencyFilter
     );
   }, [filteredExchangeOrders, exchangeCurrencyFilter]);
- 
+
   const orderStats = useMemo(() => {
     const list = filteredOrders || [];
 
@@ -329,9 +319,9 @@ export default function OrdersTab({
     const totalCount = list.length;
 
     // Only sum exchanges matching the selected "from" currency.
-const totalExchanged = (currencyFilteredExchangeOrders || []).reduce((sum, x) => {
-  return sum + Number(x.from_amount || 0);
-}, 0);
+    const totalExchanged = (currencyFilteredExchangeOrders || []).reduce((sum, x) => {
+      return sum + Number(x.from_amount || 0);
+    }, 0);
 
     const completedCount = list.filter(x => x.status === "completed").length;
     const pendingCount = list.filter(x => x.status === "pending").length;
@@ -343,1667 +333,790 @@ const totalExchanged = (currencyFilteredExchangeOrders || []).reduce((sum, x) =>
       pendingCount,
     };
   }, [filteredExchangeOrders, currencyFilteredExchangeOrders]);
- 
-const BigNumber = ({ value, style = {} }) => {
-  const formatted = formatBigNumber(value);
 
-  return (
-    <span style={{ ...style }}>
-      {formatted.value}
-      {formatted.suffix && (
-        <span
-          style={{
-            marginLeft: 4,
-            color: getNumberSuffixColor(formatted.suffix),
-            fontSize: "0.9em",
-            fontWeight: 700,
-          }}
-        >
-          {formatted.suffix}
-        </span>
-      )}
-    </span>
-  );
-};
+  const BigNumber = ({ value, className = "" }) => {
+    const formatted = formatBigNumber(value);
+
+    return (
+      <span className={className}>
+        {formatted.value}
+        {formatted.suffix && (
+          <span
+            className="us-meta-tag"
+            style={{
+              marginLeft: 4,
+              color: getNumberSuffixColor(formatted.suffix),
+              fontSize: "0.9em",
+              fontWeight: 700,
+            }}
+          >
+            {formatted.suffix}
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  const orderStatusBadgeClass = (status) =>
+    `us-badge${
+      status === "pending" ? " is-warning"
+      : status === "approved" ? " is-info"
+      : status === "delivered" || status === "completed" ? " is-success"
+      : " is-danger"
+    }`;
 
   return (
     <>
-            {/* SUB TABS */}
-              <div style={styles.subTabs}>
-                  {hasPermission(user, "orders.view") && (
-                <button
-                  onClick={() => setOrderSubTab("products")}
-                  style={orderSubTab === "products" ? styles.subTabActive : styles.subTab}
-                >
-                  Products
-                </button>
-                  )}
-                {hasPermission(user, "exchange.view") && (
-
-                <button
-                  onClick={() => setOrderSubTab("exchange")}
-                  style={orderSubTab === "exchange" ? styles.subTabActive : styles.subTab}
-                >
-                  Exchange
-                </button>
-                )}
-              </div>
+      {/* SUB TABS */}
+      <div className="us-tabs-row">
+        {hasPermission(user, "orders.view") && (
+          <button
+            onClick={() => setOrderSubTab("products")}
+            className={`us-tab-btn${orderSubTab === "products" ? " is-active" : ""}`}
+          >
+            Products
+          </button>
+        )}
+        {hasPermission(user, "exchange.view") && (
+          <button
+            onClick={() => setOrderSubTab("exchange")}
+            className={`us-tab-btn${orderSubTab === "exchange" ? " is-active" : ""}`}
+          >
+            Exchange
+          </button>
+        )}
+      </div>
 
       {/* Products Subtab */}
-
-              {permissions.canViewOrders && orderSubTab === "products" &&  (
-                <>
-                  <PermissionGate allowed={hasPermission(user, "orders.create")}>
-                  <div style={styles.createOrderBox}>
-               {/* HEADER */}
-               
-
-                  <div
-                    style={styles.transferHeader}
-                    onClick={() => setCreateOrderOpen(!createOrderOpen)}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={styles.transferIcon}>
-                        <ShoppingCart size={17} />
-                      </div>
-                      <div>
-                        <div style={styles.transferHeaderLabel}>New Order</div>
-                        <div style={styles.transferHeaderSub}>Place an order for this user</div>
-                      </div>
-                    </div>
-                              <span
-                                style={{
-                                  ...styles.walletExpandIcon,
-                                  transform: createOrderOpen ? "rotate(180deg)" : "rotate(0deg)",
-                                }}
-                              >
-                                <ChevronDown size={16} />
-                              </span>
+      {permissions.canViewOrders && orderSubTab === "products" && (
+        <>
+          <PermissionGate allowed={hasPermission(user, "orders.create")}>
+            <div className="us-collapsible-box">
+              {/* HEADER */}
+              <div
+                className="us-collapsible-header"
+                onClick={() => setCreateOrderOpen(!createOrderOpen)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div className="us-collapsible-icon">
+                    <ShoppingCart size={17} />
                   </div>
-
-                  {/*--------------- New Order container -------------------- */}
-
-                    {createOrderOpen && (
-                      <div style={styles.createOrderBody}>
-                        <div>
-                          <label style={styles.label}>Category</label>
-                          <select
-                            style={styles.input}
-                            value={selectedCategory}
-                            onChange={(e) => {
-                              setSelectedCategory(e.target.value);
-                              setSelectedProduct("");
-                              loadProductsByCategory(e.target.value);
-                            }}
-                          >
-                            <option value="">Select category</option>
-                            {productCategories.map((c) => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label style={styles.label}>Product</label>
-                          <select
-                            style={styles.input}
-                            value={selectedProduct}
-                            onChange={(e) => setSelectedProduct(e.target.value)}
-                          >
-                            <option value="">Select product</option>
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {`${p.name} — ${p.plan} | ${
-                                  p.discount_percent
-                                    ? `${Number(p.price).toFixed(2)} → ${(Number(p.price) * (1 - Number(p.discount_percent) / 100)).toFixed(2)}`
-                                    : Number(p.price).toFixed(2)
-                                } ${p.currency}`}
-                              </option>
-                            ))}
-                          </select>
-
-                            {/* Dynamic Required User Data Fields */}
-                            {selectedProductSchema?.beforeOrderFields?.length > 0 && (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-                                
-                                <div style={{
-                                  fontSize: 12,
-                                  color: "#64748b",
-                                  fontWeight: 700,
-                                  letterSpacing: "0.06em",
-                                  textTransform: "uppercase"
-                                }}>
-                                  Required Customer Information
-                                </div>
-
-                                {selectedProductSchema.beforeOrderFields.map(([key, field]) => (
-                                  <div key={key}>
-                                    <label style={styles.label}>
-                                      {field.label}
-                                      {field.required && <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>}
-                                    </label>
-
-                                    <input
-                                      type={field.type === "number" ? "number"
-                                          : field.type === "email" ? "email"
-                                          : field.type === "password" ? "password"
-                                          : field.type === "textarea" ? "text"
-                                          : "text"}
-                                      style={styles.input}
-                                      value={inputDataText[key]?.value || ""}
-                                      onChange={(e) =>
-                                        setInputDataText((prev) => ({
-                                          ...prev,
-                                          [key]: {
-                                            ...prev[key],
-                                            value: e.target.value,
-                                          },
-                                        }))
-                                      }
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {/* After Login Steps */}
-                            {selectedProductSchema?.afterLoginFields?.length > 0 && (
-                              <div style={{ marginTop: 14 }}>
-                                <div
-                                  style={{
-                                    fontSize: 12,
-                                    color: "#64748b",
-                                    fontWeight: 700,
-                                    letterSpacing: "0.06em",
-                                    textTransform: "uppercase",
-                                    marginBottom: 8,
-                                  }}
-                                >
-                                  After Login Steps
-                                </div>
-
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: 8,
-                                  }}
-                                >
-                                  {selectedProductSchema.afterLoginFields.map(([key, field]) => (
-                                    <div
-                                      key={key}
-                                      style={{
-                                        padding: "8px 12px",
-                                        borderRadius: 999,
-                                        background: "rgba(37,99,235,0.12)",
-                                        border: "1px solid rgba(37,99,235,0.25)",
-                                        color: "#93c5fd",
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {field.label}
-                                      {field.required && (
-                                        <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                                                        
-                        </div>
-
-                        <div style={{
-                          background: "linear-gradient(180deg,#0f172a 0%, #09101d 100%)",
-                          border: "1px solid #1e293b",
-                          borderRadius: 14,
-                          padding: 14,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 12,
-                        }}>
-                          <div style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>🎁 Admin Bonus (Optional)</div>
-
-                          <div>
-                            <label style={styles.label}>Bonus Discount %</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="100"
-                              placeholder="e.g. 50"
-                              value={bonusPercent}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === "" || (Number(v) >= 1 && Number(v) <= 100)) {
-                                  setBonusPercent(v);
-                                }
-                              }}
-                              style={styles.input}
-                            />
-                          </div>
-
-                      {(() => {
-                        const prod = products.find(
-                          (p) => String(p.id) === String(selectedProduct)
-                        );
-
-                        if (!prod) return null;
-
-                        const pricing = calculateProductPricing(
-                          prod,
-                          user,
-                          Number(bonusPercent || 0)
-                        );
-                        return (
-                          <div
-                            style={{
-                              background: "#0b1220",
-                              border: "1px solid #1e293b",
-                              borderRadius: 12,
-                              padding: 14,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 10,
-                            }}
-                          >
-                            {/* Original Price */}
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                fontSize: 13,
-                                paddingBottom: 15,
-                                borderBottom: "1px solid #1e293b",
-                                color: "#b2c0d4ff",
-                                fontWeight: 600,
-                              }}
-                            >
-                              <span>Original Price</span>
-                              <span>
-                                {pricing.originalPrice.toFixed(2)} {prod.currency}
-                              </span>
-                            </div>
-
-                            {/* Breakdown */}
-                            {pricing.steps.map((step, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "flex-start",
-                                  gap: 10,
-                                  fontSize: 12,
-                                  color: step.color,
-                                }}
-                              >
-                                <div>
-                                  {step.label} ({step.percent}%)
-                                </div>
-
-                                <div style={{ textAlign: "right" }}>
-                                  <div>
-                                    -{step.deducted.toFixed(2)} {prod.currency}
-                                  </div>
-
-                                  <div
-                                    style={{
-                                      color: "#64748b",
-                                      fontSize: 11,
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    Remaining: {step.remaining.toFixed(2)}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-
-                            {/* Summary */}
-                            <div
-                              style={{
-                                borderTop: "1px solid #1e293b",
-                                paddingTop: 10,
-                                marginTop: 4,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 6,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  color: "#a8ccebff",
-                                  fontSize: 12,
-                                  fontWeight: 500,
-                                }}
-                              >
-                                <span>Total Fee & Discount ({pricing.effectiveDiscount.toFixed(2)}%)</span>
-                                <span>
-                                  -{pricing.totalSaved.toFixed(2)} {prod.currency}
-                                </span>
-                              </div>
-
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  color: "#a8ccebff",
-                                  fontSize: 12,
-                                  fontWeight: 500,
-                                }}
-                              >
-                                <span>Owner Receives ({prod.admin_username})</span>
-                                <span>
-                                  {pricing.finalDue.toFixed(2)} {prod.currency}
-                                </span>
-                              </div>
-
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  borderTop: "1px solid #1e293b",
-                                  paddingTop: 10,
-                                  marginTop: 4,
-                                  fontSize: 16,
-                                  fontWeight: 700,
-                                  color: "#22c55e",
-                                }}
-                              >
-                                <span>Final Due for user</span>
-                                <span>
-                                  {pricing.finalForUser.toFixed(2)} {prod.currency}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                        </div>
-                       <div style={styles.buttonRow}>
-                        <button
-                        
-                          className="primaryBtn"
-                          onClick={createOrderForUser}
-                          disabled={creatingOrder}
-                          style={{opacity: creatingOrder ? 0.6 : 1, cursor: creatingOrder ? "not-allowed" : "pointer" }}
-                        >
-                          {creatingOrder ? "Creating..." : "Create Order"}
-                        </button>
-                         </div>
-                      </div>
-                    )}
+                  <div>
+                    <div className="us-collapsible-title">New Order</div>
+                    <div className="us-collapsible-sub">Place an order for this user</div>
                   </div>
+                </div>
+                <span className={`us-chevron${createOrderOpen ? " is-open" : ""}`}>
+                  <ChevronDown size={16} />
+                </span>
+              </div>
 
-                  </PermissionGate>
-
-                  {/*--------------- Order History -------------------- */}
-
-                  <div style={styles.ordersDivider}>
-                    <div style={styles.ordersDividerLine} />
-                    <div style={styles.ordersDividerText}>ORDER HISTORY</div>
-                    <div style={styles.ordersDividerLine} />
-                  </div>
-
-                  {/*--------------- Filter Order History -------------------- */}             
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      flex: 1,
-                      flexWrap: "nowrap",
-                      alignItems: "center",
-                      overflowX: "auto",
-                    }}
-                      >
-                    <div style={{ flex:1 }}>
-                      <div style={styles.historyFitlerTitle}>Date Range</div>
-                      <DatePicker
-                      selectsRange
-                      startDate={orderStartDate}
-                      endDate={orderEndDate}
-                      onChange={(update) => setOrderDateRange(update)}
-                      isClearable
-                      placeholderText="Order date range"
-                      customInput={<input style={{ ...styles.input, width: 220 }} />}
-                    />
-                   </div>
-                     <div style={{ flex:1 }}>
-                      <div style={styles.historyFitlerTitle}>Status</div>
-                      <select
-                        style={styles.input}
-                        value={orderStatusFilter}
-                        onChange={(e) => setOrderStatusFilter(e.target.value)}
-                      >
-                        <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="delivered">Delivered</option>
-                      </select>
-                      </div>
-                    <div style={{ flex:1 }}>
-                      <div style={styles.historyFitlerTitle}>Order Type</div>
-                      <select
-                        style={styles.input}
-                        value={productTypeFilter}
-                        onChange={(e) => setProductTypeFilter(e.target.value)}
-                      >
-                        <option value="">All Types</option>
-                        <option value="digital">Digital</option>
-                        <option value="subscription">Subscription</option>
-                        <option value="service">Service</option>
-                      </select>
-
-                      </div>
-
-                    {orderCurrencyOptions.length > 0 && (
-                      <div style={{ flex: 1 }}>
-                        <div style={styles.historyFitlerTitle}>Currency</div>
-                        <select
-                          style={styles.input}
-                          value={orderCurrencyFilter}
-                          onChange={(e) => setOrderCurrencyFilter(e.target.value)}
-                        >
-                          {orderCurrencyOptions.map((sym) => (
-                            <option key={sym} value={sym}>{sym}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                  </div>
-
-                  {/*--------------- StatePills fro Filtered Orders-------------------- */}             
-                  <div style={styles.txPillsRow}>
-
-                    <div style={styles.txPill}>
-                      <div style={styles.txPillValue}>{orderStats.totalCount}</div>
-                      <div style={styles.txPillLabel}>Total Orders</div>
-                    </div>
-
-                    <div style={styles.txPill}>
-                      <div style={styles.txPillValue}>
-                        <BigNumber value={orderStats.totalPurchase} />
-                                      
-                        {orderCurrencyFilter && (
-                          <span style={{...styles.providerMeta, fontSize:10, marginLeft:4}}>{orderCurrencyFilter}</span>
-                        )}
-
-                      </div>
-                      <div style={styles.txPillLabel}>Total Purchase  
-                        </div>
-                    </div>
-
-                    <div style={styles.txPill}>
-                      <div style={{ ...styles.txPillValue, color: "#22c55e" }}>
-                        {orderStats.completedCount}
-                      </div>
-                      <div style={styles.txPillLabel}>Completed</div>
-                    </div>
-
-                    <div style={styles.txPill}>
-                      <div style={{ ...styles.txPillValue, color: "#f59e0b" }}>
-                        {orderStats.pendingCount}
-                      </div>
-                      <div style={styles.txPillLabel}>Pending</div>
-                    </div>
-                  </div>
-
-   
-
-
-                   <PermissionGate allowed={hasPermission(user, "orders.view")}>
-                  {
-                  console.log("Orders:", orders)}
-                  <div style={styles.ordersList}>
-                    {loadingOrders ? (
-                      <div style={styles.emptyOrders}>Loading orders...</div>
-                    ) : (orders || []).length === 0 ? (
-                      <div style={styles.emptyOrders}>No orders found</div>
-                    ) : (
-                      (filteredOrders || []).map((o) => (
-                        
-                        <div key={o.order_id} style={styles.orderCard}>
-                  <div style={styles.orderTop}>
-                    <div>
-                      <div style={styles.productTitleRow}>
-                        <div style={styles.orderProduct}>
-                          {o.product_name}
-                        </div>
-
-                        {o.product_admin_id != null && (
-                          <div style={styles.providerMeta}>
-                            Provider #{o.product_admin_id} {o.product_owner_displayName}
-                          </div>
-                        )}
-                      </div>
-
-                      <div style={styles.orderMeta}>
-                        #{o.id}
-                        {o.plan && ` • ${o.plan}`}
-                        {o.product_type && ` • ${o.product_type}`}
-                        {o.data_volume_gb && ` • ${o.data_volume_gb} GB`}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        ...styles.orderStatus,
-                        ...(o.status === "pending"
-                          ? styles.statusPending
-                          : o.status === "approved"
-                          ? styles.statusApproved
-                          : o.status === "delivered"
-                          ? styles.statusDelivered
-                          : styles.statusDefault),
+              {/*--------------- New Order container -------------------- */}
+              <div className={`us-collapse${createOrderOpen ? " is-open" : ""}`}>
+                <div className="us-collapse-inner">
+                <div className="us-collapsible-body">
+                  <div>
+                    <MiniDropdown
+                      label="Category"
+                      value={selectedCategory}
+                      onChange={(v) => {
+                        setSelectedCategory(v);
+                        setSelectedProduct("");
+                        loadProductsByCategory(v);
                       }}
-                    >
-                      {o.status?.toUpperCase()}
-                    </div>
+                      placeholder="Select category"
+                      options={productCategories.map((c) => ({ value: c.id, label: c.name }))}
+                    />
                   </div>
-                          
 
-                          <div style={styles.orderPriceRow}>
-                            <div style={styles.orderPrice}>
-                              <BigNumber value={o.price} />
-                              <span style={styles.orderCurrency}>{o.currency} </span> 
-                              
-                            </div>
-                            
-                             {o.network && <div style={styles.networkBadge}>{o.network}</div>}
-                              {o.discount_percent > 0 && <div style={styles.featuredBadge}>{o.discount_percent}% Discounted</div>}
+                  <div>
+                    <MiniDropdown
+                      label="Product"
+                      value={selectedProduct}
+                      onChange={(v) => setSelectedProduct(v)}
+                      placeholder="Select product"
+                      options={products.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} — ${p.plan} | ${
+                          p.discount_percent
+                            ? `${Number(p.price).toFixed(2)} → ${(Number(p.price) * (1 - Number(p.discount_percent) / 100)).toFixed(2)}`
+                            : Number(p.price).toFixed(2)
+                        } ${p.currency}`,
+                      }))}
+                    />
 
-                          </div>
+                    {/* Dynamic Required User Data Fields */}
+                    {selectedProductSchema?.beforeOrderFields?.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+                        <div className="us-eyebrow">Required Customer Information</div>
 
-                          <div style={styles.orderDates}>
-                            <div style={styles.dateItem}>
-                              <span style={styles.dateLabel}>Created</span>
-                              <span style={styles.dateValue}>{formatDateTime(o.created_at)}</span>
-                            </div>
-                            <div style={styles.dateItem}>
-                              <span style={styles.dateLabel}>Delivered</span>
-                              <span style={styles.dateValue}>
-                                {o.delivered_at ? formatDateTime(o.delivered_at) : "—"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  </PermissionGate>
-                </>
-              )}
+                        <div className="us-req-info-grid">
+                          {selectedProductSchema.beforeOrderFields.map(([key, field]) => (
+                            <div key={key}>
+                              <label className="us-label">
+                                {field.label}
+                                {field.required && <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>}
+                              </label>
 
-              {/* ================= EXCHANGE ORDERS ================= */}
-              {permissions.canViewExchange && orderSubTab === "exchange" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%", }}>
-                 <PermissionGate allowed={hasPermission(user, "exchange.create")}>
-                  <div style={styles.createOrderBox}>
-
-                    {/* HEADER */}
-
-                    <div
-                      style={styles.transferHeader}
-                      onClick={() => setExchangeOpen(!exchangeOpen)}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={styles.transferIcon}>
-                          <ArrowLeftRight size={17} />
-                        </div>
-                        <div>
-                          <div style={styles.transferHeaderLabel}>Exchange for User</div>
-                          <div style={styles.transferHeaderSub}>Execute an exchange for this user</div>
-                        </div>
-                      </div>
-                          <span
-                                style={{
-                                  ...styles.walletExpandIcon,
-                                  transform: exchangeOpen ? "rotate(180deg)" : "rotate(0deg)",
-                                }}
-                              >
-                                <ChevronDown size={16} />
-                          </span>
-                     </div>
-                    
-
-
-                    {exchangeOpen && (
-                      <div style={styles.createOrderBody}>
-                        <div style={{ display: "flex", gap: 12 }}>
-                            <div style={{ flex: 1 }}>
-                          <label style={styles.label}>From Currency</label>
-                          <select
-                            style={styles.input}
-                            value={currencyExchangeFrom}
-                            onChange={(e) => {
-                              setCurrencyExchangeFrom(e.target.value);
-                              setCurrencyExchangeTo("");
-                              setNetworkExchangeFrom("");
-                              setNetworkExchangeTo("");
-                              setExchangePreview(null);
-                              setSelectedPairData(null);
-                              setLiveRate(null);
-                            }}
-                          >
-                            <option value="">Select currency</option>
-                            {[...new Set(
-                              exchangePairs.filter((p) => p.is_active).map((p) => p.from_currency?.symbol)
-                            )].map((sym) => (
-                              <option key={sym} value={sym}>
-                                {sym} (<BigNumber value={balanceMap[sym] ?? 0} />)
-                              </option>
-                            ))}
-                          </select>
-                             </div>
-
-                          <div style={{ flex: 1 }}>
-                          <label style={styles.label}>From Network</label>
-                          <select
-                            style={styles.input}
-                            value={networkExchangeFrom}
-                            onChange={(e) => {
-                              setNetworkExchangeFrom(e.target.value);
-                              setNetworkExchangeTo("");
-                              setExchangePreview(null);
-                              setSelectedPairData(null);
-                              setLiveRate(null);
-                              if (currencyExchangeFrom && currencyExchangeTo) {
-                                fetchLiveRate(
-                                  currencyExchangeFrom,
-                                  currencyExchangeTo,
-                                  e.target.value,
-                                  "",
-                                  customRate
-                                );
-                              }
-                            }}
-                            disabled={!currencyExchangeFrom || !fromNetworkRequired}
-                          >
-                            <option value="">
-                              {fromNetworkRequired ? "Select Network" : "No Network Required"}
-                            </option>
-                            {exchangeFromNetworks.map((n) => (
-                              <option key={n.id} value={n.id}>
-                                {n.name || n.symbol}{n.chain ? ` (${n.chain})` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          </div>
-
-                           </div>
-                          
-                          <div style={{ display: "flex", gap: 12 }}>
-                            <div style={{ flex: 1 }}>
-                          <label style={styles.label}>To Currency</label>
-                          <select
-                            style={styles.input}
-                            value={currencyExchangeTo}
-                            onChange={(e) => {
-                              setCurrencyExchangeTo(e.target.value);
-                              setNetworkExchangeTo("");
-                              setExchangePreview(null);
-                              setSelectedPairData(null);
-                              fetchLiveRate(
-                                currencyExchangeFrom,
-                                e.target.value,
-                                networkExchangeFrom,
-                                "",
-                                customRate
-                              );
-                            }}
-                          >
-                            <option value="">Select currency</option>
-                            {[...new Set(
-                              exchangePairs
-                                .filter(
-                                  (p) =>
-                                    p.is_active &&
-                                    p.from_currency?.symbol === currencyExchangeFrom
-                                            )
-                                .map((p) => p.to_currency?.symbol)
-                            )].map((sym) => (
-                              <option key={sym} value={sym}>
-                                {sym} (<BigNumber value={balanceMap[sym] ?? 0} />)
-                              </option>
-                            ))}
-                          </select>
-                          </div>
-
-                          <div style={{ flex: 1 }}>
-                          <label style={styles.label}>To Network</label>
-                          <select
-                            style={styles.input}
-                            value={networkExchangeTo}
-                            onChange={(e) => {
-                              setNetworkExchangeTo(e.target.value);
-                              setExchangePreview(null);
-                              setSelectedPairData(null);
-                              fetchLiveRate(
-                                currencyExchangeFrom,
-                                currencyExchangeTo,
-                                networkExchangeFrom,
-                                e.target.value,
-                                customRate
-                              );
-                            }}
-                            disabled={!currencyExchangeTo || !toNetworkRequired}
-                          >
-                            <option value="">
-                              {toNetworkRequired ? "Select Network" : "No Network Required"}
-                            </option>
-                            {exchangeToNetworks.map((n) => (
-                              <option key={n.id} value={n.id}>
-                                {n.name || n.symbol}{n.chain ? ` (${n.chain})` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        </div>
-                        
-                        
-                        <div>
-                          <label style={styles.label}>
-                            Amount (Max: <BigNumber value={maxExchangeable || 0} />)
-                          </label>
-                          <input
-                            type="string"
-                            style={styles.input}
-                            value={exchangeAmount}
-                            onChange={(e) => { setExchangeAmount(e.target.value); setExchangePreview(null); }}
-                            placeholder="Enter amount"
-                          />
-                        </div>
-
-                        <div style={{ background: "linear-gradient(180deg,#0f172a 0%, #09101d 100%)", border: "1px solid #1e293b", borderRadius: 16, padding: 14, marginTop: 4 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                            <div style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>Exchange Rate Configuration</div>
-                            {selectedPairData && <div style={{ fontSize: 12, color: "#64748b" }}>Pair #{selectedPairData.id}</div>}
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                            <div style={{ background: "#0b1220", border: "1px solid #1e293b", borderRadius: 12, padding: 12 }}>
-                              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Current System Rate</div>
-                              <div style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0" }}>
-                              {loadingRate ? "..." : liveRate ? formatRate(liveRate) : selectedPairData?.rate ? formatRate(selectedPairData.rate) : "-"}
-                              </div>
-                            </div>
-                            <div style={{ background: "#0b1220", border: "1px solid #1e293b", borderRadius: 12, padding: 12 }}>
-                              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Exchange Fee</div>
-                              <div style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc" }}>{selectedPairData?.fee_percent ?? 0}%</div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Custom Admin Rate (Optional)</label>
-                          <input
-                              type="number"
-                              placeholder="Leave empty to use live system rate"
-                              value={customRate ?? ""}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setCustomRate(value);
-                                setExchangePreview(null);
-                                if (currencyExchangeFrom && currencyExchangeTo) {
-                                  fetchLiveRate(
-                                    currencyExchangeFrom,
-                                    currencyExchangeTo,
-                                    networkExchangeFrom,
-                                    networkExchangeTo,
-                                    value || null
-                                  );
+                              <input
+                                type={field.type === "number" ? "number"
+                                    : field.type === "email" ? "email"
+                                    : field.type === "password" ? "password"
+                                    : field.type === "textarea" ? "text"
+                                    : "text"}
+                                className="us-input-standalone"
+                                value={inputDataText[key]?.value || ""}
+                                onChange={(e) =>
+                                  setInputDataText((prev) => ({
+                                    ...prev,
+                                    [key]: {
+                                      ...prev[key],
+                                      value: e.target.value,
+                                    },
+                                  }))
                                 }
-                              }}
-                              style={{
-                                ...styles.input,
-                                border: customRate !== "" && customRate !== null ? "1px solid #2563eb" : "1px solid #1e293b",
-                                background: customRate !== "" && customRate !== null ? "#0b1730" : "#0b1220",
-                              }}
-                            />
-                            <div style={{ marginTop: 8, fontSize: 12, color: customRate !== "" ? "#60a5fa" : "#64748b" }}>
-                              {customRate !== "" ? "Custom admin rate will override the live pair rate." : "Using automatic live exchange rate."}
+                              />
                             </div>
-                          </div>
+                          ))}
                         </div>
-                        <div style={styles.buttonRow}>
-                        <button onClick={previewExchange} className="primaryBtn" style={{  background: "#334155" }} disabled={loadingPreview}>
-                          {loadingPreview ? "Calculating..." : "Preview Exchange"}
-                        </button>
-                        </div>
-
-                        {exchangePreview ? (
-                          <div style={{ display: "flex",
-                                        justifyContent: "center",
-                                        alignItems: "center",  fontSize: 13, color: "#94a3b8" }}>
-                            Rate: <b>{formatRate(exchangePreview.selected_rate)}</b> • Fee: <b>{exchangePreview.fee_percent}%  </b> {currencyExchangeFrom}
-                          </div>
-                        ) : (
-                          currencyExchangeFrom && currencyExchangeTo && (
-                            <div style={{    display: "flex",
-                                        justifyContent: "center",
-                                        alignItems: "center", 
-                                        fontSize: 13, 
-                                        color: "#64748b" 
-                                        }}>
-                              Select amount and preview to see exchange details
-                            </div>
-                          )
-                        )}
-
-                        {exchangePreview && (
-                          <div style={{ background: "#0b1220", border: "1px solid #1e293b", borderRadius: 14, padding: 12, color: "#cbd5e1", fontSize: 13, marginTop: 10 }}>
-
-                            <div>Rate: <b>{formatRate(exchangePreview.selected_rate)}</b></div>
-                            <div>Fee: <b>{formatRate(exchangePreview.fee_amount)}</b>  {currencyExchangeFrom}</div>
-                            <div>Gross: <b>{formatRate(exchangePreview.gross_amount)}</b>  {currencyExchangeFrom}</div>
-                            <div>User Receives: <b>{formatRate(exchangePreview.received_amount)} </b> {currencyExchangeTo}</div>
-                          </div>
-                        )}
-                       <div style={styles.buttonRow}>
-                        <button
-                        className="primaryBtn"
-                          onClick={executeExchange}
-                          disabled={executingExchange || !exchangePreview}
-                          style={{
-                            opacity: executingExchange || !exchangePreview ? 0.5 : 1,
-                            cursor: executingExchange || !exchangePreview ? "not-allowed" : "pointer",
-                            background: "#1d4fd871",
-                            
-                          }}
-                        >
-                          {executingExchange ? "Executing..." : "Execute Exchange"}
-                        </button>
                       </div>
+                    )}
+                    {/* After Login Steps */}
+                    {selectedProductSchema?.afterLoginFields?.length > 0 && (
+                      <div style={{ marginTop: 14 }}>
+                        <div className="us-eyebrow" style={{ marginBottom: 8 }}>After Login Steps</div>
+
+                        <div className="us-chip-row">
+                          {selectedProductSchema.afterLoginFields.map(([key, field]) => (
+                            <div key={key} className="us-chip">
+                              {field.label}
+                              {field.required && (
+                                <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  </PermissionGate >
+                  <div className="us-subpanel">
+                    <div className="us-subpanel-title">🎁 Admin Bonus (Optional)</div>
 
-
-                  <div style={styles.ordersDivider}>
-                    <div style={styles.ordersDividerLine} />
-                    <div style={styles.ordersDividerText}>EXCHANGE HISTORY</div>
-                    <div style={styles.ordersDividerLine} />
-                  </div>
-
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      width: "100%",
-                      flexWrap: "nowrap",
-                      alignItems: "center",
-                      overflowX: "auto",
-                    }}
-                  >
-                             <div style={{ flex:1 }}>
-                      <div style={styles.historyFitlerTitle}>Date Range</div>
-                     
-                  <DatePicker
-                    selectsRange
-                    startDate={exchangeStartDate}
-                    endDate={exchangeEndDate}
-                    onChange={(update) => setExchangeDateRange(update)}
-                    isClearable
-                    placeholderText="Exchange date range"
-                    customInput={<input style={{ ...styles.input}} />}
-                  />
-                  </div>
-                  <div style={{ flex:1 }}>
-                    <div style={styles.historyFitlerTitle}>Status</div>
-                     
-                  <select
-                    style={styles.input}
-                    value={exchangeStatusFilter}
-                    onChange={(e) => setExchangeStatusFilter(e.target.value)}
-                  >
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
-
-                {exchangeCurrencyOptions.length > 0 && (
-                  <div style={{ flex: 1 }}>
-                    <div style={styles.historyFitlerTitle}>Currency</div>
-                    <select
-                      style={styles.input}
-                      value={exchangeCurrencyFilter}
-                      onChange={(e) => setExchangeCurrencyFilter(e.target.value)}
-                    >
-                      {exchangeCurrencyOptions.map((sym) => (
-                        <option key={sym} value={sym}>{sym}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                </div>
-
-                
-                  <div style={styles.txPillsRow}>
-                    <div style={styles.txPill}>
-                      <div style={styles.txPillValue}>{exchangeStats.totalCount}</div>
-                      <div style={styles.txPillLabel}>Exchanges</div>
+                    <div>
+                      <label className="us-label">Bonus Discount %</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        placeholder="e.g. 50"
+                        value={bonusPercent}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || (Number(v) >= 1 && Number(v) <= 100)) {
+                            setBonusPercent(v);
+                          }
+                        }}
+                        className="us-input-standalone"
+                      />
                     </div>
 
-                    <div style={styles.txPill}>
-                      <div style={styles.txPillValue}>
-                        <BigNumber value={exchangeStats.totalExchanged} />
-                        {exchangeCurrencyFilter && (
-                          <span style={{...styles.providerMeta, fontSize:10, marginLeft:4}}>{exchangeCurrencyFilter}</span>
-                        )}
-                      </div>
-                      <div style={styles.txPillLabel}>Total Exchanged
-                        
-                      </div>
-                    </div>
+                    {(() => {
+                      const prod = products.find(
+                        (p) => String(p.id) === String(selectedProduct)
+                      );
 
-                    <div style={styles.txPill}>
-                      <div style={{ ...styles.txPillValue, color: "#22c55e" }}>
-                        {exchangeStats.completedCount}
-                      </div>
-                      <div style={styles.txPillLabel}>Completed</div>
-                    </div>
+                      if (!prod) return null;
 
-                    <div style={styles.txPill}>
-                      <div style={{ ...styles.txPillValue, color: "#f59e0b" }}>
-                        {exchangeStats.pendingCount}
-                      </div>
-                      <div style={styles.txPillLabel}>Pending</div>
-                    </div>
-
-                  </div>
-
-                   <PermissionGate allowed={hasPermission(user, "exchange.view")}>
-
-                  <div style={styles.ordersList}>
-                    {loadingExchangeOrders ? (
-                      <div style={styles.emptyOrders}>Loading exchange orders...</div>
-                    ) : (filteredExchangeOrders || []).length === 0 ? (
-                      <div style={styles.emptyOrders}>No exchange orders</div>
-                    ) : (
-                      filteredExchangeOrders.map((o) => (
-                        <div key={o.id} style={styles.orderCard}>
-                          <div style={styles.orderTop}>
-                            <div>
-                              <div style={styles.orderProduct}>
-                                {o.from_currency?.symbol || "?"} → {o.to_currency?.symbol || "?"}
-                                <span style={{ ...styles.networkBadge, marginLeft: 20 }}>   RATE {
-                                            getDisplayRate(
-                                              o.rate,
-                                              o.from_currency?.symbol
-                                            )?.toLocaleString() || "-"
-                                          }</span>
-                                <span style={{ ...styles.networkBadge, marginLeft: 10 }}>FEE {Number(o.fee_amount).toLocaleString()}</span>
-                              </div>
-                              <div style={styles.orderMeta}>#{o.id} • Exchange #{o.admin_id} {o.admin_displayName}</div>
-                            </div>
-                            <div style={{
-                              ...styles.orderStatus,
-                              ...(o.status === "pending" ? styles.statusPending : o.status === "completed" ? styles.statusDelivered : styles.statusDefault),
-                            }}>
-                              {o.status?.toUpperCase()}
-                            </div>
-                          </div>
-
-                          <div style={styles.orderPriceRow}>
-                            <div style={styles.orderPrice}>
-                              <BigNumber value={o.from_amount} /> → <BigNumber value={o.to_amount} />
-                            </div>
-                          </div>
-
-                          <div style={styles.txFooter}>
-                            <span style={styles.txDate}>
-                              {o.created_at ? formatDateTime(o.created_at) : "-"}
+                      const pricing = calculateProductPricing(
+                        prod,
+                        user,
+                        Number(bonusPercent || 0)
+                      );
+                      return (
+                        <div className="us-pricing-box">
+                          {/* Original Price */}
+                          <div className="us-pricing-row-top">
+                            <span>Original Price</span>
+                            <span>
+                              {pricing.originalPrice.toFixed(2)} {prod.currency}
                             </span>
                           </div>
+
+                          {/* Breakdown */}
+                          {pricing.steps.map((step, idx) => (
+                            <div key={idx} className="us-pricing-step" style={{ color: step.color }}>
+                              <div>
+                                {step.label} ({step.percent}%)
+                              </div>
+
+                              <div style={{ textAlign: "right" }}>
+                                <div>
+                                  -{step.deducted.toFixed(2)} {prod.currency}
+                                </div>
+                                <div className="us-pricing-step-remaining">
+                                  Remaining: {step.remaining.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Summary */}
+                          <div className="us-pricing-summary">
+                            <div className="us-pricing-summary-row">
+                              <span>Total Fee & Discount ({pricing.effectiveDiscount.toFixed(2)}%)</span>
+                              <span>
+                                -{pricing.totalSaved.toFixed(2)} {prod.currency}
+                              </span>
+                            </div>
+
+                            <div className="us-pricing-summary-row">
+                              <span>Owner Receives ({prod.admin_username})</span>
+                              <span>
+                                {pricing.finalDue.toFixed(2)} {prod.currency}
+                              </span>
+                            </div>
+
+                            <div className="us-pricing-final-row">
+                              <span>Final Due for user</span>
+                              <span>
+                                {pricing.finalForUser.toFixed(2)} {prod.currency}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      ))
-                    )}
+                      );
+                    })()}
                   </div>
-                  </PermissionGate>
+
+                  <div className="us-btn-row">
+                    <button
+                      className="primaryBtn"
+                      onClick={createOrderForUser}
+                      disabled={creatingOrder}
+                      style={{ opacity: creatingOrder ? 0.6 : 1, cursor: creatingOrder ? "not-allowed" : "pointer" }}
+                    >
+                      {creatingOrder ? "Creating..." : "Create Order"}
+                    </button>
+                  </div>
                 </div>
+                </div>
+              </div>
+            </div>
+          </PermissionGate>
+
+          {/*--------------- Order History -------------------- */}
+          <div className="us-labeled-divider">
+            <div className="us-labeled-divider-line" />
+            <div className="us-labeled-divider-text">ORDER HISTORY</div>
+            <div className="us-labeled-divider-line" />
+          </div>
+
+          {/*--------------- Filter Order History -------------------- */}
+          <FilterBar>
+            <div className="us-hh-filter-row">
+              <MiniDateRange
+                label="Date Range"
+                startDate={orderStartDate}
+                endDate={orderEndDate}
+                onChange={(update) => setOrderDateRange(update)}
+                placeholderText="Order date range"
+                portalId="user-sidebar-datepicker-portal"
+              />
+
+              <MiniDropdown
+                label="Status"
+                value={orderStatusFilter}
+                onChange={setOrderStatusFilter}
+                placeholder="All Status"
+                options={[
+                  { value: "pending", label: "Pending" },
+                  { value: "approved", label: "Approved" },
+                  { value: "delivered", label: "Delivered" },
+                ]}
+              />
+
+              <MiniDropdown
+                label="Order Type"
+                value={productTypeFilter}
+                onChange={setProductTypeFilter}
+                placeholder="All Types"
+                options={[
+                  { value: "digital", label: "Digital" },
+                  { value: "subscription", label: "Subscription" },
+                  { value: "service", label: "Service" },
+                ]}
+              />
+
+              {orderCurrencyOptions.length > 0 && (
+                <MiniDropdown
+                  label="Currency"
+                  value={orderCurrencyFilter}
+                  onChange={setOrderCurrencyFilter}
+                  options={orderCurrencyOptions.map((sym) => ({ value: sym, label: sym }))}
+                />
               )}
+            </div>
+
+            <div className="us-hh-row-divider" />
+
+            {/*--------------- Stat pills for filtered orders -------------------- */}
+            <StatPillsRow
+              pills={[
+                { key: "count", label: "Total Orders", value: orderStats.totalCount, accent: "#94a3b8" },
+                {
+                  key: "purchase",
+                  label: "Total Purchase",
+                  accent: "#60a5fa",
+                  meta: orderCurrencyFilter || undefined,
+                  tooltip: `Total Purchase: ${formatBigNumber(orderStats.totalPurchase).value}${formatBigNumber(orderStats.totalPurchase).suffix || ""} ${orderCurrencyFilter || ""}`,
+                  value: (
+                    <>
+                      {formatBigNumber(orderStats.totalPurchase).value}
+                      {formatBigNumber(orderStats.totalPurchase).suffix && (
+                        <span style={{ color: getNumberSuffixColor(formatBigNumber(orderStats.totalPurchase).suffix) }}>
+                          {formatBigNumber(orderStats.totalPurchase).suffix}
+                        </span>
+                      )}
+                    </>
+                  ),
+                },
+                { key: "completed", label: "Completed", value: orderStats.completedCount, accent: "#22c55e" },
+                { key: "pending", label: "Pending", value: orderStats.pendingCount, accent: "#f59e0b" },
+              ]}
+            />
+          </FilterBar>
+
+          <PermissionGate allowed={hasPermission(user, "orders.view")}>
+            <div className="us-scroll-list">
+              {loadingOrders ? (
+                <div className="us-empty-state">Loading orders...</div>
+              ) : (orders || []).length === 0 ? (
+                <div className="us-empty-state">No orders found</div>
+              ) : (
+                (filteredOrders || []).map((o) => (
+                  <div key={o.order_id} className="us-record-card is-spacious">
+                    <div className="us-record-top">
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div className="us-record-title">{o.product_name}</div>
+                          {o.product_admin_id != null && (
+                            <div className="us-meta-tag">
+                              Provider #{o.product_admin_id} {o.product_owner_displayName}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="us-record-sub">
+                          #{o.id}
+                          {o.plan && ` • ${o.plan}`}
+                          {o.product_type && ` • ${o.product_type}`}
+                          {o.data_volume_gb && ` • ${o.data_volume_gb} GB`}
+                        </div>
+                      </div>
+
+                      <div className={orderStatusBadgeClass(o.status)}>
+                        {o.status?.toUpperCase()}
+                      </div>
+                    </div>
+
+                    <div className="us-amount-row">
+                      <div className="us-amount">
+                        <BigNumber value={o.price} />
+                        <span className="us-currency-tag">{o.currency} </span>
+                      </div>
+
+                      {o.network && <div className="us-network-tag">{o.network}</div>}
+                      {o.discount_percent > 0 && (
+                        <div className="us-badge" style={{ background: "rgba(220,128,16,0.4)", color: "#fee500" }}>
+                          {o.discount_percent}% Discounted
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="us-stat-grid">
+                      <div className="us-stat-box">
+                        <span className="us-stat-label">Created</span>
+                        <span className="us-stat-value">{formatDateTime(o.created_at)}</span>
+                      </div>
+                      <div className="us-stat-box">
+                        <span className="us-stat-label">Delivered</span>
+                        <span className="us-stat-value">
+                          {o.delivered_at ? formatDateTime(o.delivered_at) : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </PermissionGate>
+        </>
+      )}
+
+      {/* ================= EXCHANGE ORDERS ================= */}
+      {permissions.canViewExchange && orderSubTab === "exchange" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%" }}>
+          <PermissionGate allowed={hasPermission(user, "exchange.create")}>
+            <div className="us-collapsible-box">
+              {/* HEADER */}
+              <div
+                className="us-collapsible-header"
+                onClick={() => setExchangeOpen(!exchangeOpen)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div className="us-collapsible-icon">
+                    <ArrowLeftRight size={17} />
+                  </div>
+                  <div>
+                    <div className="us-collapsible-title">Exchange for User</div>
+                    <div className="us-collapsible-sub">Execute an exchange for this user</div>
+                  </div>
+                </div>
+                <span className={`us-chevron${exchangeOpen ? " is-open" : ""}`}>
+                  <ChevronDown size={16} />
+                </span>
+              </div>
+
+              <div className={`us-collapse${exchangeOpen ? " is-open" : ""}`}>
+                <div className="us-collapse-inner">
+                <div className="us-collapsible-body">
+                  <div className="us-two-col-row">
+                    <div>
+                      <MiniDropdown
+                        label="From Currency"
+                        value={currencyExchangeFrom}
+                        onChange={(v) => {
+                          setCurrencyExchangeFrom(v);
+                          setCurrencyExchangeTo("");
+                          setNetworkExchangeFrom("");
+                          setNetworkExchangeTo("");
+                          setExchangePreview(null);
+                          setSelectedPairData(null);
+                          setLiveRate(null);
+                        }}
+                        placeholder="Select currency"
+                        options={[...new Set(
+                          exchangePairs.filter((p) => p.is_active).map((p) => p.from_currency?.symbol)
+                        )].map((sym) => ({
+                          value: sym,
+                          label: <>{sym} (<BigNumber value={balanceMap[sym] ?? 0} />)</>,
+                        }))}
+                      />
+                    </div>
+
+                    <div>
+                      <MiniDropdown
+                        label="From Network"
+                        value={networkExchangeFrom}
+                        onChange={(v) => {
+                          setNetworkExchangeFrom(v);
+                          setNetworkExchangeTo("");
+                          setExchangePreview(null);
+                          setSelectedPairData(null);
+                          setLiveRate(null);
+                          if (currencyExchangeFrom && currencyExchangeTo) {
+                            fetchLiveRate(
+                              currencyExchangeFrom,
+                              currencyExchangeTo,
+                              v,
+                              "",
+                              customRate
+                            );
+                          }
+                        }}
+                        disabled={!currencyExchangeFrom || !fromNetworkRequired}
+                        placeholder={fromNetworkRequired ? "Select Network" : "No Network Required"}
+                        options={exchangeFromNetworks.map((n) => ({
+                          value: n.id,
+                          label: `${n.name || n.symbol}${n.chain ? ` (${n.chain})` : ""}`,
+                        }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="us-two-col-row">
+                    <div>
+                      <MiniDropdown
+                        label="To Currency"
+                        value={currencyExchangeTo}
+                        onChange={(v) => {
+                          setCurrencyExchangeTo(v);
+                          setNetworkExchangeTo("");
+                          setExchangePreview(null);
+                          setSelectedPairData(null);
+                          fetchLiveRate(
+                            currencyExchangeFrom,
+                            v,
+                            networkExchangeFrom,
+                            "",
+                            customRate
+                          );
+                        }}
+                        placeholder="Select currency"
+                        options={[...new Set(
+                          exchangePairs
+                            .filter(
+                              (p) =>
+                                p.is_active &&
+                                p.from_currency?.symbol === currencyExchangeFrom
+                            )
+                            .map((p) => p.to_currency?.symbol)
+                        )].map((sym) => ({
+                          value: sym,
+                          label: <>{sym} (<BigNumber value={balanceMap[sym] ?? 0} />)</>,
+                        }))}
+                      />
+                    </div>
+
+                    <div>
+                      <MiniDropdown
+                        label="To Network"
+                        value={networkExchangeTo}
+                        onChange={(v) => {
+                          setNetworkExchangeTo(v);
+                          setExchangePreview(null);
+                          setSelectedPairData(null);
+                          fetchLiveRate(
+                            currencyExchangeFrom,
+                            currencyExchangeTo,
+                            networkExchangeFrom,
+                            v,
+                            customRate
+                          );
+                        }}
+                        disabled={!currencyExchangeTo || !toNetworkRequired}
+                        placeholder={toNetworkRequired ? "Select Network" : "No Network Required"}
+                        options={exchangeToNetworks.map((n) => ({
+                          value: n.id,
+                          label: `${n.name || n.symbol}${n.chain ? ` (${n.chain})` : ""}`,
+                        }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="us-label">
+                      Amount (Max: <BigNumber value={maxExchangeable || 0} />)
+                    </label>
+                    <input
+                      type="string"
+                      className="us-input-standalone"
+                      value={exchangeAmount}
+                      onChange={(e) => { setExchangeAmount(e.target.value); setExchangePreview(null); }}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+
+                  <div className="us-subpanel">
+                    <div className="us-subpanel-row">
+                      <div className="us-subpanel-title">Exchange Rate Configuration</div>
+                      {selectedPairData && <div className="us-subpanel-note">Pair #{selectedPairData.id}</div>}
+                    </div>
+                    <div className="us-stat-grid" style={{ marginBottom: 14 }}>
+                      <div className="us-stat-box">
+                        <div className="us-stat-label" style={{ textTransform: "uppercase", letterSpacing: "0.5px" }}>Current System Rate</div>
+                        <div className="us-stat-value-lg" style={{ color: "#e2e8f0" }}>
+                          {loadingRate ? "..." : liveRate ? formatRate(liveRate) : selectedPairData?.rate ? formatRate(selectedPairData.rate) : "-"}
+                        </div>
+                      </div>
+                      <div className="us-stat-box">
+                        <div className="us-stat-label" style={{ textTransform: "uppercase", letterSpacing: "0.5px" }}>Exchange Fee</div>
+                        <div className="us-stat-value-lg" style={{ color: "#f8fafc" }}>{selectedPairData?.fee_percent ?? 0}%</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="us-label">Custom Admin Rate (Optional)</label>
+                      <input
+                        type="number"
+                        placeholder="Leave empty to use live system rate"
+                        value={customRate ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setCustomRate(value);
+                          setExchangePreview(null);
+                          if (currencyExchangeFrom && currencyExchangeTo) {
+                            fetchLiveRate(
+                              currencyExchangeFrom,
+                              currencyExchangeTo,
+                              networkExchangeFrom,
+                              networkExchangeTo,
+                              value || null
+                            );
+                          }
+                        }}
+                        className="us-input-standalone"
+                        style={{
+                          border: customRate !== "" && customRate !== null ? "1px solid #2563eb" : "1px solid #1e293b",
+                          background: customRate !== "" && customRate !== null ? "#0b1730" : "#0b1220",
+                        }}
+                      />
+                      <div className={`us-subpanel-note${customRate !== "" ? " is-accent" : ""}`} style={{ marginTop: 8 }}>
+                        {customRate !== "" ? "Custom admin rate will override the live pair rate." : "Using automatic live exchange rate."}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="us-btn-row">
+                    <button onClick={previewExchange} className="primaryBtn" style={{ background: "#334155" }} disabled={loadingPreview}>
+                      {loadingPreview ? "Calculating..." : "Preview Exchange"}
+                    </button>
+                  </div>
+
+                  {exchangePreview ? (
+                    <div className="us-subpanel-center">
+                      Rate: <b>{formatRate(exchangePreview.selected_rate)}</b> • Fee: <b>{exchangePreview.fee_percent}% </b> {currencyExchangeFrom}
+                    </div>
+                  ) : (
+                    currencyExchangeFrom && currencyExchangeTo && (
+                      <div className="us-subpanel-center is-muted">
+                        Select amount and preview to see exchange details
+                      </div>
+                    )
+                  )}
+
+                  {exchangePreview && (
+                    <div className="us-preview-box">
+                      <div>Rate: <b>{formatRate(exchangePreview.selected_rate)}</b></div>
+                      <div>Fee: <b>{formatRate(exchangePreview.fee_amount)}</b> {currencyExchangeFrom}</div>
+                      <div>Gross: <b>{formatRate(exchangePreview.gross_amount)}</b> {currencyExchangeFrom}</div>
+                      <div>User Receives: <b>{formatRate(exchangePreview.received_amount)} </b> {currencyExchangeTo}</div>
+                    </div>
+                  )}
+
+                  <div className="us-btn-row">
+                    <button
+                      className="primaryBtn"
+                      onClick={executeExchange}
+                      disabled={executingExchange || !exchangePreview}
+                      style={{
+                        opacity: executingExchange || !exchangePreview ? 0.5 : 1,
+                        cursor: executingExchange || !exchangePreview ? "not-allowed" : "pointer",
+                        background: "#1d4fd871",
+                      }}
+                    >
+                      {executingExchange ? "Executing..." : "Execute Exchange"}
+                    </button>
+                  </div>
+                </div>
+                </div>
+              </div>
+            </div>
+          </PermissionGate>
+
+          <div className="us-labeled-divider">
+            <div className="us-labeled-divider-line" />
+            <div className="us-labeled-divider-text">EXCHANGE HISTORY</div>
+            <div className="us-labeled-divider-line" />
+          </div>
+
+          <FilterBar>
+            <div className="us-hh-filter-row">
+              <MiniDateRange
+                label="Date Range"
+                startDate={exchangeStartDate}
+                endDate={exchangeEndDate}
+                onChange={(update) => setExchangeDateRange(update)}
+                placeholderText="Exchange date range"
+                portalId="user-sidebar-datepicker-portal"
+              />
+
+              <MiniDropdown
+                label="Status"
+                value={exchangeStatusFilter}
+                onChange={setExchangeStatusFilter}
+                placeholder="All Status"
+                options={[
+                  { value: "pending", label: "Pending" },
+                  { value: "completed", label: "Completed" },
+                  { value: "failed", label: "Failed" },
+                ]}
+              />
+
+              {exchangeCurrencyOptions.length > 0 && (
+                <MiniDropdown
+                  label="Currency"
+                  value={exchangeCurrencyFilter}
+                  onChange={setExchangeCurrencyFilter}
+                  options={exchangeCurrencyOptions.map((sym) => ({ value: sym, label: sym }))}
+                />
+              )}
+            </div>
+
+            <div className="us-hh-row-divider" />
+
+            <StatPillsRow
+              pills={[
+                { key: "count", label: "Exchanges", value: exchangeStats.totalCount, accent: "#94a3b8" },
+                {
+                  key: "exchanged",
+                  label: "Total Exchanged",
+                  accent: "#60a5fa",
+                  meta: exchangeCurrencyFilter || undefined,
+                  tooltip: `Total Exchanged: ${formatBigNumber(exchangeStats.totalExchanged).value}${formatBigNumber(exchangeStats.totalExchanged).suffix || ""} ${exchangeCurrencyFilter || ""}`,
+                  value: (
+                    <>
+                      {formatBigNumber(exchangeStats.totalExchanged).value}
+                      {formatBigNumber(exchangeStats.totalExchanged).suffix && (
+                        <span style={{ color: getNumberSuffixColor(formatBigNumber(exchangeStats.totalExchanged).suffix) }}>
+                          {formatBigNumber(exchangeStats.totalExchanged).suffix}
+                        </span>
+                      )}
+                    </>
+                  ),
+                },
+                { key: "completed", label: "Completed", value: exchangeStats.completedCount, accent: "#22c55e" },
+                { key: "pending", label: "Pending", value: exchangeStats.pendingCount, accent: "#f59e0b" },
+              ]}
+            />
+          </FilterBar>
+
+          <PermissionGate allowed={hasPermission(user, "exchange.view")}>
+            <div className="us-scroll-list">
+              {loadingExchangeOrders ? (
+                <div className="us-empty-state">Loading exchange orders...</div>
+              ) : (filteredExchangeOrders || []).length === 0 ? (
+                <div className="us-empty-state">No exchange orders</div>
+              ) : (
+                filteredExchangeOrders.map((o) => (
+                  <div key={o.id} className="us-record-card is-spacious">
+                    <div className="us-record-top">
+                      <div>
+                        <div className="us-record-title">
+                          {o.from_currency?.symbol || "?"} → {o.to_currency?.symbol || "?"}
+                          <span className="us-network-tag" style={{ marginLeft: 20 }}>
+                            RATE {getDisplayRate(o.rate, o.from_currency?.symbol)?.toLocaleString() || "-"}
+                          </span>
+                          <span className="us-network-tag" style={{ marginLeft: 10 }}>
+                            FEE {Number(o.fee_amount).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="us-record-sub">#{o.id} • Exchange #{o.admin_id} {o.admin_displayName}</div>
+                      </div>
+                      <div className={orderStatusBadgeClass(o.status === "completed" ? "delivered" : o.status)}>
+                        {o.status?.toUpperCase()}
+                      </div>
+                    </div>
+
+                    <div className="us-amount-row">
+                      <div className="us-amount">
+                        <BigNumber value={o.from_amount} /> → <BigNumber value={o.to_amount} />
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <span className="us-date-tag">
+                        {o.created_at ? formatDateTime(o.created_at) : "-"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </PermissionGate>
+        </div>
+      )}
     </>
   );
 }
-
-// =====================================================
-// STYLES
-// =====================================================
-
-const customScrollbar = {
-  scrollbarWidth: "thin",
-  scrollbarColor: "#64748b #1e293b",
-  overflowY: "auto",
-  overflowX: "auto",
-};
-
-const styles = {
-  overlay: (visible) => ({
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    backdropFilter: "blur(4px)",
-    zIndex: 50,
-    opacity: visible ? 1 : 0,
-    transition: "opacity 250ms ease",
-  }),
-
-  container: (visible) => ({
-    position: "fixed",
-    top: 0,
-    right: 0,
-    width: 580,
-    height: "100vh",
-    background: "#0f172a",
-    borderLeft: "2px solid #1e293b",
-    color: "white",
-    zIndex: 60,
-    display: "flex",
-    flexDirection: "column",
-
-    transform: visible ? "translateX(0%)" : "translateX(100%)",
-    opacity: visible ? 1 : 0,
-    transition: "transform 200ms ease, opacity 250ms ease",
-  }),
-
-  header: {
-    padding: 20,
-    borderBottom: "1px solid #1e293b",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  userTitle: { fontSize: 20, fontWeight: 700 },
-  userSub: { fontSize: 12, color: "#94a3b8", marginTop: 4 },
-
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    border: "1px solid #334155",
-    background: "#111827",
-    color: "white",
-    cursor: "pointer",
-  },
-
-  content: {
-    flex: 1,
-    padding: 18,
-    ...customScrollbar,
-  },
-  buttonRow: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-  },
-
-  section: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #1e293b",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 18,
-  },
-
-  sectionTitle: { fontSize: 16, fontWeight: 700, marginBottom: 18 },
-
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 14,
-  },
-
-  label: {
-    display: "block",
-    marginBottom: 8,
-    fontSize: 13,
-    color: "#94a3b8",
-  },
-
-  input: {
-    width: "100%",
-    background: "#0b1220",
-    border: "1px solid #1e293b",
-    borderRadius: 12,
-    padding: 12,
-    color: "white",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-
-  primaryBtn: {
-    width: "100%",
-    background: "#1d4fd871",
-    border: "none",
-    marginTop: 20,
-    borderRadius: 14,
-    padding: 14,
-    color: "white",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-
-  toggleRow: {
-    marginTop: 18,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  enabledToggle: {
-    background: "rgba(34,197,94,0.15)",
-    color: "#22c55e",
-    border: "1px solid rgba(34,197,94,0.3)",
-    borderRadius: 999,
-    padding: "8px 14px",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-
-  disabledToggle: {
-    background: "rgba(239,68,68,0.15)",
-    color: "#ef4444",
-    border: "1px solid rgba(239,68,68,0.3)",
-    borderRadius: 999,
-    padding: "8px 14px",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-
-  list: { display: "flex", flexDirection: "column", gap: 12, ...customScrollbar },
-  card: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #1e293b",
-    borderRadius: 16,
-    padding: 16,
-  },
-  cardTitle: { fontWeight: 700, marginBottom: 6 },
-  cardSub: { color: "#94a3b8", fontSize: 13 },
-
-  chatWrapper: { 
-    height: "100%", 
-    display: "flex", 
-    flexDirection: "column",
-    overflow: "hidden",
- },
-
-  balanceGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 15 },
-
-  balanceCard: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #1e293b",
-    borderRadius: 18,
-    padding: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-
-  balanceHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  balanceCurrency: { fontSize: 18, fontWeight: 700, color: "white" },
-  balanceNetwork: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#93c5fd",
-    background: "rgba(37,99,235,0.15)",
-    border: "1px solid rgba(37,99,235,0.25)",
-    padding: "4px 8px",
-    borderRadius: 999,
-  },
-
-  balanceRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  balanceLabel: { fontSize: 12, color: "#94a3b8" },
-  availableValue: { color: "#22c55e", fontWeight: 700, fontSize: 15 },
-  frozenValue: { color: "#f59e0b", fontWeight: 700, fontSize: 15 },
-
-  emptyBalances: {
-    gridColumn: "1 / -1",
-    textAlign: "center",
-    padding: 24,
-    borderRadius: 16,
-    border: "1px dashed #334155",
-    background: "#0b1220",
-    color: "#64748b",
-  },
-
-  // ── INTERNAL TRANSFER ──────────────────────────────────────────
-  transferBox: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #2564eb63",
-    borderRadius: 15,
-    overflow: "visible",
-    marginTop: 4,
-    marginBottom:10
-  },
-
-  transferHeader: {
-    padding: 14,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    cursor: "pointer",
-    borderBottom: "1px solid #1e293b",
-    userSelect: "none",
-  },
-
-  transferIcon: {
-    fontSize: 16,
-    color: "#60a5fa",
-    background: "rgba(37,99,235,0.15)",
-    border: "1px solid rgba(37,99,235,0.25)",
-    borderRadius: 8,
-    width: 30,
-    height: 30,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    flexShrink: 0,
-  },
-
-  transferHeaderLabel: { fontWeight: 600, color: "#e2e8f0", fontSize: 14 },
-  transferHeaderSub: { fontSize: 11, color: "#64748b", marginTop: 2 },
-  historyFitlerTitle: {fontSize: 11, color: "#64748b",padding:"0  0 5px 5px"},
-
-  transferBody: {
-    padding: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-
-  transferSelectedBadge: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "rgba(34,197,94,0.15)",
-    border: "1px solid rgba(34,197,94,0.3)",
-    color: "#22c55e",
-    fontSize: 11,
-    fontWeight: 700,
-    padding: "3px 8px",
-    borderRadius: 999,
-    pointerEvents: "none",
-  },
-
-  transferSpinner: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: "#64748b",
-    fontSize: 16,
-    pointerEvents: "none",
-  },
-
-  transferDropdown: {
-    position: "absolute",
-    top: "calc(100% + 6px)",
-    left: 0,
-    right: 0,
-    background: "#0f172a",
-    border: "1px solid #334155",
-    borderRadius: 12,
-    zIndex: 999,
-    maxHeight: 200,
-    overflowY: "auto",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-  },
-
-  transferDropItem: {
-    padding: "10px 14px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    cursor: "pointer",
-    borderBottom: "1px solid #1e293b",
-  },
-
-  transferBalanceHint: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "#0b1220",
-    border: "1px solid #1e293b",
-    borderRadius: 10,
-    padding: "8px 12px",
-  },
-
-  transferMaxBtn: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "rgba(37,99,235,0.2)",
-    border: "1px solid rgba(37,99,235,0.4)",
-    color: "#60a5fa",
-    fontSize: 10,
-    fontWeight: 800,
-    padding: "4px 8px",
-    borderRadius: 6,
-    cursor: "pointer",
-    letterSpacing: 0.5,
-  },
-
-  transferPreview: {
-    background: "#0b1220",
-    border: "1px solid #1e293b",
-    borderRadius: 14,
-    padding: "10px 14px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
-
-  transferPreviewRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "6px 0",
-    borderBottom: "1px solid #1e293b",
-  },
-
-  transferErrorBox: {
-    background: "rgba(239,68,68,0.1)",
-    border: "1px solid rgba(239,68,68,0.3)",
-    color: "#ef4444",
-    borderRadius: 12,
-    padding: "10px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-
-  transferSuccessBox: {
-    background: "rgba(34,197,94,0.1)",
-    border: "1px solid rgba(34,197,94,0.3)",
-    color: "#22c55e",
-    borderRadius: 12,
-    padding: "10px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-
-  transferBtn: {
-    width: "100%",
-    background: "linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)",
-    border: "1px solid rgba(37,99,235,0.4)",
-    borderRadius: 14,
-    padding: "13px 0",
-    color: "white",
-    fontWeight: 700,
-    fontSize: 14,
-    letterSpacing: 0.3,
-    marginTop: 4,
-  },
-  // ── END INTERNAL TRANSFER ──────────────────────────────────────
-
-  ordersList: { display: "flex", flexDirection: "column", gap: 14, ...customScrollbar },
-
-  orderCard: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #2c384dff",
-    borderRadius: 20,
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-
-  orderTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
-  orderProduct: { 
-    fontSize: 16, 
-    fontWeight: 700, 
-    color: "white" , 
-    marginBottom:5},
-  
-  orderMeta: {display: "flex",alignItems: "center", lineHeight: 1.2, fontSize: 12, color: "#64748b" },
-  productTitleRow: {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-},
-
-providerMeta: {
-  fontSize: 12,
-  fontWeight: 400,
-  color: "#94a3b8c0",
-  whiteSpace: "nowrap",
-},
-  orderStatus: { padding: "7px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, border: "1px solid" },
-  statusPending: { background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.25)", color: "#f59e0b" },
-  statusApproved: { background: "rgba(59,130,246,0.12)", borderColor: "rgba(59,130,246,0.25)", color: "#60a5fa" },
-  statusDelivered: { background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.25)", color: "#22c55e" },
-  statusDefault: { background: "rgba(246, 7, 7, 0.35)", borderColor: "rgba(184, 156, 148, 0.25)", color: "#b89994ff" },
-
-  orderPriceRow: { 
-    display: "flex", 
-    justifyContent: "left", 
-    alignItems: "center" ,
-    gap:5
-  },
-  orderPrice: {
-  display: "flex",
-  alignItems: "center",
-  fontSize: 22,
-  fontWeight: 800,
-  color: "white",
-  gap:10
-},
-orderCurrency: {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: 999,
-  background: "rgba(37,99,235,0.12)",
-  border: "1px solid rgba(37,99,235,0.25)",
-  padding: "2px 10px",
-  fontSize: 12,
-  marginLeft: 8,
-  color: "#94a3b8",
-  fontWeight: 600,
-  lineHeight: 1,
-  height: 22,
-  boxSizing: "border-box",
-},
-
-networkBadge: {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "2px 10px",
-  height: 22,
-  boxSizing: "border-box",
-  borderRadius: 999,
-  background: "rgba(37,99,235,0.12)",
-  border: "1px solid rgba(37,99,235,0.25)",
-  color: "#93c5fd",
-  fontSize: 12,
-  fontWeight: 600,
-  lineHeight: 1,
-},
-
-featuredBadge: {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "2px 10px",
-  height: 22,
-  boxSizing: "border-box",
-  borderRadius: 999,
-  background: "rgba(220, 128, 16, 0.4)",
-  border: "1px solid rgba(37,99,235,0.25)",
-  color: "#fee500",
-  fontSize: 12,
-  fontWeight: 600,
-  lineHeight: 1,
-},
-
-  orderDates: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-
-  dateItem: { 
-    display: "flex",
-    background: "#0b1220", 
-    border: "1px solid #1e293b", 
-    borderRadius: 14, 
-    padding: 12 ,
-    gap: 20},
-    
-  dateLabel: { display: "block", fontSize: 11, color: "#64748b", marginBottom: 6 },
-  dateValue: { fontSize: 13, color: "#e2e8f0", fontWeight: 600 },
-
-  emptyOrders: {
-    padding: 24,
-    borderRadius: 18,
-    textAlign: "center",
-    border: "1px dashed #334155",
-    background: "#111827",
-    color: "#64748b",
-  },
-
-  transactionsList: { display: "flex", flexDirection: "column", gap: 14, ...customScrollbar },
-
-  txCard: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #2c384dff",
-    borderRadius: 20,
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-
-  txHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
-  txType: { fontSize: 16, fontWeight: 700, color: "white", textTransform: "capitalize" },
-  txMeta: { marginTop: 6, fontSize: 12, color: "#64748b" },
-
-  txStatus: { padding: "7px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, border: "1px solid" },
-  txCompleted: { background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.25)", color: "#22c55e" },
-  txPending: { background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.25)", color: "#f59e0b" },
-  txFailed: { background: "rgba(239,68,68,0.12)", borderColor: "rgba(239,68,68,0.25)", color: "#ef4444" },
-
-  txAmountRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  txAmount: { fontSize: 24, fontWeight: 800 },
-
-  chainBadge: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "rgba(37,99,235,0.12)",
-    border: "1px solid rgba(37,99,235,0.25)",
-    color: "#93c5fd",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  txBlockchain: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    background: "#0b1220",
-    border: "1px solid #1e293b",
-    borderRadius: 16,
-    padding: 14,
-  },
-
-  txInfoItem: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  txInfoLabel: { fontSize: 12, color: "#64748b" },
-  txInfoValue: { fontSize: 12, color: "#e2e8f0", fontWeight: 600, fontFamily: "monospace" },
-
-  txFooter: { display: "flex", justifyContent: "flex-end" },
-  txDate: { fontSize: 12, color: "#64748b" },
-
-  emptyTransactions: {
-    padding: 24,
-    borderRadius: 18,
-    textAlign: "center",
-    border: "1px dashed #334155",
-    background: "#111827",
-    color: "#64748b",
-  },
-
-  subTabs: { display: "flex", gap: 10, marginBottom: 14 },
-
-  subTab: {
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid #1e293b",
-    background: "rgba(255,255,255,.03)",
-    color: "#94a3b8",
-    cursor: "pointer",
-  },
-
-  subTabActive: {
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid #2563eb",
-    background: "rgba(59,130,246,0.18)",
-    color: "white",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
-  createOrderBox: {
-    background: "linear-gradient(180deg,#111827 0%, #0a1226ff 100%)",
-    border: "1px solid #2564eb63",
-    borderRadius: 15,
-    overflow: "hidden",
-  },
-
-
-  createOrderBody: {
-    padding: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-    txPillsRow: {
-  display: "flex",
-  gap: 10,
-  marginBottom: 15,
-  flexWrap: "wrap",
-  borderRadius: 14,
-  background: "linear-gradient(180deg, #0f172a 30%, #070e1dff 100%)",
-},
-
-txPill: {
-  flex: "1",
-  minWidth: 120,
-  alignItems: "center",
-  borderRadius: 14,
-  padding: "10px 12px",
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-},
-
-txPillValue: {
-  fontSize: 16,
-  fontWeight: 800,
-  color: "white",
-},
-
-txPillLabel: {
-  fontSize: 11,
-  color: "#94a3b8",
-},
-  walletExpandIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#64748b",
-    minWidth: 18,
-    transition: "transform 0.2s",
-  },
-
-  ordersDivider: { display: "flex", alignItems: "center", gap: 12, marginTop: 18, marginBottom: 18 },
-  ordersDividerLine: { flex: 1, height: 1, background: "linear-gradient(90deg, transparent, #334155, transparent)" },
-  ordersDividerText: { fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: "#64748b", whiteSpace: "nowrap" },
-};

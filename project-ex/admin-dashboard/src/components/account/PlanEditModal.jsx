@@ -39,8 +39,8 @@ export default function PlanEditModal({
   };
 
   return (
-    <div style={S.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={S.modal}>
+    <div className="ma-modalOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal">
         <div style={S.modalHeader}>
           <div>
             <div style={S.modalTitle}>Edit plan — {plan.name}</div>
@@ -49,7 +49,7 @@ export default function PlanEditModal({
           <button type="button" onClick={onClose} style={S.closeBtn}><X size={14} /></button>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {EDIT_TABS.map((t) => (
             <button
               key={t.key}
@@ -225,6 +225,6 @@ function PriceAdder({ pairOptions, onSave }) {
 }
 
 const rowStyle = {
-  display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+  display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "8px 10px",
   borderRadius: T.radiusSm, border: "1px solid rgba(148,163,184,0.12)", background: "#0b1220",
 };

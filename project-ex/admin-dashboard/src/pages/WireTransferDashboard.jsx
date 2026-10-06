@@ -8,6 +8,7 @@ import {
   ArrowUpDown, Wallet,
 } from "lucide-react";
 import HeroHub from "../components/HeroHub";
+import "./WireTransferDashboard.css";
 
 const API = "http://127.0.0.1:8000";
 const token = () => localStorage.getItem("token");
@@ -698,7 +699,7 @@ function WirePairForm({ data, setData, onSubmit, submitLabel, onCancel, currenci
 }
 
 // ─── EDIT MODAL (still a centered modal — only "Add" slides in) ──────────
-function PairEditModal({ editPair, currencies, onSave, onClose }) {
+function PairEditModal({ editPair, currencies, onSave, onClose, boundsStyle }) {
   const [form, setForm] = useState({
     from_currency_id: editPair?.from_currency?.id || "",
     to_currency_id:   editPair?.to_currency?.id   || "",
@@ -714,18 +715,26 @@ function PairEditModal({ editPair, currencies, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const submit = async () => { setSaving(true); await onSave(form); setSaving(false); };
 
+  // The parent unmounts this the instant onClose runs (editPair → null), so
+  // there's no "is-open" class to reverse-transition off of. Instead: play
+  // the reverse animation first, then call the real onClose once it's done.
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => { setClosing(true); setTimeout(onClose, 300); };
+
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.72)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999, backdropFilter: "blur(6px)" }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ width: "92%", maxWidth: 560, background: "#0d1424", borderRadius: 22, padding: "26px 28px", border: "1px solid rgba(255,255,255,.08)", display: "flex", flexDirection: "column", maxHeight: "90vh", overflow: "auto", boxShadow: "0 32px 80px rgba(0,0,0,.6)" }}>
+    <div className={`wtx-modal-overlay${closing ? " is-closing" : ""}`} style={boundsStyle}
+      onClick={e => e.target === e.currentTarget && requestClose()}>
+      <div className={`wtx-modal-card${closing ? " is-closing" : ""}`}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ color: "white", fontWeight: 700, fontSize: 17 }}>Edit pair</div>
             <div style={{ color: "#4b5563", fontSize: 13, marginTop: 3 }}>{editPair?.from_currency?.symbol} → {editPair?.to_currency?.symbol}</div>
           </div>
-          <button style={S.iconBtn} onClick={onClose}><X size={14} /></button>
+          <button style={S.iconBtn} onClick={requestClose}><X size={14} /></button>
         </div>
-        <WirePairForm data={form} setData={setForm} onSubmit={submit} submitLabel={saving ? "Saving…" : "Save changes"} onCancel={onClose} currencies={currencies} />
+        <div className="wtx-modal-scroll">
+          <WirePairForm data={form} setData={setForm} onSubmit={submit} submitLabel={saving ? "Saving…" : "Save changes"} onCancel={requestClose} currencies={currencies} />
+        </div>
       </div>
     </div>,
     document.body
@@ -814,9 +823,25 @@ function StatusTimeline({ order }) {
 }
 
 // ─── ORDER SIDEBAR ────────────────────────────────────────────
-function WireSidebar({ order, onAction, onClose, showOwner }) {
+function WireSidebar({ order: incomingOrder, onAction, onClose, showOwner, boundsStyle }) {
   const [showFail, setShowFail] = useState(false);
   const [showDeliver, setShowDeliver] = useState(false);
+
+  // The parent clears `order` to null the instant it closes this, which
+  // would normally unmount immediately with no chance to animate. Instead,
+  // keep the last order around for one extra render while `closing` plays
+  // the reverse animation, then actually drop it.
+  const [order, setOrder] = useState(incomingOrder);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (incomingOrder) { setOrder(incomingOrder); setClosing(false); }
+    else if (order) {
+      setClosing(true);
+      const t = setTimeout(() => setOrder(null), 300); // matches wtxSlideDown's .3s
+      return () => clearTimeout(t);
+    }
+  }, [incomingOrder]);
+
   if (!order) return null;
 
   const inputData = order.input_data || {};
@@ -829,8 +854,12 @@ function WireSidebar({ order, onAction, onClose, showOwner }) {
       {showDeliver && (
         <DeliverModal onClose={() => setShowDeliver(false)} onConfirm={message => { setShowDeliver(false); onAction(order.id, "deliver", { message }); }} />
       )}
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 800 }} onClick={onClose} />
-      <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 440, background: "#0b1220", borderLeft: "1px solid rgba(255,255,255,.08)", zIndex: 801, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Desktop: fixed right-side drawer (unchanged). Mobile (see .css, under
+          max-width:640px): becomes the same bottom-sheet pattern as the Pairs
+          Add/Detail/Edit sheets — bounded to boundsStyle, slides up, dimmed
+          backdrop, 60% height, internal scroll. */}
+      <div className={`wtx-sidebar-backdrop${closing ? " is-closing" : ""}`} style={boundsStyle} onClick={onClose} />
+      <div className={`wtx-sidebar-panel${closing ? " is-closing" : ""}`} style={boundsStyle}>
         {/* header */}
         <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
@@ -945,6 +974,29 @@ function Row({ k, v, accent }) {
   );
 }
 
+// ─── MOBILE OVERLAY ───────────────────────────────────────────
+// Same mechanism as ExchangeDashboard's mobile Pairs tab: a bottom sheet
+// bounded to the page's real on-screen box (via boundsStyle, measured in
+// the main component with getBoundingClientRect), dimmed backdrop,
+// slides up from the bottom, scrolls internally.
+function MobileOverlay({ open, icon: Icon, iconBg, iconColor, title, onClose, children, boundsStyle }) {
+  return (
+    <div className={`wtx-mobileOverlay${open ? " is-open" : ""}`} style={boundsStyle}>
+      <div className="wtx-mobileOverlay-backdrop" onClick={onClose} />
+      <div className="wtx-mobileOverlay-panel">
+        <div className="wtx-mobileOverlay-head">
+          <div className="wtx-mobileOverlay-icon" style={{ background: iconBg }}>
+            <Icon size={15} color={iconColor} />
+          </div>
+          <span className="wtx-mobileOverlay-title">{title}</span>
+          <button className="wtx-closeIconBtn" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div className="wtx-mobileOverlay-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PAIR ROW ─────────────────────────────────────────────────
 const pairFee = (p) => {
   const methods = p.receiver_methods || [];
@@ -958,9 +1010,10 @@ function PairRow({ p, selected, onClick, showOwner }) {
   return (
     <div
       onClick={onClick}
+      className="wtx-pairRow"
       style={{
         display: "flex", alignItems: "center", gap: 10,
-        padding: "9px 16px", borderRadius: 9, cursor: "pointer",
+        borderRadius: 9, cursor: "pointer",
         border: `1px solid ${selected ? "rgba(59,130,246,.3)" : "transparent"}`,
         background: selected ? "rgba(59,130,246,.08)" : "transparent",
         transition: "all .15s", marginBottom: 3,
@@ -1200,6 +1253,62 @@ export default function WireTransferDashboard() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(emptyWireForm());
   const [editPair, setEditPair] = useState(null);
+
+  // ── mobile: same mechanism as ExchangeDashboard's Pairs tab ──
+  // This page has no tab bar at all normally (sidebar+detail+orders all show
+  // at once on desktop), so on mobile we add a small Pairs/Orders toggle and
+  // reuse the identical bottom-sheet pattern for Add, Pair Detail, Edit, and
+  // now Order Detail (WireSidebar) too.
+  const [mobileTab, setMobileTab] = useState("orders"); // "pairs" | "orders" — mobile only
+  const [mobilePanel, setMobilePanel] = useState(null); // "add" | "detail" | null — mobile only
+
+  const mainRef = useRef(null);
+  const [mainBounds, setMainBounds] = useState(null);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener("change", onChange) : mq.addListener(onChange);
+    return () => (mq.removeEventListener ? mq.removeEventListener("change", onChange) : mq.removeListener(onChange));
+  }, []);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      // horizontal bounds from the real measured box (keeps sheets clear of
+      // any app-level side menu); vertical bounds are the true viewport
+      // edges, so sheets are always flush with the real screen bottom.
+      setMainBounds({ left: r.left, right: window.innerWidth - r.right });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, []);
+
+  const sheetBoundsStyle = isMobile && mainBounds
+    ? { position: "fixed", top: 0, bottom: 0, left: mainBounds.left, right: mainBounds.right }
+    : undefined;
+
+  // Pairs tab/sheets are mobile-only — desktop keeps the original
+  // sidebar + detail-panel workflow untouched.
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileTab("orders");
+      setMobilePanel(null);
+    }
+  }, [isMobile]);
 
   // pairs search
   const [pairSearch, setPairSearch] = useState("");
@@ -1474,10 +1583,11 @@ export default function WireTransferDashboard() {
   
   // ── layout ─────────────────────────────────────────────────
   return (
-    <div style={{ 
+    <div className="wtx-scope wtx-page" style={{ 
       display: "flex", 
       flexDirection: "column", 
-      height: "100vh", 
+      height: "100%", 
+      minHeight: 0,
       background: "#060d18", 
       color: "white", 
       fontFamily: "'Inter', sans-serif", 
@@ -1489,6 +1599,7 @@ export default function WireTransferDashboard() {
           currencies={fiatCurrencies}
           onSave={savePair}
           onClose={() => setEditPair(null)}
+          boundsStyle={sheetBoundsStyle}
         />
       )}
 
@@ -1547,10 +1658,12 @@ export default function WireTransferDashboard() {
       </div>
 
       {/* ══ BODY ══ */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div className="wtx-scope wtx-body" style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* ── LEFT: Pairs sidebar + slide-in Add panel ── */}
-        <div style={{ position: "relative", flexShrink: 0, display: "flex" }}>
+        {/* ── LEFT: Pairs sidebar + slide-in Add panel — desktop/tablet only,
+               hidden on mobile (see .wtx-left in the css) where the Pairs
+               mobile tab + sheets below take over. ── */}
+        <div className="wtx-left" style={{ position: "relative", flexShrink: 0, display: "flex" }}>
 
           {/* pair list sidebar */}
           <div style={{
@@ -1646,8 +1759,8 @@ export default function WireTransferDashboard() {
           </div>
         </div>
 
-        {/* ── MIDDLE: Pair Detail ── */}
-        <div style={{
+        {/* ── MIDDLE: Pair Detail — desktop/tablet only (hidden on mobile) ── */}
+        <div className="wtx-detail" style={{
             width: selectedPair ? 258 : 0,
             overflow:"hidden",
             background:"#070f1d",
@@ -1669,36 +1782,161 @@ export default function WireTransferDashboard() {
           ) }
         </div>
 
-        {/* ── RIGHT: Orders Table ── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6,
-                background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.28)",
-                color: "#93c5fd", borderRadius: 9, padding: "7px 14px", fontWeight: 700, fontSize: 12.5,
-              }}>
-                <FileText size={13} />Orders
-                <span style={{ background: "rgba(59,130,246,.18)", borderRadius: 20, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
-                  {filteredOrders.length}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: "#475569" }}>click any row to view & action</div>
-            </div>
-           
+        {/* ── RIGHT: Pairs (mobile tab) + Orders Table ── */}
+        <div className="wtx-main" ref={mainRef} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Tab bar — same visual pattern as ExchangeDashboard's ex-tabbar.
+              "Pairs" only ever exists on mobile: excluded from the array
+              entirely (not just CSS-hidden) when !isMobile, matching
+              Exchange's double safety-net (a past bug showed CSS-only
+              hiding can lose to a more-specific rule). "Orders" is the
+              always-present tab, active by default. */}
+          <div className="wtx-tabbar">
+            {[
+              isMobile && { key: "pairs", label: "Pairs", icon: Landmark, count: filteredPairs.length, mobileOnly: true },
+              { key: "orders", label: "Orders", icon: FileText, count: filteredOrders.length },
+            ].filter(Boolean).map(({ key, label, icon: Icon, count, mobileOnly }) => (
+              <button
+                key={key}
+                className={`wtx-tab${mobileTab === key ? " is-active" : ""}${mobileOnly ? " wtx-mobileTab" : ""}`}
+                onClick={() => setMobileTab(key)}
+              >
+                <Icon size={13} />{label}<span className="wtx-tab-count">{count}</span>
+              </button>
+            ))}
           </div>
-          <OrdersTable orders={filteredOrders} onSelectOrder={selectOrder} loading={ordersLoading} showOwner={showOwnerColumns} />
+
+          {/* mobile Pairs tab content — same mechanism as ExchangeDashboard's
+              mobile Pairs tab: list + Add button, tapping a row opens the
+              Detail sheet, Add opens the Add sheet, both via MobileOverlay. */}
+          {isMobile && mobileTab === "pairs" && (
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <Landmark size={16} color="#3b82f6" />
+                  <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Pairs</span>
+                  <span style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa", borderRadius: 20, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{filteredPairs.length}</span>
+                </div>
+                <button
+                  className="wtx-addBtn"
+                  onClick={() => { setAddForm(emptyWireForm()); setMobilePanel("add"); }}
+                >
+                  <Plus size={12} />Add
+                </button>
+              </div>
+
+              {/* same sort-by-Rate/Fee row as the desktop sidebar */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                {[{ field: "rate", label: "Rate" }, { field: "fee", label: "Fee" }].map(({ field, label }) => {
+                  const active = pairSortField === field;
+                  const arrow = active ? (pairSortDir === "asc" ? "↑" : "↓") : "";
+                  return (
+                    <button
+                      key={field}
+                      onClick={() => togglePairSort(field)}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                        background: active ? "rgba(59,130,246,.16)" : "#060c18",
+                        border: `1px solid ${active ? "rgba(59,130,246,.4)" : "rgba(255,255,255,.07)"}`,
+                        color: active ? "#60a5fa" : "#94a3b8",
+                        borderRadius: 7, padding: "6px 0", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      <ArrowUpDown size={11} />{label}{arrow && <span style={{ fontSize: 12 }}>{arrow}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {pairsLoading ? (
+                [...Array(5)].map((_, i) => <div key={i} style={{ padding: "9px 11px", marginBottom: 3 }}><Sk h={14} /></div>)
+              ) : filteredPairs.length === 0 ? (
+                <div style={{ color: "#475569", textAlign: "center", paddingTop: 30, fontSize: 12 }}>No pairs found.</div>
+              ) : filteredPairs.map(p => (
+                <PairRow
+                  key={p.id} p={p} selected={false} showOwner={showPairOwner}
+                  onClick={() => { setSelectedPair(p); setMobilePanel("detail"); }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* desktop/tablet: always Orders. mobile: only when the Orders tab is active. */}
+          {(!isMobile || mobileTab === "orders") && (
+            <>
+              {/* this plain header duplicates the "Orders" tab pill above on
+                  mobile — desktop only, since desktop has no tab bar row */}
+              {!isMobile && (
+                <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.28)",
+                      color: "#93c5fd", borderRadius: 9, padding: "7px 14px", fontWeight: 700, fontSize: 12.5,
+                    }}>
+                      <FileText size={13} />Orders
+                      <span style={{ background: "rgba(59,130,246,.18)", borderRadius: 20, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
+                        {filteredOrders.length}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#475569" }}>click any row to view & action</div>
+                  </div>
+                </div>
+              )}
+              <OrdersTable orders={filteredOrders} onSelectOrder={selectOrder} loading={ordersLoading} showOwner={showOwnerColumns} />
+            </>
+          )}
+
+          {/* mobile-only: Add and Detail sheets for the Pairs tab, identical
+              mechanism to ExchangeDashboard. */}
+          <MobileOverlay
+            open={isMobile && mobilePanel === "add"}
+            icon={Plus} iconBg="rgba(59,130,246,.15)" iconColor="#60a5fa"
+            title="Add new pair"
+            onClose={() => setMobilePanel(null)}
+            boundsStyle={sheetBoundsStyle}
+          >
+            <WirePairForm
+              data={addForm} setData={setAddForm}
+              onSubmit={() => savePair(addForm)}
+              submitLabel="Create pair"
+              onCancel={() => setMobilePanel(null)}
+              currencies={fiatCurrencies}
+            />
+          </MobileOverlay>
+
+          <MobileOverlay
+            open={isMobile && mobilePanel === "detail" && !!selectedPair}
+            icon={Landmark} iconBg="rgba(59,130,246,.15)" iconColor="#60a5fa"
+            title={selectedPair ? `${selectedPair.from_currency?.symbol} → ${selectedPair.to_currency?.symbol}` : "Pair"}
+            onClose={() => { setMobilePanel(null); setSelectedPair(null); }}
+            boundsStyle={sheetBoundsStyle}
+          >
+            {selectedPair && (
+              <PairDetail
+                pair={selectedPair}
+                readOnly={!canEditPair(selectedPair)}
+                onEdit={p => setEditPair(p)}
+                onToggle={togglePair}
+                onDelete={(id) => { deletePair(id); setMobilePanel(null); }}
+                onRateUpdate={updateRate}
+              />
+            )}
+          </MobileOverlay>
         </div>
 
-        {/* ── ORDER SIDEBAR ── */}
-        {selectedOrder && (
-          <WireSidebar
-            order={selectedOrder}
-            onAction={handleOrderAction}
-            onClose={() => setSelectedOrder(null)}
-            showOwner={showOwnerColumns}
-          />
-        )}
+        {/* ── ORDER SIDEBAR ──
+            Always mounted (no `{selectedOrder && ...}` guard) — WireSidebar
+            manages its own unmount internally now, holding the last order
+            for one extra render so its close animation can actually play
+            before it disappears. Returns null itself once fully closed. */}
+        <WireSidebar
+          order={selectedOrder}
+          onAction={handleOrderAction}
+          onClose={() => setSelectedOrder(null)}
+          showOwner={showOwnerColumns}
+          boundsStyle={sheetBoundsStyle}
+        />
       </div>
 
       <style>{`

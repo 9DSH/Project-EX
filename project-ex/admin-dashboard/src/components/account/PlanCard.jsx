@@ -32,7 +32,9 @@ export default function PlanCard({
       style={{
         ...S.card,
         width,
-        minWidth: width,
+        minWidth: typeof width === "number" ? width : 0,
+        maxWidth: "100%",
+        boxSizing: "border-box",
         borderColor: ringColor ? ringColor : "rgba(148,163,184,0.14)",
         boxShadow: ringColor
           ? `0 0 0 1px ${ringColor}55, 0 18px 40px rgba(0,0,0,.35)`

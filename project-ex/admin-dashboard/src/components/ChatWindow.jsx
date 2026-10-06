@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import API from "../api/client";
-import { Upload } from "lucide-react";
+import { Upload, ArrowLeft } from "lucide-react";
+import "../pages/Messages.css";
 
 export default function ChatWindow({
     activeChat,
     token,
     refreshConversations,
     mode,
+    onBack, // optional: shown as a back button on mobile
 }) {
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
@@ -259,66 +261,34 @@ export default function ChatWindow({
     // ================= UI =================
     if (!activeChat) {
         return (
-            <div
-                style={{
-                    flex: 1,
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    color: "#6b7280",
-                }}
-            >
+            <div className="chat-empty">
                 Select a conversation
             </div>
         );
     }
 
     return (
-        <div
-            style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                width: "100%",
-                minWidth: 0,
-            }}
-        >
+        <div className="chat-window">
             {/* HEADER */}
             {mode === "message" && (
-                <div
-                    style={{
-                        padding: 16,
-                        borderBottom: "1px solid #1f2937",
-                        boxShadow:
-                            "0 8px 32px rgba(0, 0, 0, 0.4)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                    }}
-                >
-                    <div
-                        style={{
-                            fontWeight: 600,
-                        }}
-                    >
+                <div className="chat-header">
+                    {onBack && (
+                        <button
+                            type="button"
+                            className="msg-mobile-back"
+                            onClick={onBack}
+                            aria-label="Back to conversations"
+                        >
+                            <ArrowLeft size={18} />
+                        </button>
+                    )}
+
+                    <div className="chat-header-name">
                         {activeChat.username}
                     </div>
 
                     {isInternal && (
-                        <span
-                            style={{
-                                fontSize: 9,
-                                fontWeight: 800,
-                                color: "#f59e0b",
-                                background:
-                                    "rgba(245,158,11,0.12)",
-                                border:
-                                    "1px solid rgba(245,158,11,0.3)",
-                                borderRadius: 999,
-                                padding: "2px 7px",
-                            }}
-                        >
+                        <span className="chat-header-internal-tag">
                             INTERNAL
                         </span>
                     )}
@@ -326,75 +296,33 @@ export default function ChatWindow({
             )}
 
             {/* MESSAGES */}
-            <div
-                style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    padding: 10,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                    background: "#13152428",
-                }}
-            >
+            <div className="chat-messages">
                 {messages.map((m) => {
                     const isMine = m.sender === mySender;
 
                     return (
                         <div
                             key={m.id}
-                            style={{
-                                alignSelf: isMine
-                                    ? "flex-end"
-                                    : "flex-start",
-                                background: isMine
-                                    ? "#2564eb50"
-                                    : "#1f2937",
-                                padding: "10px 14px",
-                                borderRadius: 12,
-                                maxWidth: "60%",
-                                overflowWrap: "anywhere",
-                            }}
+                            className={`chat-bubble${isMine ? " mine" : ""}`}
                         >
                             {isInternal && (
-                                <div
-                                    style={{
-                                        fontSize: 10,
-                                        opacity: 0.6,
-                                        marginBottom: 4,
-                                        textTransform: "capitalize",
-                                    }}
-                                >
+                                <div className="chat-bubble-sender">
                                     {m.sender}
                                 </div>
                             )}
 
                             {m.content && (
-                                <div
-                                    style={{
-                                        whiteSpace: "pre-wrap",
-                                    }}
-                                >
+                                <div className="chat-bubble-content">
                                     {m.content}
                                 </div>
                             )}
 
                             {m.media_url && (
-                                <div
-                                    style={{
-                                        marginTop: 8,
-                                    }}
-                                >
+                                <div className="chat-bubble-media">
                                     {m.media_type === "photo" && (
                                         <img
                                             src={getMediaUrl(m.media_url)}
-                                            style={{
-                                                maxWidth: "200px",
-                                                maxHeight: "300px",
-                                                objectFit: "contain",
-                                                borderRadius: 8,
-                                                cursor: "pointer",
-                                            }}
+                                            className="chat-bubble-image"
                                             alt="attachment"
                                             onClick={() =>
                                                 window.open(
@@ -414,11 +342,7 @@ export default function ChatWindow({
                                                 m.media_url
                                             )}
                                             controls
-                                            style={{
-                                                maxWidth: "100%",
-                                                maxHeight: "300px",
-                                                borderRadius: 8,
-                                            }}
+                                            className="chat-bubble-video"
                                         />
                                     )}
 
@@ -432,10 +356,7 @@ export default function ChatWindow({
                                             )}
                                             target="_blank"
                                             rel="noreferrer"
-                                            style={{
-                                                color: "#93c5fd",
-                                                fontSize: 12,
-                                            }}
+                                            className="chat-bubble-doclink"
                                         >
                                             📎 Open attachment
                                         </a>
@@ -443,14 +364,7 @@ export default function ChatWindow({
                                 </div>
                             )}
 
-                            <div
-                                style={{
-                                    fontSize: 10,
-                                    opacity: 0.7,
-                                    marginTop: 4,
-                                    textAlign: "right",
-                                }}
-                            >
+                            <div className="chat-bubble-status">
                                 {m.status === "seen" && "✔✔"}
                                 {m.status === "delivered" && "✔✔"}
                                 {m.status === "sent" && "✔"}
@@ -463,19 +377,7 @@ export default function ChatWindow({
             </div>
 
             {/* INPUT */}
-            <div
-                style={{
-                    display: "flex",
-                    padding: "7px 10px",
-                    gap: 10,
-                    justifyContent: "center",
-                    alignContent: "center",
-                    alignItems: "center",
-                    borderTop: "1px solid #1f2937",
-                    boxShadow:
-                        "0 20px 62px 15px rgba(0, 0, 0, 0.54)",
-                }}
-            >
+            <div className="chat-input-row">
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -488,19 +390,7 @@ export default function ChatWindow({
                     onClick={() =>
                         fileInputRef.current?.click()
                     }
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 10,
-                        border: "1px solid #3c4a5eff",
-                        background: "#111827",
-                        color: "#9ca3af",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                    }}
+                    className="chat-upload-btn"
                 >
                     <Upload size={18} />
                 </button>
@@ -510,25 +400,13 @@ export default function ChatWindow({
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type message..."
-                    style={{
-                        flex: 1,
-                        minWidth: 0,
-                        padding: 10,
-                        borderRadius: 6,
-                    }}
+                    className="chat-text-input"
                 />
 
                 <button
                     type="button"
                     onClick={sendMessage}
-                    style={{
-                        padding: "10px 15px",
-                        background: "#106c08ff",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 6,
-                        cursor: "pointer",
-                    }}
+                    className="chat-send-btn"
                 >
                     Send
                 </button>

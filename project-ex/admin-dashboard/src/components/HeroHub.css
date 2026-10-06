@@ -53,7 +53,6 @@
   margin: 0;
   font-size: clamp(13px, 1.6vw, 17px);
   font-weight: 600;
-  letter-spacing: 0.05rem;
   line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
@@ -69,6 +68,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: clamp(60px, 14vw, 220px);
 }
 
 /* filters — inline segment of the single row, never wraps */
@@ -79,6 +79,16 @@
   flex: 0 1 auto;
   min-width: 0;
   gap: clamp(5px, 1vw, 8px);
+  /* Safety net: dropdowns stay in their full labeled form even on
+     mobile, so if they can't all shrink enough to fit, the row scrolls
+     instead of clipping or breaking the layout. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.hh-filter-row::-webkit-scrollbar {
+  display: none;
 }
 
 /* ── Field wrapper: small caption above every filter control, plus the
@@ -439,20 +449,32 @@
   max-width: clamp(46px, 7vw, 120px);
 }
 
-/* ── Compact stat pill — icon only; hovering (or focusing, for
-   keyboard users) reveals title + value in a portal-rendered popover
-   so it's never clipped by hh-hub's overflow. ── */
+/* ── Compact stat pill — shows just the value; hovering (or focusing,
+   for keyboard users) reveals the icon + label in a portal-rendered
+   popover so it's never clipped by hh-hub's overflow. ── */
 .hh-pill-compact {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  min-width: 30px;
   height: 30px;
+  padding: 0 8px;
   flex-shrink: 0;
   border-radius: 8px;
   cursor: default;
   outline: none;
   transition: transform 0.15s, filter 0.15s;
+}
+
+.hh-pill-compact-value {
+  font-size: clamp(11px, 1.1vw, 13px);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: clamp(46px, 7vw, 90px);
 }
 
 .hh-pill-compact:hover,
@@ -603,16 +625,21 @@
 
 /* ── Responsive behavior ─────────────────────────────────────────
    The hub is ALWAYS a single row that never wraps and never scrolls.
-   Every segment above uses CSS clamp()/flex-shrink so it continuously
-   resizes with the viewport, and the search field, each dropdown, and
-   the date range collapse to icon-only triggers (via useIsCompact in
-   HeroHub.jsx) below ~680px — opening their real control in a popover
-   or calendar right under the icon on click. The rules below are small
-   supplemental hides for secondary text at the narrowest widths, on
-   top of that continuous fluid resizing — not a fallback scrollbar. */
+   Rather than reacting to fixed viewport-width breakpoints, HeroHub.jsx
+   measures the hub's actual available space on every resize and fits
+   as much as it can in full form. When things don't fit, it compacts
+   in priority order: the date range first, then search, then the stat
+   pills one at a time (starting from the last pill) — each collapsing
+   to an icon/value-only trigger. Everything expands back to full form
+   the moment there's room again. The rules below are small supplemental
+   truncation/hides for the remaining fluid text at the narrowest sizes. */
 
-@media (max-width: 680px) {
-  .hh-subtitle {
+/* Mobile: title/subtitle are hidden outright regardless of available
+   space — everything else (search, date range, dropdowns, stat pills)
+   is still governed by the container fit algorithm in HeroHub.jsx. */
+@media (max-width: 768px) {
+  .hh-title-col,
+  .hh-divider-title {
     display: none;
   }
 }
@@ -649,7 +676,11 @@
     display: none;
   }
 
-  .hh-title-col {
-    display: none;
+  .hh-title {
+    max-width: 64px;
+  }
+
+  .hh-subtitle {
+    max-width: 64px;
   }
 }

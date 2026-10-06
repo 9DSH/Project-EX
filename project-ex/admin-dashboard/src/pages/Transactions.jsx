@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { API_URL } from "../config";
 import UserSidebar from "../components/usersidebar/UserSidebar";
 import OrderSidebar from "../components/products/OrderSidebar";
 import HeroHub from "../components/HeroHub";
-import { SlidersHorizontal, Wallet } from "lucide-react";
+import { SlidersHorizontal, Wallet, User, FileText, X } from "lucide-react";
 import "./Transactions.css";
 
 // ── Skeleton ─────────────────────────────────────────────────────
@@ -22,12 +22,34 @@ function Sk({ w = "100%", h = 16, r = 6 }) {
   );
 }
 
+// ── MOBILE OVERLAY ───────────────────────────────────────────────
+// Same bottom-sheet mechanism as ProductsManagement: dimmed backdrop, slides up,
+// bounded to the page's real on-screen box (boundsStyle), scrolls internally.
+// Used on mobile for the User and Order sidebars.
+function MobileOverlay({ open, icon: Icon, iconBg, iconColor, title, onClose, children, boundsStyle }) {
+  return (
+    <div className={`tx-mobileOverlay${open ? " is-open" : ""}`} style={boundsStyle}>
+      <div className="tx-mobileOverlay-backdrop" onClick={onClose} />
+      <div className="tx-mobileOverlay-panel">
+        <div className="tx-mobileOverlay-head">
+          <div className="tx-mobileOverlay-icon" style={{ background: iconBg }}>
+            <Icon size={15} color={iconColor} />
+          </div>
+          <span className="tx-mobileOverlay-title">{title}</span>
+          <button className="tx-closeIconBtn" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div className="tx-mobileOverlay-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 const fmt = (n, d = 2) =>
   n != null ? Number(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: d }) : "—";
 
-// ── Grid column template — shared by header + every row ─────────
+// Grid column template lives in Transactions.css (.tx-table-head / .tx-row) so the
+// tablet/mobile media queries can restructure it — an inline style would always win.
 // TX | Type | User | References | Amount | Chain | Wallet | Hash | Confirm | Status | Created
-const COLS = "106px 170px 200px 140px 130px 150px 140px 140px 84px 104px 128px";
 
 const IN_TYPES = new Set(["income", "deposit", "deposit_from_user", "admin_deposit", "commission"]);
 const OUT_TYPES = new Set(["withdraw", "withdrawal", "deposit_to_user"]);
@@ -46,17 +68,25 @@ function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
   const statusStyle = statusColors[t.status] || { bg: "#ef444422", color: "#f87171" };
 
   return (
-    <div className="tx-row" style={{ gridTemplateColumns: COLS }}>
-      {/* TX (id) */}
-      <div className="tx-id">#{t.id}</div>
+    <div className="tx-row">
+      {/* TX (id) — desktop grid column */}
+      <div className="tx-id tx-c-id">#{t.id}</div>
 
-      {/* TYPE */}
-      <div>
+      {/* TYPE — desktop grid column */}
+      <div className="tx-c-type">
+        <span className="tx-type-badge">{t.type}</span>
+      </div>
+
+      {/* Compact cards only (hidden on desktop via CSS): id + type share one
+          block, replacing the two desktop cells above. */}
+      <div className="tx-c-head">
+        <span className="tx-id">#{t.id}</span>
         <span className="tx-type-badge">{t.type}</span>
       </div>
 
       {/* USER */}
-      <div style={{ minWidth: 0 }}>
+      <div className="tx-cell tx-c-user">
+        <div className="tx-cell-label">User</div>
         <div className="tx-user-link" onClick={() => onOpenUser(t)}>
           {t.username || "Unknown"}
         </div>
@@ -64,7 +94,8 @@ function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
       </div>
 
       {/* REFERENCES: order_id / wire_transfer_order_id / platform_bank_account_id */}
-      <div className="tx-refs">
+      <div className="tx-cell tx-refs tx-c-refs">
+        <div className="tx-cell-label">References</div>
         {t.order_id ? (
           <span className="tx-ref-pill">
             Order <span className="tx-ref-link" onClick={() => onOpenOrder(t)}>#{t.order_id}</span>
@@ -81,7 +112,8 @@ function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
       </div>
 
       {/* AMOUNT */}
-      <div>
+      <div className="tx-cell tx-c-amount">
+        <div className="tx-cell-label">Amount</div>
         <div className="tx-amount" style={{ color: typeColor }}>
           {sign}
           {fmt(Math.abs(t.amount), 4)}
@@ -92,7 +124,8 @@ function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
       </div>
 
       {/* CHAIN: currency/network ids + blockchain */}
-      <div style={{ minWidth: 0 }}>
+      <div className="tx-cell tx-c-chain">
+        <div className="tx-cell-label">Chain</div>
         <div className="tx-chain-line">
           {t.network_name || (t.network_id ? `Network #${t.network_id}` : "No network")}
         </div>
@@ -100,41 +133,53 @@ function TransactionRow({ t, onOpenUser, onOpenOrder, formatDate }) {
       </div>
 
       {/* WALLET */}
-      <div className="tx-hash-text">
-        {t.wallet_address ? (
-          <>
-            {t.wallet_address.slice(0, 8)}...{t.wallet_address.slice(-6)}
-          </>
-        ) : (
-          <span className="tx-muted">—</span>
-        )}
+      <div className="tx-cell tx-c-wallet">
+        <div className="tx-cell-label">Wallet</div>
+        <div className="tx-hash-text">
+          {t.wallet_address ? (
+            <>
+              {t.wallet_address.slice(0, 8)}...{t.wallet_address.slice(-6)}
+            </>
+          ) : (
+            <span className="tx-muted">—</span>
+          )}
+        </div>
       </div>
 
       {/* HASH */}
-      <div className="tx-hash-text">
-        {t.tx_hash ? (
-          <>
-            {t.tx_hash.slice(0, 10)}...{t.tx_hash.slice(-6)}
-          </>
-        ) : (
-          <span className="tx-muted">—</span>
-        )}
+      <div className="tx-cell tx-c-hash">
+        <div className="tx-cell-label">Hash</div>
+        <div className="tx-hash-text">
+          {t.tx_hash ? (
+            <>
+              {t.tx_hash.slice(0, 10)}...{t.tx_hash.slice(-6)}
+            </>
+          ) : (
+            <span className="tx-muted">—</span>
+          )}
+        </div>
       </div>
 
       {/* CONFIRMATIONS */}
-      <div className="tx-confirm" style={{ color: Number(t.confirmations || 0) > 0 ? "#22c55e" : "#64748b" }}>
-        {t.confirmations || 0}
+      <div className="tx-cell tx-c-conf">
+        <div className="tx-cell-label">Confirmations</div>
+        <div className="tx-confirm" style={{ color: Number(t.confirmations || 0) > 0 ? "#22c55e" : "#64748b" }}>
+          {t.confirmations || 0}
+        </div>
       </div>
 
       {/* STATUS */}
-      <div>
+      <div className="tx-cell tx-c-status">
         <span className="tx-status-badge" style={{ background: statusStyle.bg, color: statusStyle.color }}>
           {t.status}
         </span>
       </div>
 
       {/* CREATED */}
-      <div className="tx-created">{formatDate(t.created_at)}</div>
+      <div className="tx-cell tx-c-created">
+        <div className="tx-cell-label">Created</div>
+        <div className="tx-created">{formatDate(t.created_at)}</div>
+      </div>
     </div>
   );
 }
@@ -169,6 +214,43 @@ export default function Transactions() {
       setSortDir("asc");
     }
   };
+
+  // ── Mobile: User/Order sidebars become bottom sheets (same as ProductsManagement) ──
+  const pageRef = useRef(null);
+  const [pageBounds, setPageBounds] = useState(null);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener("change", onChange) : mq.addListener(onChange);
+    return () => (mq.removeEventListener ? mq.removeEventListener("change", onChange) : mq.removeListener(onChange));
+  }, []);
+
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setPageBounds({ left: r.left, right: window.innerWidth - r.right });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, []);
+
+  const sheetBoundsStyle = isMobile && pageBounds
+    ? { position: "fixed", top: 0, bottom: 0, left: pageBounds.left, right: pageBounds.right }
+    : undefined;
 
   const token = localStorage.getItem("token");
 
@@ -471,7 +553,7 @@ export default function Transactions() {
   // UI
   // =========================
   return (
-    <div className="tx-page">
+    <div className="tx-page" ref={pageRef}>
       {/* ── HERO HUB (title/subtitle + filters + stat pills), centered on the page ── */}
       <div className="tx-header">
         <HeroHub
@@ -564,8 +646,30 @@ export default function Transactions() {
       {/* TABLE */}
       <div className="tx-table-container">
         <div className="tx-table-scroll">
+          {/* Tablet/mobile: the column header is hidden, so sorting moves to this chip bar */}
+          <div className="tx-sortBar">
+            {[
+              ["id", "TX"],
+              ["type", "Type"],
+              ["user_id", "User"],
+              ["amount", "Amount"],
+              ["confirmations", "Conf."],
+              ["status", "Status"],
+              ["created_at", "Created"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`tx-sortChip${sortKey === key ? " is-active" : ""}`}
+                onClick={() => handleSort(key)}
+              >
+                {label} {sortArrow(key)}
+              </button>
+            ))}
+          </div>
+
           {/* Sticky sortable header — stays visible while the body scrolls */}
-          <div className="tx-table-head" style={{ gridTemplateColumns: COLS }}>
+          <div className="tx-table-head">
             <div className={`tx-sortable${sortKey === "id" ? " is-active" : ""}`} onClick={() => handleSort("id")}>
               TX {sortArrow("id")}
             </div>
@@ -606,11 +710,39 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* SIDEBARS */}
-      {selectedUser && <UserSidebar user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={loadTransactions} />}
+      {/* SIDEBARS — desktop/tablet: side panels; mobile: bottom sheets */}
+      {isMobile ? (
+        <>
+          <MobileOverlay
+            open={!!selectedUser}
+            icon={User} iconBg="rgba(59,130,246,.15)" iconColor="#60a5fa"
+            title={selectedUser?.username || "User"}
+            onClose={() => setSelectedUser(null)}
+            boundsStyle={sheetBoundsStyle}
+          >
+            {selectedUser && <UserSidebar user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={loadTransactions} />}
+          </MobileOverlay>
 
-      {selectedOrder && (
-        <OrderSidebar order={selectedOrder} onClose={() => setSelectedOrder(null)} onRefresh={loadTransactions} onOpenUser={openUser} />
+          <MobileOverlay
+            open={!!selectedOrder}
+            icon={FileText} iconBg="rgba(167,139,250,.15)" iconColor="#a78bfa"
+            title={selectedOrder ? `Order #${selectedOrder.id}` : "Order"}
+            onClose={() => setSelectedOrder(null)}
+            boundsStyle={sheetBoundsStyle}
+          >
+            {selectedOrder && (
+              <OrderSidebar order={selectedOrder} onClose={() => setSelectedOrder(null)} onRefresh={loadTransactions} onOpenUser={openUser} />
+            )}
+          </MobileOverlay>
+        </>
+      ) : (
+        <>
+          {selectedUser && <UserSidebar user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={loadTransactions} />}
+
+          {selectedOrder && (
+            <OrderSidebar order={selectedOrder} onClose={() => setSelectedOrder(null)} onRefresh={loadTransactions} onOpenUser={openUser} />
+          )}
+        </>
       )}
     </div>
   );

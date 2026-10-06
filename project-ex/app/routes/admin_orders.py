@@ -17,7 +17,7 @@ from sqlalchemy import func
 from app.services.telegram_service import send_telegram_message
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from app.routes.utilts.shared_functions import get_admin_username, get_admin_usernames , _admin_telegram_displayName_map
+from app.routes.utilts.shared_functions import get_admin_username, get_admin_usernames , _admin_telegram_displayName_map,  _reassert_master_rls
 
 router = APIRouter(prefix="/admin/orders", tags=["Admin Orders"])
 #
@@ -331,6 +331,7 @@ def create_order_for_user(
 
     try:
         db.commit()
+        _reassert_master_rls(db)
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Order creation failed: {str(e)}")

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { API_URL } from "../../config";
 import { hasPermission } from "../../utils/permissions";
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Send, User as UserIcon, X } from "lucide-react";
+import "./OrderSidebar.css";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 
@@ -18,6 +19,18 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
+
+  // Open/close slide animation — same mechanism as UserSidebar: fade+slide
+  // in on mount, and on close, play the reverse animation for 250ms before
+  // actually calling the parent's onClose (which unmounts this).
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(() => onClose?.(), 250);
+  };
 
   const iconUrl =
     order.icon_path
@@ -43,7 +56,7 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
       }
 
       onRefresh?.();
-      onClose();
+      handleClose();
 
     } catch (err) {
 
@@ -76,7 +89,7 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
       setShowRejectModal(false);
       onRefresh?.();
-      onClose();
+      handleClose();
 
     } catch (err) {
 
@@ -125,7 +138,7 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
       setShowDeliverModal(false);
       onRefresh?.();
-      onClose();
+      handleClose();
 
     } catch (err) {
 
@@ -263,61 +276,63 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
     <>
       {/* OVERLAY */}
       <div
-        style={styles.overlay}
-        onClick={onClose}
+        className={`os-overlay${visible ? " is-visible" : ""}`}
+        onClick={handleClose}
       />
 
-      {/* SIDEBAR */}
-      <div style={styles.container}>
+      {/* SIDEBAR — slides in from the right on desktop, rises from the
+          bottom as a sheet on mobile (see OrderSidebar.css), same
+          mechanism as UserSidebar. */}
+      <div
+        className={`os-container${visible ? " is-visible" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* TOPBAR */}
-        <div style={styles.header}>
+        <div className="os-header">
 
           <div>
 
-            <div style={styles.orderId}>
+            <div className="os-order-id">
               Order #{order.id}
             </div>
 
-            <div style={styles.date}>
+            <div className="os-date">
               {new Date(order.created_at).toLocaleString()}
             </div>
 
           </div>
 
           <button
-            onClick={onClose}
-            style={styles.closeIcon}
+            onClick={handleClose}
+            className="os-close-icon"
           >
             ✕
           </button>
 
         </div>
         {/* HERO PRODUCT CARD — 3 columns: timeline | icon+product | user quick access */}
-        <div style={styles.heroCard}>
+        <div className="os-hero-card">
 
-          <div style={styles.heroGrid}>
+          <div className="os-hero-grid">
 
             {/* LEFT: STATUS TIMELINE */}
-            <div style={styles.heroTimelineCol}>
+            <div className="os-hero-timeline-col">
               <StatusTimeline steps={timelineSteps} />
             </div>
 
             {/* MIDDLE: STATUS + ICON + PRODUCT */}
-            <div style={styles.heroCenterCol}>
+            <div className="os-hero-center-col">
 
               {/* STATUS */}
               <div
-                style={{
-                  ...styles.statusBadge,
-                  background: `${statusColor}22`,
-                  color: statusColor
-                }}
+                className="os-status-badge"
+                style={{ background: `${statusColor}22`, color: statusColor }}
               >
                 {order.status?.toUpperCase()}
               </div>
 
-              <div style={styles.productIconContainer}>
+              <div className="os-product-icon-container">
                 {iconUrl ? (
                   <img
                     src={iconUrl}
@@ -332,23 +347,23 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
                     }}
                   />
                 ) : (
-                  <div style={styles.productIcon}>📦</div>
+                  <div className="os-product-icon">📦</div>
                 )}
               </div>
 
-              <div style={styles.productName}>
+              <div className="os-product-name">
                 {order.product_name}
               </div>
 
               {order.plan && (
-                <div style={styles.productPlan}>
+                <div className="os-product-plan">
                   {order.plan}
                 </div>
               )}
             </div>
 
             {/* RIGHT: USER QUICK ACCESS */}
-            <div style={styles.heroUserCol}>
+            <div className="os-hero-user-col">
               {order.user_id ? (
                 <div
                   onClick={() => {
@@ -365,29 +380,29 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
                       access_points: order.access_points,
                     });
                   }}
-                  style={styles.userQuickBtn}
+                  className="os-user-quick-btn"
                 >
                   <UserIcon size={17} />
                 </div>
               ) : (
-                <div style={{ ...styles.userQuickBtn, background: "#1e293b", cursor: "default" }}>
+                <div className="os-user-quick-btn" style={{ background: "#1e293b", cursor: "default" }}>
                   <UserIcon size={17} />
                 </div>
               )}
 
-              <div style={styles.userQuickName}>{order.username || "—"}</div>
+              <div className="os-user-quick-name">{order.username || "—"}</div>
 
               {order.user_status && (
-                <div style={{
-                  ...styles.userQuickMeta,
-                  color: order.user_status === "active" ? "#34d399" : "#94a3b8",
-                }}>
+                <div
+                  className="os-user-quick-meta"
+                  style={{ color: order.user_status === "active" ? "#34d399" : "#94a3b8" }}
+                >
                   {order.user_status}
                 </div>
               )}
 
               {order.telegram_id && (
-                <div style={styles.userQuickMeta}>Telegram linked</div>
+                <div className="os-user-quick-meta">Telegram linked</div>
               )}
             </div>
 
@@ -398,12 +413,12 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
         {/* GENERAL INFO */}
         {hasGeneralInfo && (
-          <div style={styles.card}>
-            <div style={styles.sectionTitle}>
+          <div className="os-card">
+            <div className="os-section-title">
               General Information
             </div>
 
-            <div style={styles.rowList}>
+            <div className="os-row-list">
               {generalInfo.map((item, index) => (
                 <DetailRow
                   key={index}
@@ -417,9 +432,9 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
         {/* DESCRIPTION */}
         {hasDescription && (
-          <div style={styles.card}>
-            <div style={styles.sectionTitle}>Description</div>
-            <div style={styles.description}>
+          <div className="os-card">
+            <div className="os-section-title">Description</div>
+            <div className="os-description">
               {order.description}
             </div>
           </div>
@@ -427,12 +442,12 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
         {/* EXTRA FEATURES */}
         {hasExtraFeatures && (
-          <div style={styles.card}>
-            <div style={styles.sectionTitle}>
+          <div className="os-card">
+            <div className="os-section-title">
               Extra Features
             </div>
 
-            <div style={styles.rowList}>
+            <div className="os-row-list">
               {extraFeatures.map(([key, value]) => (
                 <DetailRow
                   key={key}
@@ -450,10 +465,10 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
         {/* Input Data */}
         {/* Order Information */}
         {hasInputData && (
-          <div style={styles.card}>
-            <div style={styles.sectionTitle}>User Information</div>
+          <div className="os-card">
+            <div className="os-section-title">User Information</div>
 
-            <div style={styles.rowList}>
+            <div className="os-row-list">
               {beforeLoginFields.map(([key, field]) => (
                 <DetailRow
                   key={key}
@@ -477,24 +492,24 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
         {/* ACTIONS */}
         {hasPermission(currentUser, "orders.manage") && order.status === "pending" && (
 
-          <div style={styles.card}>
+          <div className="os-card">
 
-            <div style={styles.sectionTitle}>
+            <div className="os-section-title">
               Order Actions
             </div>
 
-            <div style={styles.actionsRow}>
+            <div className="os-actions-row">
 
               <button
                 onClick={approve}
-                style={styles.approve}
+                className="os-approve"
               >
                 ✅ Approve
               </button>
 
               <button
                 onClick={() => setShowRejectModal(true)}
-                style={styles.reject}
+                className="os-reject"
               >
                 ❌ Reject
               </button>
@@ -510,9 +525,9 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
       {hasPermission(currentUser, "orders.manage") &&(order.status === "approved" ||
           order.status === "delivered") && (
 
-          <div style={styles.card}>
+          <div className="os-card">
 
-            <div style={styles.sectionTitle}>
+            <div className="os-section-title">
               Delivery Information
             </div>
 
@@ -520,7 +535,7 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
 
               <button
                 onClick={() => setShowDeliverModal(true)}
-                style={styles.deliverBtn}
+                className="os-deliver-btn"
               >
                 🚀 Deliver Order
               </button>
@@ -528,11 +543,11 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
             ) : (
 
               <>
-                <div style={styles.deliveryBox}>
+                <div className="os-delivery-box">
                   {order.delivery_info?.message || "No delivery message"}
                 </div>
 
-                <div style={styles.deliveredAt}>
+                <div className="os-delivered-at">
                   Delivered at:
                   {" "}
                   {order.delivered_at
@@ -549,17 +564,17 @@ export default function OrderSidebar({ order, onClose, onRefresh,  onOpenUser })
         {/* REJECTION */}
         {order.status === "rejected" && (
 
-          <div style={styles.card}>
+          <div className="os-card">
 
-            <div style={styles.sectionTitle}>
+            <div className="os-section-title">
               Rejection Information
             </div>
 
-            <div style={styles.rejectionBox}>
+            <div className="os-rejection-box">
               {order.rejection_reason || "No reason provided"}
             </div>
 
-            <div style={styles.deliveredAt}>
+            <div className="os-delivered-at">
               Rejected at:
               {" "}
               {order.rejected_at
@@ -602,26 +617,27 @@ function RejectModal({ onClose, onConfirm }) {
   const [reason, setReason] = useState("");
 
   return createPortal(
-    <div style={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={styles.modalCard}>
-        <div style={styles.modalHeader}>
-          <div style={styles.modalTitle}>Reject Order</div>
-          <button style={styles.modalCloseIcon} onClick={onClose}><X size={16} /></button>
+    <div className="os-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="os-modal-card">
+        <div className="os-modal-header">
+          <div className="os-modal-title">Reject Order</div>
+          <button className="os-modal-close-icon" onClick={onClose}><X size={16} /></button>
         </div>
 
-        <div style={styles.modalLabel}>Reason for rejection</div>
+        <div className="os-modal-label">Reason for rejection</div>
         <textarea
           autoFocus
           placeholder="e.g. Payment could not be verified, duplicate order, out of stock…"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          style={{ ...styles.textarea, minHeight: 120 }}
+          className="os-textarea"
+          style={{ minHeight: 120 }}
         />
 
-        <div style={styles.actionsRow}>
-          <button style={styles.modalCancelBtn} onClick={onClose}>Cancel</button>
+        <div className="os-actions-row">
+          <button className="os-modal-cancel-btn" onClick={onClose}>Cancel</button>
           <button
-            style={styles.reject}
+            className="os-reject"
             onClick={() => onConfirm(reason)}
           >
             ❌ Confirm Rejection
@@ -640,26 +656,26 @@ function DeliverModal({ initialMessage, onClose, onConfirm }) {
   const [message, setMessage] = useState(initialMessage || "");
 
   return createPortal(
-    <div style={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={styles.modalCard}>
-        <div style={styles.modalHeader}>
-          <div style={styles.modalTitle}>Deliver Order</div>
-          <button style={styles.modalCloseIcon} onClick={onClose}><X size={16} /></button>
+    <div className="os-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="os-modal-card">
+        <div className="os-modal-header">
+          <div className="os-modal-title">Deliver Order</div>
+          <button className="os-modal-close-icon" onClick={onClose}><X size={16} /></button>
         </div>
 
-        <div style={styles.modalLabel}>Delivery message (sent to the user's Telegram)</div>
+        <div className="os-modal-label">Delivery message (sent to the user's Telegram)</div>
         <textarea
           autoFocus
           placeholder="Paste account credentials, VPN config, activation code, subscription details..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          style={styles.textarea}
+          className="os-textarea"
         />
 
-        <div style={styles.actionsRow}>
-          <button style={styles.modalCancelBtn} onClick={onClose}>Cancel</button>
+        <div className="os-actions-row">
+          <button className="os-modal-cancel-btn" onClick={onClose}>Cancel</button>
           <button
-            style={styles.deliverBtn}
+            className="os-deliver-btn"
             onClick={() => onConfirm(message)}
           >
             🚀 Confirm Delivery
@@ -712,491 +728,9 @@ function StatusTimeline({ steps }) {
 // =========================
 function DetailRow({ label, value }) {
   return (
-    <div style={styles.detailRow}>
-      <div style={styles.detailLabel}>{label}</div>
-      <div style={styles.detailValue}>{value}</div>
+    <div className="os-detail-row">
+      <div className="os-detail-label">{label}</div>
+      <div className="os-detail-value">{value}</div>
     </div>
   );
 }
-
-// =========================
-// STYLES
-// =========================
-const styles = {
-
-  // ── Reject / Deliver popup modals ──────────────────────────
-  modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.72)",
-    zIndex: 1100,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backdropFilter: "blur(6px)",
-  },
-
-  modalCard: {
-    width: "92%",
-    maxWidth: 480,
-    background: "#0d1424",
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 20,
-    padding: "22px 24px",
-    boxShadow: "0 32px 80px rgba(0,0,0,.6)",
-  },
-
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  modalTitle: {
-    color: "white",
-    fontWeight: 700,
-    fontSize: 17,
-  },
-
-  modalCloseIcon: {
-    background: "#0b1525",
-    border: "1px solid #313d58ff",
-    color: "#475569",
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  modalLabel: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: 600,
-    marginBottom: 8,
-  },
-
-  modalCancelBtn: {
-    flex: 1,
-    background: "transparent",
-    border: "1px solid rgba(255,255,255,.1)",
-    color: "#94a3b8",
-    padding: "14px 18px",
-    borderRadius: 14,
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: 15,
-  },
-
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    zIndex: 999
-  },
-
-  container: {
-    position: "fixed",
-    right: 0,
-    top: 0,
-    width: 580,
-    height: "100vh",
-
-    background: "#0f172a",
-
-    color: "white",
-
-    padding: 24,
-
-    overflowY: "auto",
-
-    zIndex: 1000,
-
-    boxShadow: "-10px 0 40px rgba(0,0,0,0.6)",
-
-    borderLeft: "1px solid #1e293b"
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 22
-  },
-
-  orderId: {
-    fontSize: 28,
-    fontWeight: 700
-  },
-
-  date: {
-    marginTop: 4,
-    color: "#94a3b8",
-    fontSize: 13
-  },
-
-  closeIcon: {
-    background: "transparent",
-    border: "none",
-    color: "#94a3b8",
-    fontSize: 24,
-    cursor: "pointer"
-  },
-
-  heroCard: {
-    position: "relative",
-
-    background:
-      "linear-gradient(to bottom right, #111827, #0f172a)",
- 
-    border: "1px solid #1e293b",
-
-    borderRadius: 24,
-
-    padding: "24px 20px",
-
-    marginBottom: 18,
-  },
-
-  statusBadge: {
-    padding: "8px 14px",
-
-    borderRadius: 999,
-
-    fontWeight: 700,
-
-    fontSize: 12,
-
-    marginBottom: 14,
-  },
-
-  // ── 3-column hero layout: timeline | icon+product | user quick access ──
-  heroGrid: {
-    display: "grid",
-    gridTemplateColumns: "140px 1fr 130px",
-    alignItems: "center",
-    gap: 14,
-  },
-
-  heroTimelineCol: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    borderRight: "1px solid rgba(255,255,255,.06)",
-    paddingRight: 12,
-  },
-
-  heroCenterCol: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-  },
-
-  heroUserCol: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    gap: 6,
-    height: "100%",
-    borderLeft: "1px solid rgba(255,255,255,.06)",
-    paddingLeft: 12,
-  },
-
-  userQuickBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: "50%",
-    background: "#6f7dfab2",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "white",
-    cursor: "pointer",
-    transition: "0.2s",
-    border: "1px solid #1e293b",
-  },
-
-  userQuickName: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "white",
-    maxWidth: 120,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  userQuickMeta: {
-    fontSize: 10,
-    color: "#64748b",
-  },
-
-  productIconContainer: {
-    width: 92,
-    height: 92,
-
-    borderRadius: 24,
-    border: "1px solid #3b3b35ed",
-    background:  "transparent",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-    marginTop: 14
-  },
-
-  productIcon: {
-    fontSize: 40
-  },
-
-  productName: {
-    fontSize: 22,
-    fontWeight: 700,
-    textAlign: "center"
-  },
-
-  productPlan: {
-    marginTop: 8,
-
-    padding: "8px 14px",
-
-    borderRadius: 999,
-
-    background: "#1e293b",
-
-    color: "#cbd5e1",
-
-    fontSize: 13
-  },
-
-  card: {
-    background: "#0f172a",
-
-    border: "1px solid #1e293b",
-
-    borderRadius: 22,
-
-    padding: 18,
-
-    marginBottom: 18
-  },
-
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: 700,
-    marginBottom: 18
-  },
-
-  // ── Stacked OrderRow-style detail list (replaces metaGrid/CompactMeta) ──
-  rowList: {
-    display: "flex",
-    flexDirection: "column",
-  },
-
-  detailRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    alignItems: "center",
-    gap: 12,
-    padding: "11px 4px",
-    borderBottom: "1px solid rgba(255,255,255,.05)",
-  },
-
-  detailLabel: {
-    color: "#94a3b8",
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-
-  detailValue: {
-    fontWeight: 700,
-    fontSize: 13,
-    color: "white",
-    textAlign: "right",
-    wordBreak: "break-word",
-  },
-
-  description: {
-    color: "#cbd5e1",
-    lineHeight: 1.7,
-    fontSize: 14
-  },
-
-  input: {
-    width: "100%",
-
-    padding: 14,
-
-    background: "#020617",
-
-    border: "1px solid #334155",
-
-    borderRadius: 14,
-
-    color: "white",
-
-    marginBottom: 14,
-
-    fontSize: 15
-  },
-
-  textarea: {
-    width: "100%",
-
-    minHeight: 180,
-
-    padding: 14,
-
-    background: "#0206177b",
-
-    border: "1px solid #334155",
-
-    borderRadius: 16,
-
-    color: "white",
-
-    resize: "vertical",
-
-    fontSize: 14,
-
-    marginBottom: 16,
-
-    lineHeight: 1.6
-  },
-
-  actionsRow: {
-    display: "flex",
-    gap: 12
-  },
-
-  approve: {
-    flex: 1,
-
-    background: "#10b981",
-
-    color: "white",
-
-    border: "none",
-
-    padding: "14px 18px",
-
-    borderRadius: 14,
-
-    cursor: "pointer",
-
-    fontWeight: 700,
-
-    fontSize: 15
-  },
-
-  reject: {
-    flex: 1,
-
-    background: "#ef4444",
-
-    color: "white",
-
-    border: "none",
-
-    padding: "14px 18px",
-
-    borderRadius: 14,
-
-    cursor: "pointer",
-
-    fontWeight: 700,
-
-    fontSize: 15
-  },
-
-  updateBtn: {
-    width: "100%",
-
-    background: "#2563eb",
-
-    color: "white",
-
-    border: "none",
-
-    padding: "14px",
-
-    borderRadius: 14,
-
-    cursor: "pointer",
-
-    fontWeight: 700,
-
-    fontSize: 15
-  },
-
-  deliverBtn: {
-    width: "100%",
-
-    background: "#7c3aed",
-
-    color: "white",
-
-    border: "none",
-
-    padding: "16px",
-
-    borderRadius: 16,
-
-    cursor: "pointer",
-
-    fontWeight: 700,
-
-    fontSize: 16
-  },
-
-  deliveryBox: {
-    background: "#0206177b",
-
-    border: "1px solid #1e293b",
-
-    padding: 18,
-
-    borderRadius: 16,
-
-    whiteSpace: "pre-wrap",
-
-    lineHeight: 1.7,
-
-    color: "#e2e8f0",
-
-    fontSize: 14
-  },
-
-  rejectionBox: {
-    background: "rgba(239,68,68,.07)",
-
-    border: "1px solid rgba(239,68,68,.2)",
-
-    padding: 18,
-
-    borderRadius: 16,
-
-    whiteSpace: "pre-wrap",
-
-    lineHeight: 1.7,
-
-    color: "#fca5a5",
-
-    fontSize: 14
-  },
-
-
-  deliveredAt: {
-    marginTop: 14,
-    color: "#94a3b8",
-    fontSize: 13
-  }
-};

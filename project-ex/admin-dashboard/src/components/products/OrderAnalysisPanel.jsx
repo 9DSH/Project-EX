@@ -1,22 +1,27 @@
 import { useEffect, useState, useRef } from "react";
 import API from "../../api/client";
 import {
-  BarChart3, X, Package, DollarSign, LayoutGrid,
+  X, Package, DollarSign, LayoutGrid,
   Search, ChevronDown, User, Trophy, TrendingUp, Calendar
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
+import "./OrderAnalysisPanel.css";
+
+/* NOTE ON SCOPE: ColumnChart (below) draws its bars with computed,
+   per-data-point inline styles (bar height/position from `barH`, tooltip
+   x/y from a getBoundingClientRect() measurement, hover-driven gradients) —
+   that's rendering logic, not decorative styling, so it's intentionally
+   left inline (same treatment as the app's other chart components). Every
+   other component here — the skeleton, MetaCard, and the whole panel
+   chrome (header, toggles, filters, meta footer, chart-area wrapper) — has
+   its static styling extracted to OrderAnalysisPanel.css, with only truly
+   dynamic values (an `accent` color prop, active/selected state) left as
+   inline overrides alongside a className. */
 
 // ── Skeleton ────────────────────────────────────────────────────
 function Sk({ w = "100%", h = 16, r = 6 }) {
-  return (
-    <div style={{
-      width: w, height: h, borderRadius: r,
-      background: "linear-gradient(90deg,#0e1a2e 25%,#1a2a40 50%,#0e1a2e 75%)",
-      backgroundSize: "200% 100%",
-      animation: "shimmer 1.5s infinite",
-    }} />
-  );
+  return <div className="oap-sk" style={{ width: w, height: h, borderRadius: r }} />;
 }
 
 // ── Summary pill ─────────────────────────────────────────────────
@@ -44,51 +49,19 @@ function SummaryPill({ icon: Icon, label, value, accent }) {
 
 function MetaCard({ icon: Icon, label, line1, line2, line3, accent, loading }) {
   return (
-    <div
-      style={{
-        flex: 1,
-        background: "#0a1628",
-        border: `1px solid ${accent}28`,
-        borderRadius: 12,
-        padding: "11px 14px",
-        minWidth: 0,
-      }}
-    >
+    <div className="oap-metaCard" style={{ border: `1px solid ${accent}28` }}>
       {/* TOP LABEL */}
-      <div
-        style={{
-          fontSize: 9,
-          color: "#808fa4ff",
-          fontWeight: 700,
-          letterSpacing: 0.8,
-          marginBottom: 10,
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
+      <div className="oap-metaCard-label">{label}</div>
 
       {/* BODY ROW */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="oap-metaCard-body">
         {/* ICON CENTERED */}
-        <div
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 9,
-            flexShrink: 0,
-            background: accent + "18",
-            color: accent,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+        <div className="oap-metaCard-icon" style={{ background: accent + "18", color: accent }}>
           <Icon size={15} />
         </div>
 
         {/* CONTENT INLINE ROW */}
-        <div style={{ marginLeft:10, minWidth: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="oap-metaCard-content">
           {loading ? (
             <>
               <Sk w={90} h={12} r={4} />
@@ -96,46 +69,18 @@ function MetaCard({ icon: Icon, label, line1, line2, line3, accent, loading }) {
             </>
           ) : line1 ? (
             <>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: "#e2e8f0",
-                  whiteSpace: "nowrap",
-                }}
-                title={line1}
-              >
-                {line1}
-              </span>
+              <span className="oap-metaCard-line1" title={line1}>{line1}</span>
 
               {line2 && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "#64748b",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={line2}
-                >
-                  · {line2}
-                </span>
+                <span className="oap-metaCard-line2" title={line2}> · {line2}</span>
               )}
 
               {line3 && (
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: accent,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  · {line3}
-                </span>
+                <span className="oap-metaCard-line3" style={{ color: accent }}> · {line3}</span>
               )}
             </>
           ) : (
-            <span style={{ fontSize: 11, color: "#334155" }}>No data</span>
+            <span className="oap-metaCard-nodata">No data</span>
           )}
         </div>
       </div>
@@ -580,67 +525,48 @@ export default function OrderAnalysisPanel({
   };
 
   return (
-    <div style={{
-      width: !visible ? "0%" : fullWidth ? "100%" : "50%",
-      minWidth: visible ? 320 : 0,
-      overflow: "hidden",
-      transition: "width 0.35s cubic-bezier(0.4,0,0.2,1), min-width 0.35s cubic-bezier(0.4,0,0.2,1)",
-      flexShrink: 0,
-      display: "flex",
-      flexDirection: "column",
-      borderLeft: visible && !fullWidth ? "1px solid #1a2540" : "none",
-      background: "#060d1a",
-      padding: visible ? 20 : 0,
-      border: visible ? "1px solid #203f5db6" : "none",
-      borderRadius: 20,
-    }}>
+    <div
+      className="oap-panel"
+      style={{
+        width: !visible ? "0%" : fullWidth ? "100%" : "50%",
+        minWidth: visible ? 320 : 0,
+        borderLeft: visible && !fullWidth ? "1px solid #1a2540" : "none",
+        padding: visible ? 20 : 0,
+        border: visible ? "1px solid #203f5db6" : "none",
+      }}
+    >
       {visible && (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 320 }}>
+        <div className="oap-panel-inner">
 
           {/* ── Header: title + toggles (hidden when a parent Hero already shows these) ── */}
           {!hideFilters && (
-          <div style={{
-            padding: "12px 14px 10px",
-            borderBottom: "1px solid #1a2540",
-            background: "#07101d",
-            flexShrink: 0,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <BarChart3 size={15} color="#3b82f6" />
-              <span style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>Product Analytics</span>
-
+          <div className="oap-header">
+            <div className="oap-header-top">
               {/* Metric toggle */}
-              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+              <div className="oap-toggleGroup">
                 {[
                   { key: "sold", label: "Sold", icon: Package },
                   { key: "income", label: "Income", icon: DollarSign },
                 ].map(({ key, label, icon: Icon }) => (
-                  <button key={key} onClick={() => setMetric(key)} style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                    fontSize: 11, fontWeight: 700,
-                    background: metric === key ? "rgba(59,130,246,0.2)" : "transparent",
-                    color: metric === key ? "#60a5fa" : "#475569",
-                    transition: "all 0.15s",
-                  }}>
+                  <button
+                    key={key} onClick={() => setMetric(key)}
+                    className={`oap-toggleBtn${metric === key ? " is-active-blue" : ""}`}
+                  >
                     <Icon size={11} />{label}
                   </button>
                 ))}
               </div>
 
               {/* View mode toggle */}
-              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+              <div className="oap-toggleGroup">
                 {[
                   { key: "products", label: "Products" },
                   { key: "categories", label: "Categories" },
                 ].map(({ key, label }) => (
-                  <button key={key} onClick={() => setViewMode(key)} style={{
-                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                    fontSize: 11, fontWeight: 700,
-                    background: viewMode === key ? "rgba(139,92,246,0.2)" : "transparent",
-                    color: viewMode === key ? "#a78bfa" : "#475569",
-                    transition: "all 0.15s",
-                  }}>
+                  <button
+                    key={key} onClick={() => setViewMode(key)}
+                    className={`oap-toggleBtn${viewMode === key ? " is-active-purple" : ""}`}
+                  >
                     {label}
                   </button>
                 ))}
@@ -648,24 +574,19 @@ export default function OrderAnalysisPanel({
             </div>
 
             {/* ── Filter row ── */}
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex: 1, minWidth: 120 }}>
-                <Search size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
+            <div className="oap-filterRow">
+              <div className="oap-filterField oap-filterField--search">
+                <Search size={11} className="oap-filterIcon" />
                 <input
                   placeholder="Search product, plan, category..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  style={{
-                    width: "100%", boxSizing: "border-box",
-                    background: "#0b1424", border: "1px solid #1a2540",
-                    color: "white", padding: "6px 10px 6px 26px",
-                    borderRadius: 8, outline: "none", fontSize: 11,
-                  }}
+                  className="oap-input"
                 />
               </div>
 
-              <div style={{ position: "relative", minWidth: 140, flex: 1 }}>
-                <Calendar size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none", zIndex: 1 }} />
+              <div className="oap-filterField oap-filterField--date">
+                <Calendar size={11} className="oap-filterIcon" style={{ zIndex: 1 }} />
                 <DatePicker
                   selectsRange
                   startDate={startDate}
@@ -675,31 +596,20 @@ export default function OrderAnalysisPanel({
                   placeholderText="Select date range"
                   customInput={
                     <input
-                      style={{
-                        width: "100%", boxSizing: "border-box",
-                        background: "#0b1424", border: "1px solid #1a2540",
-                        color: startDate || endDate ? "#e2e8f0" : "#8997abff",
-                        padding: "6px 28px 6px 26px",
-                        borderRadius: 8, outline: "none", fontSize: 11,
-                        cursor: "pointer",
-                      }}
+                      className="oap-input oap-dateInput"
+                      style={{ color: startDate || endDate ? "#e2e8f0" : "#8997abff" }}
                     />
                   }
                 />
               </div>
 
-              <div style={{ position: "relative", minWidth: 120 }}>
-                <User size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
+              <div className="oap-filterField oap-filterField--select">
+                <User size={11} className="oap-filterIcon" />
                 <select
                   value={selectedAdmin}
                   onChange={e => setSelectedAdmin(e.target.value)}
-                  style={{
-                    background: "#0b1424", border: "1px solid #1a2540",
-                    color: selectedAdmin !== "all" ? "#a78bfa" : "#8997abff",
-                    padding: "6px 10px 6px 26px",
-                    borderRadius: 8, outline: "none", fontSize: 11,
-                    appearance: "none", cursor: "pointer", minWidth: 120,
-                  }}
+                  className="oap-select"
+                  style={{ color: selectedAdmin !== "all" ? "#a78bfa" : "#8997abff" }}
                 >
                   <option value="all">All Admins</option>
                   {admins.map((a) => (
@@ -708,72 +618,53 @@ export default function OrderAnalysisPanel({
                     </option>
                   ))}
                 </select>
-                <ChevronDown size={10} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
+                <ChevronDown size={10} className="oap-filterIcon oap-filterIcon--right" />
               </div>
 
-              <div style={{ position: "relative", minWidth: 120 }}>
-                <LayoutGrid size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
+              <div className="oap-filterField oap-filterField--select">
+                <LayoutGrid size={11} className="oap-filterIcon" />
                 <select
                   value={selectedCategory}
                   onChange={e => setSelectedCategory(e.target.value)}
-                  style={{
-                    background: "#0b1424", border: "1px solid #1a2540",
-                    color: selectedCategory !== "all" ? "#60a5fa" : "#8997abff",
-                    padding: "6px 10px 6px 26px",
-                    borderRadius: 8, outline: "none", fontSize: 11,
-                    appearance: "none", cursor: "pointer", minWidth: 120,
-                  }}
+                  className="oap-select"
+                  style={{ color: selectedCategory !== "all" ? "#60a5fa" : "#8997abff" }}
                 >
                   <option value="all">All Categories</option>
                   {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <ChevronDown size={10} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#334155", pointerEvents: "none" }} />
+                <ChevronDown size={10} className="oap-filterIcon oap-filterIcon--right" />
               </div>
             </div>
           </div>
           )}
 
           {hideFilters && (
-            <div style={{
-              padding: "12px 14px", borderBottom: "1px solid #1a2540",
-              background: "#07101d", flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <BarChart3 size={15} color="#3b82f6" />
-              <span style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>Product Analytics</span>
-
+            <div className="oap-header oap-header--compact">
               {/* Metric toggle — restored here exactly as in the original panel */}
-              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+              <div className="oap-toggleGroup">
                 {[
                   { key: "sold", label: "Sold", icon: Package },
                   { key: "income", label: "Income", icon: DollarSign },
                 ].map(({ key, label, icon: Icon }) => (
-                  <button key={key} onClick={() => setMetric(key)} style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                    fontSize: 11, fontWeight: 700,
-                    background: metric === key ? "rgba(59,130,246,0.2)" : "transparent",
-                    color: metric === key ? "#60a5fa" : "#475569",
-                    transition: "all 0.15s",
-                  }}>
+                  <button
+                    key={key} onClick={() => setMetric(key)}
+                    className={`oap-toggleBtn${metric === key ? " is-active-blue" : ""}`}
+                  >
                     <Icon size={11} />{label}
                   </button>
                 ))}
               </div>
 
               {/* View mode toggle — kept here exactly as in the original panel, since "group by" only ever applies to Analysis */}
-              <div style={{ display: "flex", gap: 3, background: "#0b1424", borderRadius: 8, padding: 3, border: "1px solid #1a2540" }}>
+              <div className="oap-toggleGroup">
                 {[
                   { key: "products", label: "Products" },
                   { key: "categories", label: "Categories" },
                 ].map(({ key, label }) => (
-                  <button key={key} onClick={() => setViewMode(key)} style={{
-                    padding: "5px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                    fontSize: 11, fontWeight: 700,
-                    background: viewMode === key ? "rgba(139,92,246,0.2)" : "transparent",
-                    color: viewMode === key ? "#a78bfa" : "#475569",
-                    transition: "all 0.15s",
-                  }}>
+                  <button
+                    key={key} onClick={() => setViewMode(key)}
+                    className={`oap-toggleBtn${viewMode === key ? " is-active-purple" : ""}`}
+                  >
                     {label}
                   </button>
                 ))}
@@ -782,7 +673,7 @@ export default function OrderAnalysisPanel({
           )}
             {/* ── Meta footer ── */}
             {!loading && (
-              <div style={{ marginTop: 10, display: "flex", gap: 9 }}>
+              <div className="oap-metaFooterRow">
                 <MetaCard {...card1} loading={loading} />
                 <MetaCard {...card2} loading={loading} />
               </div>
@@ -790,15 +681,8 @@ export default function OrderAnalysisPanel({
 
 
           {/* ── Chart area ── */}
-          <div style={{
-            flex: 1,
-            textAlign: "center",
-            overflowY: "auto", overflowX: "hidden",
-            padding: "14px 16px",
-            scrollbarWidth: "thin", scrollbarColor: "#1e293b #060d1a",
-            marginTop: 20,
-          }}>
-            <div style={{ alignContent: "center", fontSize: 10, fontWeight: 700, color: "#8294aeff", letterSpacing: 1, marginBottom: 14 }}>
+          <div className="oap-chartArea">
+            <div className="oap-chartArea-caption">
               {metric === "sold" ? "UNITS SOLD" : "INCOME"} BY {viewMode === "categories" ? "CATEGORY" : "PRODUCT"}
               {selectedAdmin !== "all" && (
                 <span style={{ color: "#8b5cf6" }}> · {selectedAdminLabel || `ADMIN #${selectedAdmin}`}</span>

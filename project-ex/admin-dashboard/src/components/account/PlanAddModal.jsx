@@ -31,8 +31,8 @@ export default function PlanAddModal({ onClose, onCreate }) {
   };
 
   return (
-    <div style={S.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modal, width: "min(520px, 96vw)" }}>
+    <div className="ma-modalOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal ma-modal--sm">
         <div style={S.modalHeader}>
           <div>
             <div style={S.modalTitle}>New plan</div>

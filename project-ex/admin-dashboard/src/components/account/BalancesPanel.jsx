@@ -7,44 +7,14 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { API_URL } from "../../config";
 import UserBalanceSidebar from "./UserBalanceSidebar";
+import { authHeaders, fmt, fmtDate, showToast } from "./accountUtils";
+import { EmptyState, MetaRow, Tag, TxRow } from "./AccountBits";
+import "../../pages/MyAccount.css";
 
 const api = axios.create({ baseURL: API_URL });
-const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });
-
-const fmt = (value, digits = 6) =>
-  value != null
-    ? Number(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits })
-    : "—";
-
-const fmtDate = (value) => (value ? new Date(value).toLocaleString() : "—");
 
 function balanceKey(item) {
   return `${item.currency_id ?? item.currency}-${item.network_id ?? item.network}`;
-}
-
-function shortAddress(value) {
-  if (!value) return "—";
-  if (String(value).length <= 18) return value;
-  return `${String(value).slice(0, 8)}...${String(value).slice(-8)}`;
-}
-
-function showToast(msg, ok = true) {
-  const el = document.createElement("div");
-  el.textContent = msg;
-  Object.assign(el.style, {
-    position: "fixed", bottom: "24px", right: "24px", zIndex: 99999,
-    padding: "12px 20px", borderRadius: "12px", fontWeight: 600, fontSize: "13px",
-    color: "white", pointerEvents: "none",
-    background: ok ? "#16a34a" : "#dc2626",
-    boxShadow: ok ? "0 8px 32px rgba(22,163,74,.35)" : "0 8px 32px rgba(220,38,38,.35)",
-    transform: "translateY(8px)", opacity: 0, transition: "all .25s ease",
-  });
-  document.body.appendChild(el);
-  requestAnimationFrame(() => { el.style.opacity = 1; el.style.transform = "translateY(0)"; });
-  setTimeout(() => {
-    el.style.opacity = 0; el.style.transform = "translateY(8px)";
-    setTimeout(() => el.remove(), 300);
-  }, 3500);
 }
 
 export default function BalancesPanel({ isMaster }) {
@@ -57,7 +27,6 @@ export default function BalancesPanel({ isMaster }) {
   const [platformBanks, setPlatformBanks] = useState([]);
 
   const [balanceSubTab, setBalanceSubTab] = useState("my-balance");
-  const [hoveredBalanceKey, setHoveredBalanceKey] = useState(null);
   const [selectedBalance, setSelectedBalance] = useState(null);
 
   const [txSearch, setTxSearch] = useState("");
@@ -233,62 +202,53 @@ export default function BalancesPanel({ isMaster }) {
     }
   };
 
+
+  const hasFilters = !!(txSearch || txCurrency || txStatus || txDateRange[0]);
+  const clearFilters = () => { setTxSearch(""); setTxCurrency(""); setTxStatus(""); setTxDateRange([null, null]); };
+  const emptyBank = { bank_name: "", bank_holder_name: "", bank_card_number: "", bank_sheba: "", is_active: false };
+
   return (
-    <div style={styles.stack}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button type="button" onClick={loadData} disabled={loading} style={styles.refreshBtn}>
-          <RefreshCcw size={13} /> {loading ? "Refreshing..." : "Refresh"}
-        </button>
+    <div className="ma-stack">
+      <div className="ma-row-between">
+        {isMaster ? (
+          <div className="ma-subtabs">
+            <button type="button" onClick={() => setBalanceSubTab("my-balance")} className={`ma-subtab${balanceSubTab === "my-balance" ? " is-active" : ""}`}>My Balance</button>
+            <button type="button" onClick={() => setBalanceSubTab("platform-wallet")} className={`ma-subtab${balanceSubTab === "platform-wallet" ? " is-active" : ""}`}>Platform Wallets</button>
+          </div>
+        ) : <span />}
       </div>
 
-      {isMaster && (
-        <div style={styles.tabRow}>
-          <button type="button" onClick={() => setBalanceSubTab("my-balance")} style={styles.pillTab(balanceSubTab === "my-balance")}>
-            My Balance
-          </button>
-          <button type="button" onClick={() => setBalanceSubTab("platform-wallet")} style={styles.pillTab(balanceSubTab === "platform-wallet")}>
-            Platform Wallets
-          </button>
-        </div>
-      )}
-
       {(!isMaster || balanceSubTab === "my-balance") && (
-        <>
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>My Balance</div>
-            <div style={styles.balanceGrid}>
+        <div className="ma-split">
+          {/* LEFT — balances, one card per row */}
+          <section className="ma-card">
+            <div className="ma-card-title">My Balance</div>
+            <div className="ma-subtle">Tap a balance to deposit, withdraw, or see its activity.</div>
+            <div className="ma-balList">
               {balances.map((item) => (
-                <BalanceCard
-                  key={balanceKey(item)}
-                  item={item}
-                  onClick={() => setSelectedBalance(item)}
-                  hovered={hoveredBalanceKey === balanceKey(item)}
-                  onHover={setHoveredBalanceKey}
-                />
+                <BalanceCard key={balanceKey(item)} item={item} onClick={() => setSelectedBalance(item)} />
               ))}
-              {balances.length === 0 && <div style={styles.subtle}>No balances found.</div>}
+              {balances.length === 0 && <EmptyState>No balances found.</EmptyState>}
             </div>
-          </div>
+          </section>
 
-          <div style={styles.card}>
-            <div style={{ ...styles.cardHeader, flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-              <div>
-                <div style={styles.cardTitle}>Transactions</div>
-                <div style={styles.subtle}>{filteredTxs.length} of {walletHistory.length} transactions</div>
+          {/* RIGHT — transactions */}
+          <section className="ma-card">
+            <div className="ma-card-title">Transactions</div>
+            <div className="ma-subtle">{filteredTxs.length} of {walletHistory.length} transactions</div>
+
+            <div className="ma-filters">
+              <div className="ma-searchWrap">
+                <Search size={13} />
+                <input className="ma-input ma-input--sm" value={txSearch} onChange={(e) => setTxSearch(e.target.value)} placeholder="Search hash, user, type…" />
               </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#081224", border: "1px solid #29405e", borderRadius: 10, padding: "6px 10px", flex: 1, minWidth: 180 }}>
-                <Search size={12} color="#7c8ca8" />
-                <input value={txSearch} onChange={e => setTxSearch(e.target.value)} placeholder="Search hash, user, type…" style={{ background: "transparent", border: "none", outline: "none", color: "white", fontSize: 12, width: "100%" }} />
-              </div>
-              <select value={txCurrency} onChange={e => setTxCurrency(e.target.value)} style={{ ...styles.input, width: 110, fontSize: 12, padding: "6px 10px" }}>
+              <select className="ma-select ma-select--sm" value={txCurrency} onChange={(e) => setTxCurrency(e.target.value)}>
                 <option value="">All Currencies</option>
-                {txCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
+                {txCurrencies.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select value={txStatus} onChange={e => setTxStatus(e.target.value)} style={{ ...styles.input, width: 120, fontSize: 12, padding: "6px 10px" }}>
+              <select className="ma-select ma-select--sm" value={txStatus} onChange={(e) => setTxStatus(e.target.value)}>
                 <option value="">All Statuses</option>
-                {["pending", "completed", "failed", "confirmed"].map(s => <option key={s} value={s}>{s}</option>)}
+                {["pending", "completed", "failed", "confirmed"].map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
               <DatePicker
                 selectsRange
@@ -297,49 +257,21 @@ export default function BalancesPanel({ isMaster }) {
                 onChange={setTxDateRange}
                 placeholderText="Date range"
                 isClearable
-                customInput={<input style={{ ...styles.input, width: 180, fontSize: 12, padding: "6px 10px", cursor: "pointer" }} />}
+                customInput={<input className="ma-input ma-input--sm" style={{ cursor: "pointer" }} />}
               />
-              {(txSearch || txCurrency || txStatus || txDateRange[0]) && (
-                <button type="button" onClick={() => { setTxSearch(""); setTxCurrency(""); setTxStatus(""); setTxDateRange([null, null]); }} style={styles.ghostBtn}>
-                  <X size={12} /> Clear
-                </button>
+              {hasFilters && (
+                <button type="button" onClick={clearFilters} className="ma-btn ma-btn--ghost ma-btn--sm"><X size={12} /> Clear</button>
               )}
             </div>
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>ID</th>
-                    <th style={styles.th}>Time</th>
-                    <th style={styles.th}>User</th>
-                    <th style={styles.th}>Type</th>
-                    <th style={styles.th}>Currency</th>
-                    <th style={styles.th}>Network</th>
-                    <th style={styles.th}>Amount</th>
-                    <th style={styles.th}>Status</th>
-                    <th style={styles.th}>Tx Hash</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTxs.slice(0, 200).map((tx) => (
-                    <tr key={tx.id} style={styles.tr}>
-                      <td style={styles.td}>{tx.id || "—"}</td>
-                      <td style={styles.td}>{fmtDate(tx.created_at || tx.timestamp)}</td>
-                      <td style={styles.td}><span style={{ fontWeight: 700 }}>{tx.username || "—"}</span><br /><span style={styles.tableSub}>#{tx.user_id}</span></td>
-                      <td style={styles.td}><span style={styles.typeBadge}>{tx.type}</span></td>
-                      <td style={styles.td}>{tx.currency || "—"}</td>
-                      <td style={styles.td}>{tx.network || "—"}</td>
-                      <td style={styles.td}>{fmt(tx.amount)}</td>
-                      <td style={styles.td}><StatusBadgeTx status={tx.status} /></td>
-                      <td style={styles.td}><span style={{ fontFamily: "monospace", fontSize: 11, color: "#60a5fa" }} title={tx.tx_hash}>{shortAddress(tx.tx_hash || tx.wallet_address)}</span></td>
-                    </tr>
-                  ))}
-                  {filteredTxs.length === 0 && <tr><td colSpan={9} style={{ ...styles.td, textAlign: "center", color: "#7c8ca8", padding: "24px 0" }}>No transactions match the filters.</td></tr>}
-                </tbody>
-              </table>
+
+            <div className="ma-scrollY">
+              <div className="ma-txList">
+                {filteredTxs.slice(0, 200).map((tx) => <TxRow key={tx.id} tx={tx} />)}
+              </div>
+              {filteredTxs.length === 0 && <EmptyState>No transactions match the filters.</EmptyState>}
             </div>
-          </div>
-        </>
+          </section>
+        </div>
       )}
 
       {isMaster && balanceSubTab === "platform-wallet" && (
@@ -348,7 +280,7 @@ export default function BalancesPanel({ isMaster }) {
           platformBanks={platformBanks}
           retryingAll={retryingAll}
           retryAllSweeps={retryAllSweeps}
-          onAddBank={() => { setBankEditTarget(null); setBankDraftForm({ bank_name: "", bank_holder_name: "", bank_card_number: "", bank_sheba: "", is_active: false }); setBankModalOpen(true); }}
+          onAddBank={() => { setBankEditTarget(null); setBankDraftForm(emptyBank); setBankModalOpen(true); }}
           onEditBank={(b) => { setBankEditTarget(b); setBankDraftForm({ bank_name: b.bank_name || "", bank_holder_name: b.bank_holder_name || "", bank_card_number: b.bank_card_number || "", bank_sheba: b.bank_sheba || "", is_active: b.is_active }); setBankModalOpen(true); }}
           onDeleteBank={deletePlatformBank}
           onToggleBank={togglePlatformBank}
@@ -383,85 +315,52 @@ export default function BalancesPanel({ isMaster }) {
   );
 }
 
-function MetaRow({ label, value }) {
+function BalanceCard({ item, onClick }) {
+  const total = Number(item.available || 0) + Number(item.frozen || 0);
   return (
-    <div style={styles.metaRow}>
-      <span style={styles.metaLabel}>{label}</span>
-      <span style={styles.metaValue}>{value ?? "—"}</span>
-    </div>
-  );
-}
-
-function Tag({ text, color }) {
-  return <span style={styles.tag(color)}>{text}</span>;
-}
-
-function BalanceCard({ item, onClick, hovered, onHover }) {
-  const key = balanceKey(item);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => onHover(key)}
-      onMouseLeave={() => onHover(null)}
-      style={styles.balanceCard(hovered)}
-    >
-      <div style={styles.rowBetween}>
-        <strong>{item.currency}</strong>
-        <ArrowRightLeft size={13} />
+    <button type="button" onClick={onClick} className="ma-bal">
+      <div className="ma-bal-top">
+        <div className="ma-bal-coin">{String(item.currency || "?").slice(0, 3)}</div>
+        <div className="ma-bal-id">
+          <div className="ma-bal-cur">{item.currency}</div>
+          <div className="ma-bal-net">{item.network_chain || item.network || "Wallet pair"}</div>
+        </div>
+        <div className="ma-bal-total">
+          <div className="ma-bal-value">{fmt(total)}</div>
+          <div className="ma-bal-cap">Total</div>
+        </div>
+        <ArrowRightLeft size={14} color="#64748b" />
       </div>
-      <div style={styles.balanceSub}>{item.network_chain || item.network || "Wallet pair"}</div>
-      <div style={styles.balanceValue}>{fmt(Number(item.available || 0) + Number(item.frozen || 0))}</div>
-      <div style={styles.balanceMiniRow}>
-        <span>Available</span>
-        <strong style={{ color: "#10b981" }}>{fmt(item.available)}</strong>
-      </div>
-      <div style={styles.balanceMiniRow}>
-        <span>Frozen</span>
-        <strong style={{ color: "#f59e0b" }}>{fmt(item.frozen)}</strong>
+      <div className="ma-bal-parts">
+        <div className="ma-bal-part"><small>Available</small><strong style={{ color: "#10b981" }}>{fmt(item.available)}</strong></div>
+        <div className="ma-bal-part"><small>Frozen</small><strong style={{ color: "#f59e0b" }}>{fmt(item.frozen)}</strong></div>
       </div>
     </button>
   );
 }
 
-function StatusBadgeTx({ status }) {
-  const s = status?.toLowerCase();
-  const map = {
-    completed: { bg: "rgba(34,197,94,.1)", color: "#4ade80", border: "rgba(34,197,94,.25)" },
-    confirmed: { bg: "rgba(34,197,94,.1)", color: "#4ade80", border: "rgba(34,197,94,.25)" },
-    pending: { bg: "rgba(245,158,11,.1)", color: "#fbbf24", border: "rgba(245,158,11,.25)" },
-    failed: { bg: "rgba(239,68,68,.1)", color: "#f87171", border: "rgba(239,68,68,.25)" },
-  };
-  const c = map[s] || { bg: "rgba(100,116,139,.1)", color: "#94a3b8", border: "rgba(100,116,139,.25)" };
-  return <span style={{ display: "inline-block", padding: "2px 9px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>{status || "—"}</span>;
-}
-
 function WalletCurrencyCard({ row, walletKey, gasFees }) {
-  const gas = gasFees?.find(g => g.chain?.toUpperCase() === (row.network_chain || "").toUpperCase());
+  const gas = gasFees?.find((g) => g.chain?.toUpperCase() === (row.network_chain || "").toUpperCase());
   const wallet = row[walletKey] || {};
   return (
-    <div style={{ borderRadius: 16, border: "1px solid #223451", background: "linear-gradient(160deg,#091629 0%,#0d1830 100%)", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div className="ma-gasBox" style={{ gap: 10, padding: 12 }}>
+      <div className="ma-row-between" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontWeight: 900, fontSize: 15 }}>{row.currency}</div>
           <div style={{ fontSize: 11, color: "#60a5fa", marginTop: 2 }}>{row.network_chain}</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 20, fontWeight: 900 }}>{fmt(wallet.balance)}</div>
-          <div style={{ fontSize: 10, color: "#7c8ca8" }}>{row.currency}</div>
+          <div className="ma-subtle" style={{ fontSize: 10 }}>{row.currency}</div>
         </div>
       </div>
-      {wallet.address && (
-        <div style={{ fontSize: 10, color: "#7c8ca8", fontFamily: "monospace", wordBreak: "break-all", padding: "6px 8px", background: "#081224", borderRadius: 8, border: "1px solid #20314e" }}>
-          {wallet.address}
-        </div>
-      )}
+      {wallet.address && <div className="ma-addr" style={{ padding: "6px 8px", background: "#060e1c", borderRadius: 8, border: "1px solid var(--ma-line)" }}>{wallet.address}</div>}
       {gas && gas.available && gas.tiers?.length > 0 && (
         <div style={{ background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.2)", borderRadius: 10, padding: "8px 10px" }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: "#fbbf24", marginBottom: 4 }}>GAS FEES ({gas.native_symbol})</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {gas.tiers.map(tier => (
-              <div key={tier.label} style={{ fontSize: 10, color: "#fde68a" }}>
+          <div className="ma-row">
+            {gas.tiers.map((tier) => (
+              <div key={tier.label} style={{ fontSize: 10.5, color: "#fde68a" }}>
                 <span style={{ color: "#9ca3af" }}>{tier.label}: </span>
                 {tier.approx_fee ? `≈${fmt(tier.approx_fee, 6)} ${gas.native_symbol}` : `${tier.amount} ${tier.unit}`}
               </div>
@@ -474,96 +373,59 @@ function WalletCurrencyCard({ row, walletKey, gasFees }) {
 }
 
 function PlatformWalletColumn({ title, walletKey, rows, gasFees, transactions }) {
-  const myTxs = transactions?.filter(tx => {
+  const myTxs = transactions?.filter((tx) => {
     if (walletKey === "hot_wallet") return tx.type === "sweep" || tx.type === "sweep_exchange" || tx.type === "withdraw";
     if (walletKey === "master_wallet") return tx.type === "sweep" || tx.type === "sweep_exchange";
     return false;
   }) || [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#cdd8eb", textTransform: "uppercase", letterSpacing: 1 }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {rows.map(row => (
-          <WalletCurrencyCard key={`${row.currency_id}-${row.network_id}`} row={row} walletKey={walletKey} gasFees={gasFees} />
-        ))}
-        {rows.length === 0 && <div style={styles.subtle}>No wallets available.</div>}
+    <>
+      <div className="ma-pwTitle">{title}</div>
+      <div className="ma-activity">
+        {rows.map((row) => <WalletCurrencyCard key={`${row.currency_id}-${row.network_id}`} row={row} walletKey={walletKey} gasFees={gasFees} />)}
+        {rows.length === 0 && <EmptyState>No wallets available.</EmptyState>}
       </div>
       {myTxs.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#7c8ca8", marginBottom: 8 }}>RELATED TRANSACTIONS</div>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Time</th>
-                  <th style={styles.th}>User</th>
-                  <th style={styles.th}>Type</th>
-                  <th style={styles.th}>Currency</th>
-                  <th style={styles.th}>Amount</th>
-                  <th style={styles.th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myTxs.slice(0, 30).map(tx => (
-                  <tr key={tx.id} style={styles.tr}>
-                    <td style={styles.td}>{fmtDate(tx.created_at)}</td>
-                    <td style={styles.td}>{tx.username || "—"}<br /><span style={styles.tableSub}>#{tx.user_id}</span></td>
-                    <td style={styles.td}><span style={styles.typeBadge}>{tx.type}</span></td>
-                    <td style={styles.td}>{tx.currency || "—"}</td>
-                    <td style={styles.td}>{fmt(tx.amount)}</td>
-                    <td style={styles.td}><StatusBadgeTx status={tx.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div>
+          <div className="ma-sectionLabel">Related transactions</div>
+          <div className="ma-txList ma-scrollY" style={{ maxHeight: 420 }}>
+            {myTxs.slice(0, 30).map((tx) => <TxRow key={tx.id} tx={tx} showHash={false} showNetwork={false} />)}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
 function IrtBankSection({ platformBanks, onAdd, onEdit, onDelete, onToggle, transactions }) {
-  const irtTxs = (transactions || []).filter(tx => (tx.currency || "").toUpperCase() === "IRT" || tx.type === "wire" || tx.type === "deposit_wire");
+  const irtTxs = (transactions || []).filter((tx) => (tx.currency || "").toUpperCase() === "IRT" || tx.type === "wire" || tx.type === "deposit_wire");
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#cdd8eb", textTransform: "uppercase", letterSpacing: 1 }}>IRT Platform Wallet</div>
-        <button type="button" onClick={onAdd} style={styles.primaryBtn}>
-          <Plus size={13} /> Add New Bank
-        </button>
+    <>
+      <div className="ma-row-between">
+        <div className="ma-pwTitle">IRT Platform Wallet</div>
+        <button type="button" onClick={onAdd} className="ma-btn ma-btn--primary ma-btn--sm"><Plus size={13} /> Add New Bank</button>
       </div>
 
-      {platformBanks.length === 0 && (
-        <div style={{ ...styles.subtle, padding: "20px 0", textAlign: "center" }}>No platform bank accounts (wires) configured yet.</div>
-      )}
+      {platformBanks.length === 0 && <EmptyState>No platform bank accounts (wires) configured yet.</EmptyState>}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {platformBanks.map(bank => (
-          <div key={bank.id} style={{ borderRadius: 16, border: `1px solid ${bank.is_active ? "rgba(16,185,129,.3)" : "#223451"}`, background: bank.is_active ? "rgba(16,185,129,.05)" : "#091629", padding: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 8 }}>
+      <div className="ma-activity">
+        {platformBanks.map((bank) => (
+          <div key={bank.id} className="ma-gasBox" style={{ gap: 10, padding: 12, borderColor: bank.is_active ? "rgba(16,185,129,.35)" : undefined, background: bank.is_active ? "rgba(16,185,129,.05)" : undefined }}>
+            <div className="ma-metaList">
               <MetaRow label="Bank Name" value={bank.bank_name} />
               <MetaRow label="Holder" value={bank.bank_holder_name} />
               <MetaRow label="Card" value={bank.bank_card_number} />
               <MetaRow label="Sheba" value={bank.bank_sheba} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, alignItems: "flex-end" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 10px", borderRadius: 999, background: bank.is_active ? "rgba(16,185,129,.12)" : "rgba(100,116,139,.1)", color: bank.is_active ? "#34d399" : "#94a3b8", border: `1px solid ${bank.is_active ? "rgba(16,185,129,.3)" : "rgba(100,116,139,.2)"}` }}>
-                {bank.is_active ? "ACTIVE" : "INACTIVE"}
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button type="button" onClick={() => onToggle(bank)} style={{ ...styles.ghostBtn, padding: "5px 8px", fontSize: 11 }}>
-                  <Power size={11} /> {bank.is_active ? "Deactivate" : "Activate"}
-                </button>
+            <div className="ma-row-between">
+              <Tag text={bank.is_active ? "ACTIVE" : "INACTIVE"} color={bank.is_active ? "#34d399" : "#94a3b8"} />
+              <div className="ma-row">
+                <button type="button" onClick={() => onToggle(bank)} className="ma-btn ma-btn--ghost ma-btn--sm"><Power size={11} /> {bank.is_active ? "Deactivate" : "Activate"}</button>
                 {!bank.has_transactions && (
                   <>
-                    <button type="button" onClick={() => onEdit(bank)} style={{ ...styles.secondaryBtn, padding: "5px 8px", fontSize: 11 }}>
-                      <Edit2 size={11} /> Edit
-                    </button>
-                    <button type="button" onClick={() => onDelete(bank.id)} style={{ ...styles.secondaryBtn, padding: "5px 8px", fontSize: 11, color: "#f87171", borderColor: "rgba(239,68,68,.3)" }}>
-                      <Trash2 size={11} />
-                    </button>
+                    <button type="button" onClick={() => onEdit(bank)} className="ma-btn ma-btn--sm"><Edit2 size={11} /> Edit</button>
+                    <button type="button" onClick={() => onDelete(bank.id)} className="ma-btn ma-btn--danger ma-btn--sm" aria-label="Delete bank"><Trash2 size={11} /></button>
                   </>
                 )}
               </div>
@@ -574,34 +436,13 @@ function IrtBankSection({ platformBanks, onAdd, onEdit, onDelete, onToggle, tran
 
       {irtTxs.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#7c8ca8", marginBottom: 8 }}>PLATFORM BANK TRANSACTIONS (IRT / WIRE)</div>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Time</th>
-                  <th style={styles.th}>User</th>
-                  <th style={styles.th}>Type</th>
-                  <th style={styles.th}>Amount</th>
-                  <th style={styles.th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {irtTxs.slice(0, 30).map(tx => (
-                  <tr key={tx.id} style={styles.tr}>
-                    <td style={styles.td}>{fmtDate(tx.created_at)}</td>
-                    <td style={styles.td}>{tx.username || "—"}<br /><span style={styles.tableSub}>#{tx.user_id}</span></td>
-                    <td style={styles.td}><span style={styles.typeBadge}>{tx.type}</span></td>
-                    <td style={styles.td}>{fmt(tx.amount)} IRT</td>
-                    <td style={styles.td}><StatusBadgeTx status={tx.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="ma-sectionLabel">Platform bank transactions (IRT / wire)</div>
+          <div className="ma-txList ma-scrollY" style={{ maxHeight: 420 }}>
+            {irtTxs.slice(0, 30).map((tx) => <TxRow key={tx.id} tx={tx} showHash={false} showNetwork={false} forceCurrency="IRT" />)}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -610,7 +451,7 @@ function PlatformWalletsTab({
   retryingAll, retryAllSweeps, loadData, retrySweep, retryingSweepId, expandedSweepId, setExpandedSweepId,
 }) {
   const allRows = Array.isArray(platformWallet?.wallets) ? platformWallet.wallets : [];
-  const cryptoRows = allRows.filter(r => r.currency_type === "crypto");
+  const cryptoRows = allRows.filter((r) => r.currency_type === "crypto");
   const gasFees = platformWallet?.gas_fees || [];
   const transactions = platformWallet?.transactions || [];
   const failedSweeps = Array.isArray(platformWallet?.failed_sweeps) ? platformWallet.failed_sweeps : [];
@@ -619,109 +460,75 @@ function PlatformWalletsTab({
   const showingSweeps = view === "sweeps";
 
   return (
-    <div style={styles.card}>
-      <div style={{ ...styles.cardHeader, marginBottom: 16 }}>
+    <section className="ma-card">
+      <div className="ma-card-head">
         <div>
-          <div style={styles.cardTitle}>{showingSweeps ? "Failed Sweeps" : "Platform Wallets"}</div>
-          <div style={styles.subtle}>
+          <div className="ma-card-title">{showingSweeps ? "Failed Sweeps" : "Platform Wallets"}</div>
+          <div className="ma-subtle">
             {showingSweeps ? "Retry each failed sweep individually or all at once." : "Hot Wallet · Master Wallet · IRT Platform Wallet"}
           </div>
         </div>
-        <div style={styles.rowGap}>
-          {showingSweeps ? (
-            <button type="button" onClick={() => setView("wallets")} style={styles.secondaryBtn}>
-              <ArrowRightLeft size={13} /> Back to Wallets
-            </button>
-          ) : (
-            <button type="button" onClick={() => setView("sweeps")} style={styles.secondaryBtn}>
-              <ArrowRightLeft size={13} /> Sweeps
-              {failedSweeps.length > 0 && (
-                <span style={{ ...styles.tag("#f87171"), minHeight: 18, padding: "0 7px", fontSize: 10, marginLeft: 4 }}>{failedSweeps.length}</span>
-              )}
-            </button>
-          )}
-        </div>
+        {showingSweeps ? (
+          <button type="button" onClick={() => setView("wallets")} className="ma-btn"><ArrowRightLeft size={13} /> Back to Wallets</button>
+        ) : (
+          <button type="button" onClick={() => setView("sweeps")} className="ma-btn">
+            <ArrowRightLeft size={13} /> Sweeps
+            {failedSweeps.length > 0 && <Tag text={failedSweeps.length} color="#f87171" />}
+          </button>
+        )}
       </div>
 
       {!showingSweeps && (
-        <div style={styles.platformWalletGrid}>
-          <div style={styles.platformWalletCol}>
-            <PlatformWalletColumn title="Hot Wallet" walletKey="hot_wallet" rows={cryptoRows} gasFees={gasFees} transactions={transactions} />
-          </div>
-          <div style={styles.platformWalletCol}>
-            <PlatformWalletColumn title="Master Wallet" walletKey="master_wallet" rows={cryptoRows} gasFees={gasFees} transactions={transactions} />
-          </div>
-          <div style={styles.platformWalletCol}>
-            <IrtBankSection platformBanks={platformBanks} onAdd={onAddBank} onEdit={onEditBank} onDelete={onDeleteBank} onToggle={onToggleBank} transactions={transactions} />
-          </div>
+        <div className="ma-pwGrid">
+          <div className="ma-pwCol"><PlatformWalletColumn title="Hot Wallet" walletKey="hot_wallet" rows={cryptoRows} gasFees={gasFees} transactions={transactions} /></div>
+          <div className="ma-pwCol"><PlatformWalletColumn title="Master Wallet" walletKey="master_wallet" rows={cryptoRows} gasFees={gasFees} transactions={transactions} /></div>
+          <div className="ma-pwCol"><IrtBankSection platformBanks={platformBanks} onAdd={onAddBank} onEdit={onEditBank} onDelete={onDeleteBank} onToggle={onToggleBank} transactions={transactions} /></div>
         </div>
       )}
 
       {showingSweeps && (
-        <>
-          <div style={{ ...styles.rowGap, marginBottom: 12 }}>
-            <button type="button" onClick={retryAllSweeps} disabled={retryingAll} style={{ ...styles.primaryBtn, background: "rgba(239,68,68,.16)", borderColor: "rgba(239,68,68,.4)", color: "#fca5a5" }}>
-              <Zap size={13} /> {retryingAll ? "Retrying all..." : "Retry All Failed"}
-            </button>
-            <button type="button" onClick={loadData} style={styles.secondaryBtn}>
-              <RefreshCcw size={13} /> Reload
-            </button>
+        <div style={{ marginTop: 14 }}>
+          <div className="ma-row" style={{ marginBottom: 12 }}>
+            <button type="button" onClick={retryAllSweeps} disabled={retryingAll} className="ma-btn ma-btn--danger"><Zap size={13} /> {retryingAll ? "Retrying all..." : "Retry All Failed"}</button>
+            <button type="button" onClick={loadData} className="ma-btn"><RefreshCcw size={13} /> Reload</button>
           </div>
-          <FailedSweepsList
-            rows={failedSweeps}
-            onRetry={retrySweep}
-            retryingId={retryingSweepId}
-            expandedId={expandedSweepId}
-            onExpandToggle={setExpandedSweepId}
-          />
-        </>
+          <FailedSweepsList rows={failedSweeps} onRetry={retrySweep} retryingId={retryingSweepId} expandedId={expandedSweepId} onExpandToggle={setExpandedSweepId} />
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
 function FailedSweepsList({ rows, onRetry, retryingId, expandedId, onExpandToggle }) {
-  if (!rows.length) return <div style={styles.subtle}>No failed sweeps recorded.</div>;
+  if (!rows.length) return <EmptyState>No failed sweeps recorded.</EmptyState>;
   return (
-    <div style={styles.sweepContainer}>
+    <div className="ma-tileGrid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))" }}>
       {rows.map((row) => {
         const isExpanded = expandedId === row.id;
         return (
-          <div key={row.id} style={styles.failedSweepCard}>
-            <div style={styles.rowBetween}>
-              <button type="button" onClick={() => onExpandToggle(isExpanded ? null : row.id)} style={styles.expandBtn}>
-                <div>
-                  <div style={styles.failedSweepTitle}>
-                    {row.currency}/{row.network || "N/A"} · {fmt(row.amount)}
-                    {(row.user_id || row.username) && (
-                      <span style={{ marginLeft: 8, color: "#7c8ca8", fontWeight: 400, fontSize: 11 }}>
-                        User #{row.user_id}{row.username ? ` · ${row.username}` : ""}
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.subtle}>{row.reason || row.error || "Unknown failure"}</div>
-                </div>
-              </button>
-              <div style={styles.rowGap}>
-                <button type="button" onClick={() => onRetry(row.id)} disabled={retryingId === row.id} style={styles.secondaryBtn}>
-                  <Zap size={13} /> {retryingId === row.id ? "Retrying..." : "Retry"}
-                </button>
+          <div key={row.id} className="ma-sweepCard">
+            <button type="button" onClick={() => onExpandToggle(isExpanded ? null : row.id)} style={{ background: "none", border: "none", color: "inherit", textAlign: "left", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5 }}>
+                {row.currency}/{row.network || "N/A"} · {fmt(row.amount)}
               </div>
-            </div>
+              {(row.user_id || row.username) && (
+                <div className="ma-subtle" style={{ marginTop: 2 }}>User #{row.user_id}{row.username ? ` · ${row.username}` : ""}</div>
+              )}
+              <div className="ma-subtle" style={{ marginTop: 4 }}>{row.reason || row.error || "Unknown failure"}</div>
+            </button>
+            <button type="button" onClick={() => onRetry(row.id)} disabled={retryingId === row.id} className="ma-btn ma-btn--sm ma-btn--block">
+              <Zap size={13} /> {retryingId === row.id ? "Retrying..." : "Retry"}
+            </button>
             {isExpanded && (
-              <div style={styles.sweepDetails}>
-                <div style={styles.failedSweepMeta}>
-                  <MetaRow label="User ID" value={row.user_id} />
-                  <MetaRow label="Username" value={row.username} />
-                  <MetaRow label="Created" value={fmtDate(row.created_at)} />
-                  <MetaRow label="Retries" value={row.retries} />
-                  <MetaRow label="Resolved" value={row.resolved ? "Yes" : "No"} />
-                </div>
-                <div style={styles.failedSweepTrail}>
-                  <MetaRow label="Source wallet" value={row.trail?.source_wallet} />
-                  <MetaRow label="Hot wallet" value={row.trail?.hot_wallet} />
-                  <MetaRow label="Master wallet" value={row.trail?.master_wallet} />
-                </div>
+              <div className="ma-metaList">
+                <MetaRow label="User ID" value={row.user_id} />
+                <MetaRow label="Username" value={row.username} />
+                <MetaRow label="Created" value={fmtDate(row.created_at)} />
+                <MetaRow label="Retries" value={row.retries} />
+                <MetaRow label="Resolved" value={row.resolved ? "Yes" : "No"} />
+                <MetaRow label="Source wallet" value={row.trail?.source_wallet} />
+                <MetaRow label="Hot wallet" value={row.trail?.hot_wallet} />
+                <MetaRow label="Master wallet" value={row.trail?.master_wallet} />
               </div>
             )}
           </div>
@@ -732,150 +539,40 @@ function FailedSweepsList({ rows, onRetry, retryingId, expandedId, onExpandToggl
 }
 
 function BankModal({ draft, setDraft, isEdit, onClose, onSave, saving }) {
-  const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
+  const set = (k, v) => setDraft((prev) => ({ ...prev, [k]: v }));
+  const field = (label, key, placeholder) => (
+    <label className="ma-field">
+      <span className="ma-label">{label}</span>
+      <input className="ma-input" value={draft[key]} onChange={(e) => set(key, e.target.value)} placeholder={placeholder} />
+    </label>
+  );
   return (
-    <div style={styles.modalOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={styles.modal}>
-        <div style={styles.modalHeader}>
+    <div className="ma-modalOverlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal ma-modal--md">
+        <div className="ma-modalHeader">
           <div>
-            <div style={styles.cardTitle}>{isEdit ? "Edit" : "Add"} Platform Bank Account</div>
-            <div style={styles.subtle}>This is a platform-kind "wires" bank account.</div>
+            <div className="ma-modalTitle">{isEdit ? "Edit" : "Add"} Platform Bank Account</div>
+            <div className="ma-modalSub">This is a platform-kind "wires" bank account.</div>
           </div>
-          <button type="button" onClick={onClose} style={styles.closeBtn}><X size={14} /></button>
+          <button type="button" onClick={onClose} className="ma-closeBtn"><X size={14} /></button>
         </div>
-        <div style={styles.formGrid}>
-          <label style={styles.inputWrap}>
-            <span style={styles.metaLabel}>Bank Name</span>
-            <input value={draft.bank_name} onChange={e => set("bank_name", e.target.value)} style={styles.input} placeholder="e.g., Bank Mellat" />
-          </label>
-          <label style={styles.inputWrap}>
-            <span style={styles.metaLabel}>Holder Name</span>
-            <input value={draft.bank_holder_name} onChange={e => set("bank_holder_name", e.target.value)} style={styles.input} placeholder="Account holder name" />
-          </label>
-          <label style={styles.inputWrap}>
-            <span style={styles.metaLabel}>Card Number</span>
-            <input value={draft.bank_card_number} onChange={e => set("bank_card_number", e.target.value)} style={styles.input} placeholder="16-digit card number" />
-          </label>
-          <label style={styles.inputWrap}>
-            <span style={styles.metaLabel}>SHEBA</span>
-            <input value={draft.bank_sheba} onChange={e => set("bank_sheba", e.target.value)} style={styles.input} placeholder="IR..." />
-          </label>
+        <div className="ma-formGrid">
+          {field("Bank Name", "bank_name", "e.g., Bank Mellat")}
+          {field("Holder Name", "bank_holder_name", "Account holder name")}
+          {field("Card Number", "bank_card_number", "16-digit card number")}
+          {field("SHEBA", "bank_sheba", "IR...")}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button type="button" onClick={() => set("is_active", !draft.is_active)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 38, height: 22, borderRadius: 11, background: draft.is_active ? "#10b981" : "#1f2937", border: `1px solid ${draft.is_active ? "#10b981" : "#374151"}`, position: "relative", transition: "all .25s", flexShrink: 0 }}>
-              <div style={{ position: "absolute", top: 2, left: draft.is_active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: draft.is_active ? "white" : "#4b5563", transition: "left .25s" }} />
-            </div>
-            <span style={{ color: draft.is_active ? "#34d399" : "#6b7280", fontSize: 13, fontWeight: 600 }}>Set as Active</span>
-          </button>
-        </div>
-        <div style={styles.rowGap}>
-          <button type="button" onClick={onSave} disabled={saving} style={styles.primaryBtn}>
-            <Save size={13} /> {saving ? "Saving..." : "Save"}
-          </button>
-          <button type="button" onClick={onClose} style={styles.ghostBtn}>Cancel</button>
+        <button type="button" onClick={() => set("is_active", !draft.is_active)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
+          <div style={{ width: 38, height: 22, borderRadius: 11, background: draft.is_active ? "#10b981" : "#1f2937", border: `1px solid ${draft.is_active ? "#10b981" : "#374151"}`, position: "relative", transition: "all .25s", flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 2, left: draft.is_active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: draft.is_active ? "white" : "#4b5563", transition: "left .25s" }} />
+          </div>
+          <span style={{ color: draft.is_active ? "#34d399" : "#6b7280", fontSize: 13, fontWeight: 600 }}>Set as Active</span>
+        </button>
+        <div className="ma-modalActions">
+          <button type="button" onClick={onSave} disabled={saving} className="ma-btn ma-btn--primary"><Save size={13} /> {saving ? "Saving..." : "Save"}</button>
+          <button type="button" onClick={onClose} className="ma-btn ma-btn--ghost">Cancel</button>
         </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  stack: { display: "flex", flexDirection: "column", gap: 16 },
-  card: {
-    borderRadius: 18,
-    border: "1px solid #223451",
-    background: "linear-gradient(180deg, rgba(11,22,40,.98), rgba(8,18,36,.94))",
-    padding: 16,
-    boxShadow: "0 16px 42px rgba(0,0,0,.25)",
-  },
-  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  cardTitle: { fontSize: 16, fontWeight: 800, marginBottom: 4 },
-  subtle: { fontSize: 12, color: "#7c8ca8" },
-  rowBetween: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  rowGap: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  balanceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 },
-  balanceCard: (hovered) => ({
-    borderRadius: 16,
-    border: `1px solid ${hovered ? "#60a5fa" : "#223451"}`,
-    background: hovered ? "rgba(30,41,59,.95)" : "linear-gradient(170deg,#091629 0%,#0d1830 100%)",
-    color: "white",
-    padding: 14,
-    textAlign: "left",
-    cursor: "pointer",
-    boxShadow: hovered ? "0 0 0 1px rgba(96,165,250,.35) inset" : "none",
-    transition: "all 120ms ease",
-  }),
-  balanceSub: { fontSize: 11, color: "#7c8ca8", marginTop: 4 },
-  balanceValue: { fontSize: 24, fontWeight: 900, margin: "12px 0" },
-  balanceMiniRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: 12, color: "#cbd5e1" },
-  metaRow: {
-    display: "flex", justifyContent: "space-between", gap: 10, padding: "9px 10px",
-    borderRadius: 12, border: "1px solid #20314e", background: "#081224", alignItems: "center",
-  },
-  metaLabel: { color: "#7c8ca8", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 },
-  metaValue: { color: "#dbe7fb", fontSize: 12, fontWeight: 700, wordBreak: "break-word" },
-  tag: (color) => ({
-    display: "inline-flex", alignItems: "center", minHeight: 28, padding: "0 10px",
-    borderRadius: 999, border: `1px solid ${color}`, background: `${color}22`, color, fontSize: 11, fontWeight: 800,
-  }),
-  tabRow: { display: "flex", gap: 8, flexWrap: "wrap" },
-  pillTab: (active) => ({
-    borderRadius: 999,
-    border: `1px solid ${active ? "#3b82f6" : "#2b3b54"}`,
-    background: active ? "rgba(59,130,246,.16)" : "#0b1628",
-    color: active ? "#bfdbfe" : "#94a3b8",
-    padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer",
-  }),
-  sweepContainer: { display: "flex", flexDirection: "column", gap: 10, marginTop: 12, maxHeight: 400, overflowY: "auto", paddingRight: 8 },
-  expandBtn: { background: "none", border: "none", color: "white", textAlign: "left", cursor: "pointer", flex: 1, padding: 0 },
-  sweepDetails: { paddingTop: 12, borderTop: "1px solid #20314e", display: "flex", flexDirection: "column", gap: 10 },
-  failedSweepCard: { borderRadius: 16, border: "1px solid #223451", background: "#091629", padding: 14, display: "flex", flexDirection: "column", gap: 10 },
-  failedSweepTitle: { fontWeight: 800 },
-  failedSweepMeta: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 },
-  failedSweepTrail: { display: "grid", gap: 8 },
-  tableWrap: { overflowX: "auto", marginTop: 12 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 12 },
-  tableSub: { color: "#7c8ca8", fontSize: 11, marginTop: 4, wordBreak: "break-all" },
-  th: {
-    textAlign: "left", padding: "10px 12px", color: "#7c8ca8", fontSize: 11, fontWeight: 800,
-    textTransform: "uppercase", letterSpacing: 0.7, borderBottom: "1px solid #223451", whiteSpace: "nowrap",
-  },
-  tr: { borderBottom: "1px solid rgba(34,51,75,.45)" },
-  td: { padding: "10px 12px", fontSize: 12, color: "#dbe7fb", verticalAlign: "top" },
-  typeBadge: {
-    display: "inline-flex", alignItems: "center", minHeight: 24, padding: "0 8px", borderRadius: 999,
-    border: "1px solid #28405f", background: "#0e1a2d", color: "#93c5fd", fontSize: 10, fontWeight: 800, textTransform: "uppercase",
-  },
-  input: { width: "100%", padding: "10px 12px", borderRadius: 12, border: "1px solid #29405e", background: "#081224", color: "white", boxSizing: "border-box" },
-  inputWrap: { display: "grid", gap: 6 },
-  formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
-  primaryBtn: {
-    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px",
-    borderRadius: 12, border: "1px solid rgba(59,130,246,.4)", background: "rgba(37,99,235,.18)", color: "#bfdbfe", fontWeight: 800, cursor: "pointer",
-  },
-  secondaryBtn: {
-    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 12px",
-    borderRadius: 12, border: "1px solid #28405f", background: "#0e1a2d", color: "#cbd5e1", fontWeight: 700, cursor: "pointer",
-  },
-  ghostBtn: {
-    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 12px",
-    borderRadius: 12, border: "1px solid #2d3a52", background: "transparent", color: "#94a3b8", fontWeight: 700, cursor: "pointer",
-  },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 10, border: "1px solid #31425f", background: "#0b1527", color: "#94a3b8",
-    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  refreshBtn: {
-    height: 38, borderRadius: 12, border: "1px solid #243957", background: "#0f1b2f", color: "white",
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", padding: "0 14px",
-  },
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 2500, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 },
-  modal: {
-    width: "min(680px, 96vw)", borderRadius: 20, border: "1px solid #223451",
-    background: "linear-gradient(180deg, #0b1628 0%, #091629 100%)", padding: 18, boxShadow: "0 30px 90px rgba(0,0,0,.6)", display: "grid", gap: 16,
-  },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  platformWalletGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(280px, 1fr))", gap: 16, alignItems: "start" },
-  platformWalletCol: { borderRadius: 16, border: "1px solid #1c2c48", background: "#0a1526", padding: 14, minWidth: 0 },
-};

@@ -469,6 +469,7 @@ def update_my_admin_profile(
             setattr(row, field, value)
 
     db.commit()
+    _reassert_master_rls(db)
     bank_info = db.query(UserBankInfo).filter(UserBankInfo.user_id == row.user_id).first()
     return _serialize_profile(row, bank_info)
 
@@ -506,6 +507,7 @@ def upsert_my_admin_bank_info(
             setattr(bank_info, field, value)
 
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(bank_info)
     return _serialize_bank_info_state(row, bank_info)
 
@@ -876,6 +878,7 @@ def create_irt_withdrawal_request(
         is_read=False,
     ))
     db.commit()
+    _reassert_master_rls(db)
 
     return {
         "status": "withdraw_pending",

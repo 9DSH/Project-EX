@@ -1,36 +1,9 @@
-import { useEffect, useRef, useState, forwardRef } from "react";
+import { useEffect, useLayoutEffect, useCallback, useRef, useState, forwardRef } from "react";
 import { createPortal } from "react-dom";
 import { Search, ChevronDown, CalendarRange, RefreshCw, X, ListFilter } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import DatePicker from "react-datepicker";
 import "./HeroHub.css";
-
-/**
- * ── useIsCompact ─────────────────────────────────────────────────
- * Tracks whether the viewport is at/below `breakpoint`. Used to collapse
- * the search and date fields down to an icon-only trigger + popover so
- * the hub itself never has to wrap onto a second row.
- */
-function useIsCompact(breakpoint = 680) {
-  const [compact, setCompact] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= breakpoint
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-    const handler = (e) => setCompact(e.matches);
-    handler(mq);
-    if (mq.addEventListener) mq.addEventListener("change", handler);
-    else mq.addListener(handler);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener("change", handler);
-      else mq.removeListener(handler);
-    };
-  }, [breakpoint]);
-
-  return compact;
-}
 
 /**
  * ── useClickAway ─────────────────────────────────────────────────
@@ -122,7 +95,13 @@ function StatPill({ icon: Icon, label, value, accent = "#60a5fa", loading, meta,
       aria-label={`${label}: ${loading ? "loading" : value ?? "—"}`}
       style={{ background: accent + "16", color: accent }}
     >
-      {Icon && <Icon size={14} />}
+      {loading ? (
+        <Sk w={22} h={12} />
+      ) : (
+        <span className="hh-pill-compact-value" style={{ color: accent }}>
+          {value ?? "—"}
+        </span>
+      )}
 
       {hovered &&
         createPortal(
@@ -131,6 +110,7 @@ function StatPill({ icon: Icon, label, value, accent = "#60a5fa", loading, meta,
             style={{ top: coords.top, left: coords.left }}
           >
             <div className="hh-pill-tooltip-label">
+              {Icon && <Icon size={12} style={{ color: accent, marginRight: 5, verticalAlign: -2 }} />}
               {meta && <span style={{ color: accent }}>{meta} </span>}
               {label}
             </div>
@@ -474,6 +454,7 @@ export default function HeroHub({
   const visibleActions = actions.filter((a) => a.visible !== false);
 
   const visibleDropdowns = dropdowns.filter((d) => d.visible !== false);
+  const visibleStatPills = statPills; // all pills participate in fitting; none are filtered out
 
   const hasActiveFilters =
     Boolean(search?.value?.trim()) ||
@@ -489,39 +470,159 @@ export default function HeroHub({
     }
   };
 
-  const compact = useIsCompact(1280);
-
   const dateLabel = datePicker?.label || "Date Range";
   const dateActive = Boolean(datePicker?.startDate) || Boolean(datePicker?.endDate);
+  const searchLabel = search?.label || "Search";
+
+  const showSearch = Boolean(search && search.visible !== false);
+  const showDate = Boolean(datePicker && datePicker.visible !== false);
+
+  /**
+   * ── Dynamic fit algorithm ──────────────────────────────────────
+   * The hub always fills the space it has. On every resize we measure
+   * how much room is actually available and how much room every field
+   * would need in its full (uncompacted) form, using hidden same-CSS
+   * clones so the measurement is pixel-accurate without ever flashing
+   * the wrong state on screen.
+   *
+   * Priority order when things don't fit (compact one at a time):
+   *   1. date range → icon-only
+   *   2. search → icon-only
+   *   3. stat pills, one by one starting from the last pill → value-only
+   *   4. once every pill is already value-only, keep going: hide pills
+   *      entirely one by one, still starting from the last pill
+   * Everything renders in its full form again as soon as there's space.
+   */
+  const [dateCompact, setDateCompact] = useState(false);
+  const [searchCompact, setSearchCompact] = useState(false);
+  const [compactPillCount, setCompactPillCount] = useState(0);
+  const [hiddenPillCount, setHiddenPillCount] = useState(0);
+
+  const hubRef = useRef(null);
+  const titleColRef = useRef(null);
+  const titleDividerRef = useRef(null);
+  const clearBtnRef = useRef(null);
+  const pillsDividerRef = useRef(null);
+  const rightGroupRef = useRef(null);
+  const dropdownRefs = useRef({});
+  const searchFullMeasureRef = useRef(null);
+  const searchCompactMeasureRef = useRef(null);
+  const dateFullMeasureRef = useRef(null);
+  const dateCompactMeasureRef = useRef(null);
+  const pillFullMeasureRefs = useRef({});
+  const pillCompactMeasureRefs = useRef({});
+
+  const recalc = useCallback(() => {
+    const hub = hubRef.current;
+    if (!hub) return;
+
+    const hubStyles = getComputedStyle(hub);
+    const paddingX = parseFloat(hubStyles.paddingLeft || 0) + parseFloat(hubStyles.paddingRight || 0);
+    const available = hub.clientWidth - paddingX;
+    const gapPx = parseFloat(hubStyles.columnGap || hubStyles.gap || 0) || 8;
+
+    // Parts of the row that never change shape — measured directly off
+    // the real (already-rendered) elements.
+    const titleW = (titleColRef.current?.offsetWidth || 0) + (titleDividerRef.current?.offsetWidth || 0);
+    const dropdownsW = Object.values(dropdownRefs.current).reduce((sum, el) => sum + (el?.offsetWidth || 0), 0);
+    const clearW = clearBtnRef.current?.offsetWidth || 0;
+    const pillsDividerW = pillsDividerRef.current?.offsetWidth || 0;
+    const rightGroupW = rightGroupRef.current?.offsetWidth || 0;
+
+    // Rough allowance for the row/segment gaps that sit between all of
+    // the pieces above — not exact, but errs toward compacting a touch
+    // early rather than overflowing.
+    const segmentCount =
+      (title || subtitle ? 2 : 0) + 1 + visibleDropdowns.length + (showDate ? 1 : 0) + (showSearch ? 1 : 0) + 2;
+    const gapBuffer = gapPx * segmentCount;
+
+    const fixedTotal = titleW + dropdownsW + clearW + pillsDividerW + rightGroupW + gapBuffer;
+
+    const searchFullW = showSearch ? searchFullMeasureRef.current?.offsetWidth || 0 : 0;
+    const searchCompactW = showSearch ? searchCompactMeasureRef.current?.offsetWidth || 0 : 0;
+    const dateFullW = showDate ? dateFullMeasureRef.current?.offsetWidth || 0 : 0;
+    const dateCompactW = showDate ? dateCompactMeasureRef.current?.offsetWidth || 0 : 0;
+
+    const pillFullWidths = visibleStatPills.map((p) => pillFullMeasureRefs.current[p.key]?.offsetWidth || 0);
+    const pillCompactWidths = visibleStatPills.map((p) => pillCompactMeasureRefs.current[p.key]?.offsetWidth || 0);
+    const n = visibleStatPills.length;
+
+    // Steps 0-1 handle the date range and search. Steps 2..(2+n) compact
+    // pills one by one, from the last pill inward. Once every pill is
+    // already value-only, steps (2+n)..(2+2n) keep going by hiding those
+    // same pills entirely, still starting from the last one.
+    const maxStep = 2 + 2 * n;
+
+    for (let step = 0; step <= maxStep; step++) {
+      const dateC = showDate && step >= 1;
+      const searchC = showSearch && step >= 2;
+
+      const touchedFromEnd = Math.min(Math.max(0, step - 2), n);
+      const hiddenCount = Math.min(Math.max(0, step - 2 - n), n);
+      const compactVisibleCount = touchedFromEnd - hiddenCount;
+
+      const dateW = showDate ? (dateC ? dateCompactW : dateFullW) : 0;
+      const searchW = showSearch ? (searchC ? searchCompactW : searchFullW) : 0;
+      const pillsW = pillFullWidths.reduce((sum, w, i) => {
+        const positionFromEnd = n - 1 - i;
+        if (positionFromEnd < hiddenCount) return sum; // hidden entirely
+        if (positionFromEnd < hiddenCount + compactVisibleCount) return sum + pillCompactWidths[i];
+        return sum + w;
+      }, 0);
+
+      const total = fixedTotal + dateW + searchW + pillsW;
+
+      if (total <= available || step === maxStep) {
+        setDateCompact(dateC);
+        setSearchCompact(searchC);
+        setCompactPillCount(compactVisibleCount);
+        setHiddenPillCount(hiddenCount);
+        break;
+      }
+    }
+  }, [title, subtitle, showSearch, showDate, visibleDropdowns.length, visibleStatPills]);
+
+  useLayoutEffect(() => {
+    recalc();
+    const hub = hubRef.current;
+    if (!hub || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => recalc());
+    ro.observe(hub);
+    window.addEventListener("resize", recalc);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recalc);
+    };
+  }, [recalc]);
 
   return (
     <div className="hh-wrap">
-      <div className="hh-hub">
+      <div className="hh-hub" ref={hubRef}>
         {/* title / subtitle */}
         {(title || subtitle) && (
           <>
-            <div className="hh-title-col">
+            <div className="hh-title-col" ref={titleColRef}>
               {title && <div className="hh-title">{title}</div>}
               {subtitle && <div className="hh-subtitle">{subtitle}</div>}
             </div>
-            <div className="hh-divider" />
+            <div className="hh-divider hh-divider-title" ref={titleDividerRef} />
           </>
         )}
 
         {/* filters */}
         <div className="hh-filter-row">
-          {search && search.visible !== false && (
-            <SearchField search={search} compact={compact} />
-          )}
+          {showSearch && <SearchField search={search} compact={searchCompact} />}
 
-          {dropdowns
-            .filter((d) => d.visible !== false)
-            .map((d) => (
-              <DropdownFilter key={d.key} dropdown={d} compact={compact} />
-            ))}
+          {visibleDropdowns.map((d) => (
+            // Dropdowns always render in their normal, labeled form — only
+            // search, the date range, and stat pills take part in compaction.
+            <div key={d.key} ref={(el) => (dropdownRefs.current[d.key] = el)}>
+              <DropdownFilter dropdown={d} compact={false} />
+            </div>
+          ))}
 
-          {datePicker && datePicker.visible !== false && (
-            compact ? (
+          {showDate &&
+            (dateCompact ? (
               <div className="hh-field hh-field-compact">
                 <DatePicker
                   selectsRange={datePicker.selectsRange ?? true}
@@ -556,12 +657,12 @@ export default function HeroHub({
                   />
                 </div>
               </Field>
-            )
-          )}
+            ))}
 
           {hasActiveFilters && (
             <button
               type="button"
+              ref={clearBtnRef}
               className="hh-clear-btn"
               onClick={handleClearFilters}
               title="Clear filters"
@@ -574,19 +675,33 @@ export default function HeroHub({
         </div>
 
         {/* divider */}
-        <div className="hh-divider" />
+        <div className="hh-divider hh-divider-pills" ref={pillsDividerRef} />
 
         {/* stat pills */}
         <div className="hh-pills-row">
-          {statPills.map((p) => (
-            <StatPill key={p.key} icon={p.icon} label={p.label} value={p.value} accent={p.accent} loading={p.loading} meta={p.meta} compact={compact} />
-          ))}
+          {visibleStatPills.map((p, idx) => {
+            const positionFromEnd = visibleStatPills.length - 1 - idx;
+            if (positionFromEnd < hiddenPillCount) return null; // no room — dropped entirely
+            const isCompact = positionFromEnd < hiddenPillCount + compactPillCount;
+            return (
+              <StatPill
+                key={p.key}
+                icon={p.icon}
+                label={p.label}
+                value={p.value}
+                accent={p.accent}
+                loading={p.loading}
+                meta={p.meta}
+                compact={isCompact}
+              />
+            );
+          })}
         </div>
 
         {/* right-corner group — actions + refresh, pinned to the far right
             via margin-left: auto while everything else stays left-aligned */}
         {(visibleActions.length > 0 || onRefresh) && (
-          <div className="hh-right-group">
+          <div className="hh-right-group" ref={rightGroupRef}>
             {visibleActions.length > 0 && (
               <>
                 <div className="hh-divider" />
@@ -622,6 +737,78 @@ export default function HeroHub({
             )}
           </div>
         )}
+
+        {/* ── Hidden measurement clones ──────────────────────────────
+            Same classes/content as the real fields in both their full
+            and compact forms, rendered off-screen (visibility: hidden,
+            position: fixed) purely so recalc() can read accurate
+            offsetWidths for states that aren't currently on screen.
+            Never interactive, never visible, never affects layout. */}
+        <div
+          aria-hidden="true"
+          style={{ position: "fixed", top: -9999, left: -9999, visibility: "hidden", pointerEvents: "none", display: "flex" }}
+        >
+          {showSearch && (
+            <div className="hh-field hh-field-search" ref={searchFullMeasureRef}>
+              <div className="hh-field-label">{searchLabel}</div>
+              <div className="hh-search-wrap">
+                <Search size={13} className="hh-field-icon" />
+                <input className="hh-input" readOnly value={search.value || ""} placeholder={search.placeholder || "Search..."} />
+              </div>
+            </div>
+          )}
+          {showSearch && (
+            <div className="hh-field hh-field-compact" ref={searchCompactMeasureRef}>
+              <div className="hh-icon-trigger">
+                <Search size={14} />
+              </div>
+            </div>
+          )}
+
+          {showDate && (
+            <div className="hh-field hh-field-date" ref={dateFullMeasureRef}>
+              <div className="hh-field-label">{dateLabel}</div>
+              <div className="hh-date-wrap">
+                <CalendarRange size={13} className="hh-field-icon" />
+                <input
+                  className="hh-input hh-date-input"
+                  readOnly
+                  value={dateActive ? "01 Jan 2024 - 01 Feb 2024" : ""}
+                  placeholder={datePicker.placeholderText || "Date range"}
+                />
+              </div>
+            </div>
+          )}
+          {showDate && (
+            <div className="hh-field hh-field-compact" ref={dateCompactMeasureRef}>
+              <div className="hh-icon-trigger">
+                <CalendarRange size={14} />
+              </div>
+            </div>
+          )}
+
+          {visibleStatPills.map((p) => (
+            <div key={p.key} style={{ display: "flex" }}>
+              <div className="hh-pill" ref={(el) => (pillFullMeasureRefs.current[p.key] = el)}>
+                {p.icon && (
+                  <div className="hh-pill-icon">
+                    <p.icon size={14} />
+                  </div>
+                )}
+                <div className="hh-pill-text">
+                  <div className="hh-pill-label">
+                    {p.label}
+                    {p.meta && <span className="hh-pill-meta"> - {p.meta}</span>}
+                  </div>
+                  <div className="hh-pill-value">{p.loading ? "…" : p.value ?? "—"}</div>
+                </div>
+              </div>
+              <div className="hh-pill-compact" ref={(el) => (pillCompactMeasureRefs.current[p.key] = el)}>
+                <span className="hh-pill-compact-value">{p.loading ? "…" : p.value ?? "—"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

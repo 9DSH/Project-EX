@@ -419,6 +419,8 @@ def bootstrap_master(
     create_default_balances(db, master.user_id)
 
     db.commit()
+    
+    _reassert_master_rls(db)
     db.refresh(master)
 
     return {
@@ -559,6 +561,8 @@ def link_telegram(
 
     user.telegram_id = telegram_id
     db.commit()
+    
+    _reassert_master_rls(db)
 
     return {"success": True}
 
@@ -650,6 +654,8 @@ def internal_transfer(
     )
     db.add(tx_recv)
     db.commit()
+    
+    _reassert_master_rls(db)
 
     return {
         "success": True,
@@ -901,6 +907,7 @@ def update_balance(
         ))
 
     db.commit()
+    _reassert_master_rls(db)
 
     return {"success": True, "new_balance": balance_row.available_balance}
 
@@ -979,6 +986,7 @@ def delete_balance(
 
     db.delete(balance_row)
     db.commit()
+    _reassert_master_rls(db)
 
     return {
         "success": True,
@@ -1133,6 +1141,7 @@ def update_user_wallet_pair(
             ))
 
     db.commit()
+    _reassert_master_rls(db)
 
     deposit_wallet = db.query(UserWallet).filter(
         UserWallet.user_id == user_id,
@@ -1288,6 +1297,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db_rls), user=Depends(ge
 
         db.delete(db_user)
         db.commit()
+        _reassert_master_rls(db)
 
     except HTTPException:
         raise
@@ -1369,6 +1379,7 @@ def update_user_bank_info(
             setattr(bank_info, field, payload.get(field))
 
     db.commit()
+    _reassert_master_rls(db)
     db.refresh(bank_info)
 
     return {

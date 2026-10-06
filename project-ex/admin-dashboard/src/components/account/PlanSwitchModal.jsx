@@ -23,8 +23,8 @@ export default function PlanSwitchModal({ currentPlanName, plan, onClose, onConf
   };
 
   return (
-    <div style={S.modalOverlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...S.modal, width: "min(480px, 96vw)" }}>
+    <div className="ma-modalOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ma-modal ma-modal--xs">
         <div style={S.modalHeader}>
           <div>
             <div style={S.modalTitle}>Switch plan</div>
